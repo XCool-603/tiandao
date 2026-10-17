@@ -170,47 +170,50 @@ class SimulationManager:
     def _genesis_real(self, world_theme=""):
         """大模型真实自主创世（由 AI 完全自主构建全新的天地与全新的人物）"""
         llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+        target_book = self.active_book
+        book_genre = target_book.genre or "全题材原创"
+        book_title = target_book.title or "当前世界"
         theme_hint = f"世界主题定制：{world_theme}\n" if world_theme else ""
 
         prompt = f"""
-你是不受任何既定故事束缚的【天道开辟主宰】。
-请从零为一部【全新凡人流群像修仙小说】开辟初始世界舞台，并完全自主捏造第一批（4位）登场角色的设定。
+你是不受任何既定故事束缚的【大千世界开辟主宰】。
+请从零为一部【{book_genre}】小说《{book_title}》开辟初始世界舞台，并完全自主捏造第一批（4位）登场角色的设定。
 
-【重要禁忌】：
-- **严禁使用任何已有小说人物名字（绝对不要出现韩立/韩厉、南宫婉/南宫璇、厉飞雨、顾长青、方源等任何名字）！**
-- **必须完全自主原创姓名与身世背景！**
-- **人人皆是主角，人人皆怀鬼胎与长生执念，绝无降智炮灰，也无天定免死光环！**
+【重要原则】：
+- **严禁抄袭已有知名小说人名（绝对不要出现韩立、南宫婉、萧炎、林动、顾长青等任何既有名字）！**
+- **必须完全自主原创姓名与身世背景，严格契合【{book_genre}】世界观！**
+- **人人皆是主角，人人皆怀执念与隐秘底牌，绝无降智炮灰，也无天定免死光环！**
 
 {theme_hint}
 请输出纯净严格的 JSON 格式：
 ```json
 {{
-  "scene_title": "秘境/杀局古典名称 (如: 【天芒断崖·古修血灵大阵】)",
-  "scene_description": "当前天地格局、异宝现世、险恶禁制压制描述 (120~200字)",
+  "scene_title": "舞台/绝地/都市/战场/空间站名称 (如: 【柯伊伯带·第七废弃矿港】 / 【江州商会·风云绝顶】)",
+  "scene_description": "当前天地格局、核心矛盾焦点、危机与压迫描写 (120~200字)",
   "characters": [
     {{
       "name": "原创姓名 (2~3字)",
-      "title": "头衔/身份 (如: 掩星阁暗桩 / 游方散修 / 剑庄少主)",
-      "camp": "正道/魔修/散修/商贾",
-      "cultivation_level": "真实境界与表面伪装境界",
-      "public_profile": "外貌神态与表面法宝装束 (60~100字)",
+      "title": "头衔/身份/职业 (如: 战术先锋 / 幕后财阀 / 宗门真传 / 执灯调查员)",
+      "camp": "所属阵营/流派",
+      "cultivation_level": "真实实力阶层或社会地位",
+      "public_profile": "外貌神态与表面装束描写 (60~100字)",
       "secret_profile": "【真实隐秘底牌、暗中心机与绝密底线】 (80~120字)",
-      "inventory": ["法宝1", "暗器2", "保命底牌3"]
+      "inventory": ["核心装备/法宝/信物1", "底牌道具2", "保命底牌3"]
     }}
   ]
 }}
 ```
 """
-        raw_res = llm.chat(os.getenv("MODEL_NAME", "deepseek-chat"), [
-            {"role": "system", "content": "你是冷酷主宰一切的修仙世界创世天道。"},
+        raw_res = llm.chat(os.getenv("MODEL_NAME", "balanced-model"), [
+            {"role": "system", "content": f"你是冷酷掌控【{book_genre}】世界开辟的至高创世意志。"},
             {"role": "user", "content": prompt}
         ])
         parsed = llm.extract_json(raw_res)
         if not parsed or not parsed.get("characters"):
             raise ValueError("LLM 未能正确生成天地结构")
 
-        self.world.title = parsed.get("scene_title", "【荒天大泽·古仙遗蜕】")
-        self.world.scene_description = parsed.get("scene_description", "荒古雷云密布，九道天雷撕裂地脉，异宝现世。")
+        self.world.title = parsed.get("scene_title", f"【{book_title} · 序幕现世】")
+        self.world.scene_description = parsed.get("scene_description", "大幕拉开，各方博弈在这一刻悄然开启。")
         self.world.characters = {}
 
         for idx, c in enumerate(parsed["characters"][:4]):
@@ -218,68 +221,158 @@ class SimulationManager:
             c["status"] = "alive"
             self.world.characters[cid] = c
 
-
     def spawn_character(self, preset_id=None, custom_prompt="", force_mock=False):
-        """天道点化 / 引入新修士入局"""
+        """天道点化 / 引入新角色入局（全题材自适应）"""
         load_dotenv()
         current_api_key = os.getenv("OPENAI_API_KEY", "")
         use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
+
+        target_genre = self.active_book.genre or "通用幻想"
+        target_title = self.active_book.title or "当前世界"
 
         char_id = f"char_{int(time.time())}"
         new_char = None
 
         if use_mock or not custom_prompt:
-            # 模拟/随机动态捏人备选库
-            mock_pool = [
-                {
-                    "name": "燕狂徒",
-                    "title": "异灵根散修",
-                    "camp": "散修/亡命徒",
-                    "cultivation_level": "筑基初期",
-                    "public_profile": "满头赤发，披着带血兽皮，扛着一柄门板大小的断狱重刀，周身隐有雷弧闪烁。",
-                    "secret_profile": "【困兽之斗】被仇家追杀走投无路，嗅到重宝出世气息，欲强行争夺博一线生机；性情狂暴，一言不合便拔刀决生死。",
-                    "inventory": ["断狱重刀", "狂雷符x3", "天雷遁甲"]
-                },
-                {
-                    "name": "金不换",
-                    "title": "万宝阁四海游商",
-                    "camp": "中立/商贾",
-                    "cultivation_level": "练气九层巅峰",
-                    "public_profile": "大腹便便，面色和蔼，身着金丝绸缎长袍，十指戴满储物灵戒，脚踏一尊金元宝飞行法器。",
-                    "secret_profile": "【贪婪商人】随身携带有高阶'破禁符'与'金蝉脱壳符'，专门在秘境死地高价兜售救命丹药或低价抄底死者储物袋。",
-                    "inventory": ["八宝如意金钱", "金蝉脱壳符", "化瘀还魂丹x5"]
-                },
-                {
-                    "name": "赵青鸾",
-                    "title": "名门巡界执法使",
-                    "camp": "正道宗门",
-                    "cultivation_level": "筑基中期",
-                    "public_profile": "一袭青鸾暗纹锦袍，眉宇威严，手持追魂寻气罗盘，踏空而立，四方灵压沉重如山。",
-                    "secret_profile": "【奉命夺宝】奉宗门密令探查天地异象核心，立誓斩杀所有阻挠夺宝的各方修士。",
-                    "inventory": ["青鸾破空梭", "追魂罗盘", "极寒玄冰障"]
-                }
-            ]
+            # 根据当前书籍题材智能匹配备选库
+            g = target_genre
+            if any(k in g for k in ["科幻", "星际", "赛博", "末世", "机甲"]):
+                mock_pool = [
+                    {
+                        "name": "零度幽灵",
+                        "title": "深空赏金猎人",
+                        "camp": "暗网黑客游侠",
+                        "cultivation_level": "义体突击三阶",
+                        "public_profile": "身披全息光学折射披风，右臂搭载单兵微型轨道炮，机械双瞳泛着冷静的猩红光晕。",
+                        "secret_profile": "【猎杀赏金】受雇于匿名地下财阀，追踪高维密钥载体，一旦得手立刻引爆信标脱离战场。",
+                        "inventory": ["高斯狙击炮", "光学伪装发生器", "自爆脉冲雷"]
+                    },
+                    {
+                        "name": "瓦连京",
+                        "title": "轨道重装陆战老兵",
+                        "camp": "第七舰队遗孤",
+                        "cultivation_level": "重装外骨骼驾驶员",
+                        "public_profile": "两米高壮硕身躯披挂着粗糙焊补的防辐射钛钢装甲，手持两百毫米转管机炮，杀气凛冽。",
+                        "secret_profile": "【复仇执念】誓要让当年抛弃第七舰队的星环财阀高层血债血偿，随时准备玉石俱焚。",
+                        "inventory": ["转管机炮", "战术吸附雷x3", "过载强化肾上腺素"]
+                    }
+                ]
+            elif any(k in g for k in ["悬疑", "惊悚", "诡异", "怪谈", "规则", "克苏鲁"]):
+                mock_pool = [
+                    {
+                        "name": "白九思",
+                        "title": "异常收容司执剑人",
+                        "camp": "官方对策局",
+                        "cultivation_level": "序列八·剖魂者",
+                        "public_profile": "身穿防腐黑色长大衣，手提一口沉重的手提黑箱，脸色苍白如纸，唇角毫无血色。",
+                        "secret_profile": "【绝对隔离】黑箱内收容着极度危险的S级诡异遗蜕，在绝境中会选择同归于尽式展开领域。",
+                        "inventory": ["镇煞短刃", "封印手提黑箱", "精神安定喷雾"]
+                    },
+                    {
+                        "name": "红伞少女",
+                        "title": "雨夜问路诡异",
+                        "camp": "不可名状之物",
+                        "cultivation_level": "高阶规则具现",
+                        "public_profile": "手持一柄滴血红油纸伞，面容隐匿在伞檐阴影中，轻声在浓雾中询问生者生辰八字。",
+                        "secret_profile": "【言语诱杀】只要对方回答任何涉及时间或年龄的字眼，其寿元便会被瞬间剥夺。",
+                        "inventory": ["滴血红油纸伞", "引魂骨梳"]
+                    }
+                ]
+            elif any(k in g for k in ["西幻", "魔法", "奇幻", "领主", "骑士"]):
+                mock_pool = [
+                    {
+                        "name": "罗兰",
+                        "title": "银色黎明圣武士",
+                        "camp": "圣堂骑士团",
+                        "cultivation_level": "高阶圣光裁决者",
+                        "public_profile": "银白全身板甲纤尘不染，手握散发神圣晨曦光芒的战锤，胸前悬挂太阳神徽，英姿勃发。",
+                        "secret_profile": "【异端审判】只要嗅到一丝深渊或亡灵气息，便会发动无差别狂热圣裁，绝不宽恕。",
+                        "inventory": ["晨曦裁决之锤", "圣光庇护卷轴", "强效驱魔药剂"]
+                    },
+                    {
+                        "name": "莫甘娜",
+                        "title": "黑沼泽剧毒女巫",
+                        "camp": "暗黑结社",
+                        "cultivation_level": "深渊剧毒操纵者",
+                        "public_profile": "头戴黑色尖顶软帽，长发如毒蛇般蜷曲，周身缭绕着墨绿色腐蚀毒雾，笑声沙哑阴森。",
+                        "secret_profile": "【活体炼药】专挑重伤强者的尸体或灵体做毒药引子，暗中布置化尸血沼。",
+                        "inventory": ["剧毒魔药坩埚", "蛇骨法杖", "假死迷雾石"]
+                    }
+                ]
+            elif any(k in g for k in ["都市", "神豪", "逆袭", "战神", "商战"]):
+                mock_pool = [
+                    {
+                        "name": "赵铁手",
+                        "title": "南岭战神殿暗影统领",
+                        "camp": "战神暗卫",
+                        "cultivation_level": "暗劲巅峰武宗",
+                        "public_profile": "一袭黑色修身西装，戴着墨镜与战术耳麦，双手布满老茧，眼神如鹰隼般锐利。",
+                        "secret_profile": "【奉令护主】携三十六天罡令秘密潜入江州，誓死保卫龙王少主，敢冒犯者格杀勿论。",
+                        "inventory": ["消音格洛克", "战神贴身密令", "军用止血针"]
+                    },
+                    {
+                        "name": "万三千",
+                        "title": "海外神秘风投巨鳄",
+                        "camp": "中立资本联盟",
+                        "cultivation_level": "千亿级对冲操盘手",
+                        "public_profile": "身披羊绒大衣，指间夹着古巴雪茄，谈笑间可瞬间调动百亿跨国资金击垮对手盘口。",
+                        "secret_profile": "【资本猎手】趁江州豪门内讧做空其核心资产，以低至一折的价格强行兼并蚕食。",
+                        "inventory": ["全球瑞士银行黑卡", "股权质押通牒", "防弹专车车钥匙"]
+                    }
+                ]
+            else:
+                # 默认/凡人修仙
+                mock_pool = [
+                    {
+                        "name": "燕狂徒",
+                        "title": "异灵根散修",
+                        "camp": "散修/亡命徒",
+                        "cultivation_level": "筑基初期",
+                        "public_profile": "满头赤发，披着带血兽皮，扛着一柄门板大小的断狱重刀，周身隐有雷弧闪烁。",
+                        "secret_profile": "【困兽之斗】被仇家追杀走投无路，嗅到重宝出世气息，欲强行争夺博一线生机；性情狂暴，一言不合便拔刀决生死。",
+                        "inventory": ["断狱重刀", "狂雷符x3", "天雷遁甲"]
+                    },
+                    {
+                        "name": "金不换",
+                        "title": "万宝阁四海游商",
+                        "camp": "中立/商贾",
+                        "cultivation_level": "练气九层巅峰",
+                        "public_profile": "大腹便便，面色和蔼，身着金丝绸缎长袍，十指戴满储物灵戒，脚踏一尊金元宝飞行法器。",
+                        "secret_profile": "【贪婪商人】随身携带有高阶'破禁符'与'金蝉脱壳符'，专门在秘境死地高价兜售救命丹药或低价抄底死者储物袋。",
+                        "inventory": ["八宝如意金钱", "金蝉脱壳符", "化瘀还魂丹x5"]
+                    },
+                    {
+                        "name": "赵青鸾",
+                        "title": "名门巡界执法使",
+                        "camp": "正道宗门",
+                        "cultivation_level": "筑基中期",
+                        "public_profile": "一袭青鸾暗纹锦袍，眉宇威严，手持追魂寻气罗盘，踏空而立，四方灵压沉重如山。",
+                        "secret_profile": "【奉命夺宝】奉宗门密令探查天地异象核心，立誓斩杀所有阻挠夺宝的各方修士。",
+                        "inventory": ["青鸾破空梭", "追魂罗盘", "极寒玄冰障"]
+                    }
+                ]
+
             # 选一个没出场过的
             available = [c for c in mock_pool if not any(existing["name"] == c["name"] for existing in self.world.characters.values())]
             chosen = available[0] if available else mock_pool[0]
             new_char = dict(chosen)
         else:
-            # 真实大模型实时捏人
+            # 真实大模型实时捏人（题材自适应）
             llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
             prompt = f"""
-请为【传统凡人流修仙世界】创造一位新登场的修士，要求严格契合凡人流的冷酷风格（注重因果、算计、隐秘底牌）。
-修士设定要求：{custom_prompt if custom_prompt else "一位被寒潭巨大斗法动静吸引而来的路过修士（可以是老怪、邪修、捡漏散修或宗门追兵）"}
+请为【{target_genre}】小说《{target_title}》创造一位新登场的角色，要求严格契合该题材流派的风格特色（注重因果、算计、隐秘底牌与独特生存准则）。
+角色设定要求：{custom_prompt if custom_prompt else "一位被现场剧烈冲突动静吸引而来的新入局者（可以是强援、死敌、趁乱渔利者、追捕者或神秘中立散客）"}
 
 请严格输出 JSON 格式：
 ```json
 {{
   "name": "姓名 (2~3字)",
-  "title": "尊号/宗门头衔",
-  "camp": "阵营 (如: 正道/魔道/散修/商会)",
-  "cultivation_level": "境界 (如: 练气八层 / 筑基初期 / 结丹老怪)",
-  "public_profile": "外貌神态与表面法宝描述 (60~100字)",
+  "title": "头衔/身份/尊号",
+  "camp": "阵营 (如: 正义联盟/财阀暗部/反抗军/魔门/异常调查局)",
+  "cultivation_level": "实力等级或社会阶层",
+  "public_profile": "外貌神态与表面装备描述 (60~100字)",
   "secret_profile": "【真实隐秘底牌与暗中心思准则】 (80~120字)",
-  "inventory": ["法宝1", "暗器2", "保命符箓3"]
+  "inventory": ["专属装备/道具1", "暗中底牌2", "保命手段3"]
 }}
 ```
 """
@@ -287,7 +380,7 @@ class SimulationManager:
             parsed = None
             try:
                 raw_res = llm.chat(model_to_use, [
-                    {"role": "system", "content": "你是修仙世界造物天道。"},
+                    {"role": "system", "content": f"你是【{target_genre}】世界至高造物主。"},
                     {"role": "user", "content": prompt}
                 ])
                 parsed = llm.extract_json(raw_res)
@@ -296,10 +389,13 @@ class SimulationManager:
                 if model_to_use != "balanced-model":
                     try:
                         raw_res = llm.chat("balanced-model", [
-                            {"role": "system", "content": "你是修仙世界造物天道。"},
+                            {"role": "system", "content": f"你是【{target_genre}】世界至高造物主。"},
                             {"role": "user", "content": prompt}
                         ])
                         parsed = llm.extract_json(raw_res)
+                    except Exception as e2:
+                        print(f"[天道点化 兜底] balanced-model 回退亦失败: {e2}，使用预设角色")
+                        parsed = None
                     except Exception as e2:
                         print(f"[天道点化 兜底] balanced-model 回退亦失败: {e2}，使用预设修士")
                         parsed = None
@@ -461,75 +557,30 @@ class SimulationManager:
         time.sleep(1.2)  # 模拟推演时间
         decree_text = f"【天道法旨干涉】：{divine_decree}\n" if divine_decree else ""
 
+        target_book = self.active_book
+        target_genre = target_book.genre or "通用幻想"
+
         # 获取当前存活的角色
         active_chars = [c for c in self.world.characters.values() if c.get("status", "alive") == "alive"]
 
-        # 【核心】：若当前场上没有任何角色（第一回合从零开辟），天地异象爆发，自发引来第一批3位修士！
+        # 【核心】：若当前场上没有任何角色（第一回合从零开辟），天地初开，根据题材自动初始化首批核心角色
         if not active_chars:
-            initial_arrivals = [
-                {
-                    "name": "楚无痕",
-                    "title": "隐忍苟道散修",
-                    "camp": "散修/亡命徒",
-                    "cultivation_level": "练气八层巅峰(伪装五层)",
-                    "public_profile": "相貌平平，身穿洗旧麻布道袍，神情谨小慎微，双手拢在宽袖之中。",
-                    "secret_profile": "【绝对谨慎】精通敛息龟息之术，袖中暗藏淬毒追魂钉与疾风符，永远先寻三条逃跑路线。",
-                    "inventory": ["淬毒追魂钉", "匿灵地行符x2", "阴雷子"],
-                    "inner": "此地煞气冲天，必有大凶。我且隐于最下风处，若有异动立刻遁地逃走！",
-                    "speech": "在下偶感灵气路过此地，绝无与诸位争夺之意……",
-                    "act": "神色慌乱地退至乱石背阴处，右手在袖中扣紧一枚追魂钉。"
-                },
-                {
-                    "name": "陆青霜",
-                    "title": "天剑宗真传剑子",
-                    "camp": "正道宗门",
-                    "cultivation_level": "筑基初期",
-                    "public_profile": "白衣胜雪，背负古剑，面容孤傲清冷，周身剑气吞吐隐而不发。",
-                    "secret_profile": "【孤绝剑道】奉师命寻找凝丹至宝，心性果决绝情，凡阻碍剑道者唯有一剑斩之。",
-                    "inventory": ["青罡灵剑", "护心玄冰障", "破风剑符"],
-                    "inner": "这帮散修鬼祟退缩，定心怀鬼胎。待灵物出世，谁敢上前一步，休怪我青罡剑利！",
-                    "speech": "天材地宝有缘者得之，宵小之徒若敢妄动，休怪飞剑无情！",
-                    "act": "凝霜飞剑出鞘三寸，化作青白光芒盘旋于头顶丈许，剑气逼人。"
-                },
-                {
-                    "name": "封不破",
-                    "title": "千幻魔宗暗桩",
-                    "camp": "魔煞邪修",
-                    "cultivation_level": "练气九层巅峰",
-                    "public_profile": "一袭暗紫华袍，手摇折扇，言谈举止看似儒雅随和，眼底却隐有嗜血冷光。",
-                    "secret_profile": "【笑里藏刀】精通魔道幻术与化骨血毒，惯于以大义挑拨正道相残，再趁乱收割精血与金丹。",
-                    "inventory": ["千幻阴煞扇", "化骨透心毒钉", "天魔血遁符"],
-                    "inner": "桀桀，一个胆怯散修，一个傲慢剑修。待他们火并力竭，两人的储物袋与血肉金丹全归我千幻宗！",
-                    "speech": "仙子何必如此凌厉？宝物现世见者有份，我等不如合力探寻如何？",
-                    "act": "折扇轻摇，步履优雅踏前一步，袖底却暗中将三枚无形化骨毒钉按入土中。"
-                }
-            ]
+            book_mgr._populate_new_book_archetypes(target_book, target_genre, target_book.theme_prompt or "")
+            active_chars = [c for c in self.world.characters.values() if c.get("status", "alive") == "alive"]
 
             actions = []
-            for idx, c in enumerate(initial_arrivals):
-                cid = f"char_dyn_init_{idx+1}"
-                self.world.characters[cid] = {
-                    "name": c["name"],
-                    "title": c["title"],
-                    "camp": c["camp"],
-                    "cultivation_level": c["cultivation_level"],
-                    "public_profile": f"{c['name']}，{c['public_profile']}",
-                    "secret_profile": c["secret_profile"],
-                    "inventory": c["inventory"],
-                    "status": "alive"
-                }
+            for c in active_chars:
                 actions.append(CharacterAction(
                     char_id=c["name"],
                     char_name=c["name"],
-                    inner_thought=c["inner"],
-                    speech=c["speech"],
-                    action=c["act"]
+                    inner_thought=c.get("secret_profile", "静观其变，伺机夺得先机。"),
+                    speech=f"事关重大，见者有份，各凭真本事！",
+                    action=f"暗中握紧携带之物品道具，眼神警惕锁定全场动静。"
                 ))
 
-            self.world.title = "【万绝古渊 · 仙煞残图出世】"
-            env_change = "轰隆！深渊地脉轰然崩裂，一道万丈霞光冲天而起，照彻万里苍穹，引动周遭修士破空而至！"
-            fate_twist = f"{decree_text}【天地因果初显】：深渊绝地异象爆发！三位互不相识的争渡者第一时间被灵波吸引，降临深渊裂谷！"
-            arbitration = "三方修士各怀鬼胎，于深渊边缘形成三角对峙，神识与暗器已死死锁定彼此，杀机一触即发！"
+            env_change = f"风云变幻，{self.world.title}核心异动爆发，多方核心势力初次交锋！"
+            fate_twist = f"{decree_text}【天地因果初显】：各方互不相识的焦点人物第一时间被异变卷入局中！"
+            arbitration = "各方阵营心怀鬼胎，于局中形成制衡对峙，底牌与杀招蓄势待发，冲突一触即发！"
 
             log = RoundLog(
                 round_number=round_num,
@@ -545,28 +596,31 @@ class SimulationManager:
         for idx, c in enumerate(active_chars):
             c_name = c["name"]
             c_type = c.get("title", "")
-            
-            # 根据角色的修行派系与性格，动态产生博弈行为
-            if "苟" in c_type or "隐忍" in c_type or "散修" in c_type:
-                thought = f"此地阵法禁制灵气狂暴，前方必有大凶险！我且借地形掩护退入死角，袖中扣紧淬毒暗器与匿灵符，万万不可当出头鸟！"
-                speech = f"诸位道友，在下法力微薄，愿在侧翼为诸位防范暗处变故。"
-                act = f"神色惶恐躬身后撤三步，双手缩入宽袖之中，暗中将三枚淬毒暗器扣紧，神识扫探周遭逃生退路。"
-            elif "剑" in c_type or "天骄" in c_type or "真传" in c_type:
-                thought = f"这帮散修与同门各怀鬼胎，谁也信不过！待会儿宝物显露，谁若敢阻我长生道途，唯有一剑斩之！"
-                speech = f"重宝在前，各凭本事！谁若敢暗中施展阴毒手段，休怪本座剑下无情！"
-                act = f"背后本命长剑发出一阵清越龙吟，剑气化作丈许青霜逼退狂暴灵压，踏立虚空蓄势待发。"
-            elif "伪善" in c_type or "师兄" in c_type or "内鬼" in c_type or "执事" in c_type:
-                thought = f"这帮蠢货还在试探，正合我意！稍后借暴虐灵力将他们震向禁制陷阱，我便能坐收渔翁之利！"
-                speech = f"诸位同道切莫伤了和气，当务之急是一同抵御凶险，机缘当均分！"
-                act = f"面带温和微笑出言安抚，宽袍之下却将三枚阴煞化骨钉悄然打入冻土死角。"
-            elif "魔" in c_type or "邪修" in c_type or "暗桩" in c_type:
-                thought = f"桀桀，一群满口仁义的名门伪君子！待你们两败俱伤，神魂与金丹皆是本座的无上资粮！"
-                speech = f"咯咯，说得比唱得还好听，奴家倒要看看今天谁能活着带走机缘！"
-                act = f"周身黑红血煞之气忽隐忽现，修罗血刃在指尖回旋，无形神识惑音封死众人退路。"
+            c_sec = c.get("secret_profile", "")
+            inv = c.get("inventory", [])
+            item_hint = f"，暗中扣住【{inv[0]}】" if inv else ""
+
+            # 根据角色的修行派系、性格与题材动态产生博弈行为
+            if any(k in c_type for k in ["苟", "隐忍", "散修", "拾荒", "独狼", "刺客"]):
+                thought = f"局势变幻莫测，前方暗藏巨大危机！绝不可过早成为出头鸟，务必留存撤退暗道{item_hint}！"
+                speech = f"诸位请便，在下自当从旁策应，绝无贪天之意。"
+                act = f"脚下微移退入阴影死角，双手暗自蓄力，眼神扫探全场退路。"
+            elif any(k in c_type for k in ["天骄", "剑", "先锋", "领主", "会长", "战神", "董事"]):
+                thought = f"眼前这帮对手各怀异心，谁也信不过！既然机缘现世，顺我者昌逆我者亡，当以雷霆之势破局！"
+                speech = f"大局已定！谁若敢暗中阻挠，休怪本座手下无情！"
+                act = f"气势全面爆发{item_hint}，强横威压横扫四方，正面威慑全场！"
+            elif any(k in c_type for k in ["商贾", "义医", "情报", "门阀", "内鬼", "权臣"]):
+                thought = f"两虎相争必有一伤，正合我意！且待他们拼得两败俱伤，我再出面收拾残局！"
+                speech = f"诸位稍安勿躁，以和为贵，不如坐下谈谈如何分润？"
+                act = f"面带温和微笑出言斡旋，暗中却布下连环算计陷阱。"
+            elif any(k in c_type for k in ["诡异", "魔", "邪", "狂暴", "不可知"]):
+                thought = f"贪婪的蠢货们……越是挣扎，越是成为最好的收割资粮！"
+                speech = f"呵呵……今天谁也别想活着走出这里！"
+                act = f"杀意如潮水般悄然弥漫，无形杀招死死封住众人命门。"
             else:
-                thought = f"局势凶险万分，不可妄动，务必留存底牌以备不测！"
-                speech = f"静观其变，伺机而动！"
-                act = f"祭起护身法器，全神贯注戒备四周动静。"
+                thought = f"战局凶险，静观其变，伺机寻找破局契机{item_hint}！"
+                speech = f"诸位各凭真章，见机行事！"
+                act = f"全面戒备，锁定关键变数。"
 
             actions.append(CharacterAction(
                 char_id=c_name,
@@ -576,29 +630,18 @@ class SimulationManager:
                 action=act
             ))
 
-        # 根据轮次演变天地异象与自动引渡新人/结算生死
+        # 根据轮次演变局势与自动引渡新人/结算生死
         if round_num == 1:
-            # 自动吸引来一位全新的海外老怪破空杀入！
-            new_id = f"char_dyn_new_1"
-            if new_id not in self.world.characters:
-                self.world.characters[new_id] = {
-                    "name": "万剑真人",
-                    "title": "海外结丹剑修",
-                    "camp": "正道散修",
-                    "cultivation_level": "结丹初期",
-                    "public_profile": "万剑真人，白发狂舞，踏着一柄十丈赤铜巨剑破空降临，恐怖威压如泰山压顶。",
-                    "secret_profile": "寿元将尽，嗅到异宝霞光破关而出，视眼前众生为蝼蚁草芥，敢阻挠者必杀无赦。",
-                    "inventory": ["赤铜诛魔剑", "太乙化血金丹", "青溟遁符"],
-                    "status": "alive"
-                }
-            env_change = f"虚空崩裂，天地罡风肆虐，{self.world.title}核心之物光芒冲霄！"
-            fate_twist = f"{decree_text}【天地因果涌现】：剧烈法宝激荡引动百里外的结丹老怪【万剑真人】御剑横空杀入战局！"
-            arbitration = f"结丹威压笼罩全场！在场修士各展护身底牌狼狈倒退，杀气直冲云霄，战局彻底失控！"
+            # 自动吸引一位新人破空入局
+            new_char = self.spawn_character(force_mock=True)
+            new_name = new_char.get("name", "神秘新来者") if isinstance(new_char, dict) else "神秘强援"
+            env_change = f"气浪席卷，异象彻底沸腾，{self.world.title}核心博弈进入白热化！"
+            fate_twist = f"{decree_text}【天地因果涌现】：剧烈冲突余波引动【{new_name}】强行杀入战局！"
+            arbitration = f"新入局者【{new_name}】掀起惊天变局，在场各方立刻调整防线，杀机直冲云霄！"
 
         elif round_num == 2:
-            # 随机淘汰1人(身死)，让1人逃脱(远遁)
-            dead_name = "一位修士"
-            esc_name = "一位修士"
+            dead_name = "一位对手"
+            esc_name = "一位机敏者"
             if len(active_chars) >= 2:
                 active_chars[1]["status"] = "dead"
                 dead_name = active_chars[1]["name"]
@@ -606,27 +649,17 @@ class SimulationManager:
                 active_chars[0]["status"] = "escaped"
                 esc_name = active_chars[0]["name"]
 
-            # 再自动涌现一位趁乱摸金的黑市散修
-            new_id = f"char_dyn_new_2"
-            if new_id not in self.world.characters:
-                self.world.characters[new_id] = {
-                    "name": "百里遁",
-                    "title": "地行夺宝客",
-                    "camp": "黑市散修",
-                    "cultivation_level": "练气九层巅峰",
-                    "public_profile": "百里遁，身披土黄隐灵披风，悄无声息潜行于碎石废墟之中，双手戴满破禁金丝手套。",
-                    "secret_profile": "专掏陨落大能遗蜕储物袋，绝不参与正面斗法，一击得手瞬息遁地千里。",
-                    "inventory": ["天罗遁地铲", "绝息符x5", "烟罗遁影网"],
-                    "status": "alive"
-                }
-            env_change = "雷火狂暴炸裂，断崖峭壁巨石崩裂，古阵法纹被余波撕开数十丈裂痕！"
-            fate_twist = f"{decree_text}【因果生死结算】：【{dead_name}】暗算失误反遭围杀【身死道消】！【{esc_name}】趁乱卷走部分遗蜕【远遁脱离】！"
-            arbitration = f"【{dead_name}】陨落当场，血雾弥漫！摸金修士【百里遁】潜入战场搜刮战利品，剩余修士陷入拼死搏杀！"
+            # 再引渡一位趁乱入局者
+            new_char = self.spawn_character(force_mock=True)
+            new_name = new_char.get("name", "黄雀在后者") if isinstance(new_char, dict) else "黄雀"
+            env_change = "狂暴气流撕裂全场，战线崩解，残垣断壁在冲击波中化作齑粉！"
+            fate_twist = f"{decree_text}【因果生死结算】：【{dead_name}】底牌尽出终遭重创击溃！【{esc_name}】夺得关键战利品脱离战场！"
+            arbitration = f"【{dead_name}】黯然退场！新来者【{new_name}】潜入战场搜刮遗存，剩余人员陷入殊死决战！"
 
         else:
-            env_change = "极品宝光彻底爆发，地脉暗火翻涌，秘境大阵即将陷入永恒塌陷！"
-            fate_twist = f"{decree_text}【天道命数终局】：天地倒悬，各展禁忌秘术生死决断！"
-            arbitration = "残存众生各施逆天手段，遁法与杀招对撞，重宝四分五裂，胜者带伤破空离去，败者尸骨永镇绝地！"
+            env_change = "核心悬念彻底爆发，全场能量与杀机攀升至终极顶点！"
+            fate_twist = f"{decree_text}【宿命终局演变】：终局决断降临，众生各展平生至高底牌！"
+            arbitration = "残存强者终极对撞，胜者破局夺魁绝尘而去，败者遗恨终生，天地因果落定！"
 
         log = RoundLog(
             round_number=round_num,

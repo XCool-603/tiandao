@@ -1092,8 +1092,18 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">题材类型风格</label>
-          <input type="text" id="createBookGenre" class="form-input" value="传统凡人修仙" placeholder="如：传统凡人修仙 / 现代都市逆袭 / 穿越历史大明">
+          <label class="form-label">题材类型风格 (可点击快捷选用)</label>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('仙侠修真', '《万古争渡：从执掌因果玉佩开始》', '无钦定天命主角，人人皆怀长生执念，寒渊夺宝与杀伐逆袭')">🌌 仙侠修真</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('现代都市', '《龙王出渊：开局百亿神豪退婚》', '三年隐忍期满，至尊龙王令解封，横推江南财阀与打脸反派')">🏙️ 现代都市</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('科幻星际', '《深空余烬：第七舰队的赛博亡魂》', '柯伊伯带拾荒觉醒高维密钥，退役舰队血战巨型财阀与机械蜂群')">🚀 科幻星际</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('悬疑怪谈', '《诡异降临：我在规则怪谈中找生路》', '午夜公寓租客生存守则，直视深渊裂隙，以命解构不可名状规则')">👁️ 悬疑怪谈</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('历史架空', '《大明第一权相：从斩贪官开始》', '现代法医刑侦专家戴枷上殿，手撕假账，老朱赐尚方宝剑巡按天下')">📜 历史架空</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('剑与魔法', '《破晓领主：开局觉醒黄金龙血》', '孤堡黑石崖抵御兽人与食尸鬼黑潮，奥术高塔禁咒与骑士征伐')">⚔️ 剑与魔法</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('游戏无限', '《神域诸天：我的被动无限叠加》', '重生封弊者单挑超级垄断公会，极限微操与神级词条破局')">🎮 游戏无限</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('传统武侠', '《快意寒刀：一人一刀踏平天下》', '刀光剑影，快意恩仇，名门宿怨与绝顶刀客雪夜破重围')">🗡️ 传统武侠</button>
+          </div>
+          <input type="text" id="createBookGenre" class="form-input" value="传统凡人修仙" placeholder="可手动输入任意自定义流派，如：克苏鲁跑团 / 赛博朋克 / 诸天快穿">
         </div>
         <div class="form-group">
           <label class="form-label">书籍名称</label>
@@ -1626,7 +1636,7 @@
           <div class="char-profile-card">
             <div class="char-card-top">
               <div>
-                <span class="char-name">${escapeHtml(c.name || '无名修士')}</span>
+                <span class="char-name">${escapeHtml(c.name || '入局角色')}</span>
                 <span style="font-size: 11px; color: var(--text-muted); margin-left: 4px;">${escapeHtml(c.title || '')}</span>
               </div>
               <div style="display: flex; gap: 4px; align-items: center;">
@@ -2214,6 +2224,14 @@
     // ==========================================
     function openNewBookModal() {
       document.getElementById("modalCreateBook").classList.add("active");
+    }
+    function selectGenrePreset(genre, defaultTitle, defaultTheme) {
+      const gInput = document.getElementById("createBookGenre");
+      const tInput = document.getElementById("createBookTitle");
+      const thInput = document.getElementById("createBookTheme");
+      if (gInput) gInput.value = genre;
+      if (tInput && (!tInput.value.trim() || tInput.value.startsWith("《"))) tInput.value = defaultTitle;
+      if (thInput && !thInput.value.trim()) thInput.value = defaultTheme;
     }
     function openSettingsModal() {
       document.getElementById("modalSettings").classList.add("active");
