@@ -30,8 +30,9 @@ from agents.chronicler import ChroniclerAgent
 from mock_engine import run_mock_demo
 from book_manager import book_mgr, Book
 
-WEB_DIR = Path(__file__).parent / "web"
-OUTPUT_DIR = Path(__file__).parent / "output"
+BASE_DIR = Path(__file__).resolve().parent
+WEB_DIR = BASE_DIR / "web"
+OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 def get_fanqie_category_tags(genre: str):
@@ -161,6 +162,7 @@ class SimulationManager:
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     result["webhook_code"] = resp.status
                     result["message"] = f"🍅 第 {chapter_id} 章《{clean_title}》已成功推送至番茄通道（HTTP {resp.status}）"
+                    self.mark_fanqie_synced(book.id, chapter_id, mode=mode)
                     return result
             except Exception as e_wh:
                 result["status"] = "warning"
@@ -170,6 +172,71 @@ class SimulationManager:
             result["status"] = "local_ready"
             result["message"] = f"🍅 第 {chapter_id} 章《{clean_title}》已按番茄作家规范完成首行两格缩进与净化排版！配置 Webhook 后可全自动直推番茄草稿箱。"
             return result
+
+    def get_fanqie_sync_state(self, book_id=None):
+        if not book_id:
+            book = self.active_book
+        else:
+            book = book_mgr.books.get(book_id, self.active_book)
+        if not book:
+            return []
+        bid = book.id if str(book.id).startswith("book_") else f"book_{book.id}"
+        sync_file = OUTPUT_DIR / "fanqie_sync" / bid / "sync_history.json"
+        if sync_file.exists():
+            try:
+                return json.loads(sync_file.read_text(encoding="utf-8"))
+            except Exception:
+                return []
+        return []
+
+    def mark_fanqie_synced(self, book_id, chapter_id, mode="draft", remote_id=""):
+        book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
+        if not book:
+            return []
+        bid = book.id if str(book.id).startswith("book_") else f"book_{book.id}"
+        fanqie_dir = OUTPUT_DIR / "fanqie_sync" / bid
+        fanqie_dir.mkdir(parents=True, exist_ok=True)
+        sync_file = fanqie_dir / "sync_history.json"
+        synced = self.get_fanqie_sync_state(book.id)
+        existing = next((s for s in synced if str(s.get("chapter_id")) == str(chapter_id)), None)
+        record = {
+            "chapter_id": int(chapter_id) if str(chapter_id).isdigit() else chapter_id,
+            "synced_at": time.time(),
+            "mode": mode,
+            "remote_id": remote_id
+        }
+        if existing:
+            existing.update(record)
+        else:
+            synced.append(record)
+        sync_file.write_text(json.dumps(synced, ensure_ascii=False, indent=2), encoding="utf-8")
+        return synced
+
+    def get_pending_fanqie_chapter(self, book_id=None):
+        book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
+        if not book or not book.chapters:
+            return None
+        synced = self.get_fanqie_sync_state(book.id)
+        synced_ids = {str(s.get("chapter_id")) for s in synced}
+        for chap in book.chapters:
+            cid = str(chap.get("id"))
+            if cid not in synced_ids:
+                title = chap.get("title", f"第{cid}章")
+                content = chap.get("content", "")
+                clean_title = title.replace("#", "").strip()
+                if not clean_title.startswith("第") and "章" not in clean_title:
+                    clean_title = f"第{cid}章 {clean_title}"
+                clean_body = clean_fanqie_content(clean_title, content)
+                return {
+                    "book_id": book.id,
+                    "book_title": book.title,
+                    "chapter_id": int(cid) if cid.isdigit() else cid,
+                    "chapter_title": clean_title,
+                    "content": clean_body,
+                    "word_count": len(clean_body),
+                    "total_chapters": len(book.chapters)
+                }
+        return None
 
     @property
     def active_book(self) -> Book:
@@ -1433,6 +1500,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
     def do_GET(self):
@@ -1750,6 +1820,52 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             }, ensure_ascii=False).encode("utf-8"))
             return
 
+        if path == "/api/fanqie/pending_chapter":
+            qs = urllib.parse.parse_qs(parsed.query)
+            query_book_id = qs.get("book_id", [""])[0]
+            target_book = book_mgr.books.get(query_book_id, sim_mgr.active_book) if query_book_id else sim_mgr.active_book
+            pending = sim_mgr.get_pending_fanqie_chapter(target_book.id if target_book else None)
+            synced = sim_mgr.get_fanqie_sync_state(target_book.id if target_book else None)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "has_pending": bool(pending),
+                "chapter": pending,
+                "book_id": target_book.id if target_book else "",
+                "book_title": target_book.title if target_book else "",
+                "synced_count": len(synced),
+                "total_chapters": len(target_book.chapters) if target_book else 0
+            }, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/fanqie/sync_status":
+            target_book = sim_mgr.active_book
+            synced = sim_mgr.get_fanqie_sync_state(target_book.id if target_book else None)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "book_id": target_book.id if target_book else "",
+                "synced": synced,
+                "total_chapters": len(target_book.chapters) if target_book else 0
+            }, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/fanqie/script.user.js":
+            script_path = BASE_DIR / "fanqie_userscript.js"
+            content = script_path.read_text(encoding="utf-8") if script_path.exists() else "// Script file not found"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(content.encode("utf-8"))
+            return
+
         # 管理端专属配置读取接口 (需鉴权)
         if path == "/api/admin/config":
             if not self.is_admin_authenticated():
@@ -2003,6 +2119,34 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/fanqie/confirm_uploaded":
+                bid = req_data.get("book_id", "")
+                cid = req_data.get("chapter_id", None)
+                mode = req_data.get("mode", "draft")
+                remote_id = req_data.get("remote_id", "")
+                synced = sim_mgr.mark_fanqie_synced(bid, cid, mode=mode, remote_id=remote_id)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "message": f"第 {cid} 章同步记录已确认", "synced_count": len(synced)}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/fanqie/launch_edge_bot":
+                try:
+                    bot_script = BASE_DIR / "fanqie_bot.py"
+                    subprocess.Popen([sys.executable, str(bot_script)], creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
+                    msg = "已在独立控制台窗口成功唤起番茄 Edge 挂机发书机器人！"
+                    st = "ok"
+                except Exception as e_bot:
+                    msg = f"唤起发书机器人失败: {e_bot}"
+                    st = "error"
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": st, "message": msg}, ensure_ascii=False).encode("utf-8"))
                 return
 
             if path == "/api/auto_publish":

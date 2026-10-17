@@ -1817,6 +1817,66 @@
           </div>
         </div>
 
+        <!-- 🔥 全自动挂机发书模式：写一章·自动发一章 -->
+        <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 14px 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 20px;">🤖</span>
+              <div>
+                <div style="font-size: 14px; font-weight: 800; color: #ef4444; display: flex; align-items: center; gap: 6px;">
+                  <span>全自动无人值守挂机发书 (写一章 · 自动上传一章)</span>
+                  <span id="botSyncBadge" class="pill pill-green" style="font-size: 10.5px;">挂机已就绪</span>
+                </div>
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                  零人工干预！天道每推演写完一章，后台机器人立即在番茄后台自动新建章节、填入标题正文并保存草稿。
+                </div>
+              </div>
+            </div>
+            <div id="botProgressInfo" style="font-size: 12px; color: var(--accent-gold); font-weight: 600;">
+              已自动同步: <span id="syncedChapCount">0</span> 章
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px;">
+            <!-- 方案 1: 油猴脚本挂机 (推荐，最轻量零风控) -->
+            <div style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                  <span>🐒 方式一：油猴插件挂机助手</span>
+                  <span class="pill pill-blue" style="font-size: 9.5px;">推荐 · 零风险</span>
+                </div>
+                <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
+                  安装天道专属油猴脚本后，在平时使用的浏览器中打开番茄作家助手，天道推演完章节将自动在该标签页保存草稿。
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <a href="/api/fanqie/script.user.js" target="_blank" class="btn btn-primary" style="font-size: 11px; padding: 4px 10px; text-decoration: none; flex: 1; text-align: center;">
+                  <span>📥 1秒安装油猴脚本</span>
+                </a>
+                <button class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px;" onclick="copyTampermonkeyUrl()">复制直链</button>
+              </div>
+            </div>
+
+            <!-- 方案 2: 独立 Edge 机器人 (无需插件，一键唤起) -->
+            <div style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                  <span>🌐 方式二：独立 Edge 守护机器人</span>
+                  <span class="pill pill-gold" style="font-size: 9.5px;">无需装插件</span>
+                </div>
+                <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
+                  一键唤起 Windows 自带 Edge 浏览器独立进程，登录一次番茄账号永久有效，后台全自动静默推演上传。
+                </div>
+              </div>
+              <div>
+                <button class="btn btn-gold" style="font-size: 11px; padding: 4px 10px; width: 100%;" onclick="launchEdgeBot()">
+                  <span>🚀 一键唤起 Edge 挂机机器人</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 方案 A: 番茄官方专属 ZIP 批量导入包 -->
         <div style="background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
@@ -3294,6 +3354,16 @@
         }
 
         renderPublishChaptersList(data.chapters || []);
+
+        // 获取机器人同步进度
+        fetch(`/api/fanqie/pending_chapter?book_id=${encodeURIComponent(bid)}`)
+          .then(r => r.json())
+          .then(pdata => {
+            if (pdata && pdata.status === "ok") {
+              const el = document.getElementById("syncedChapCount");
+              if (el) el.innerText = `${pdata.synced_count || 0} / ${pdata.total_chapters || 0}`;
+            }
+          }).catch(() => {});
       } catch (e) {
         console.error("加载番茄审核看板异常:", e);
       }
@@ -3302,6 +3372,30 @@
     function closePublishModal() {
       const modal = document.getElementById("publishModal");
       if (modal) modal.classList.remove("active");
+    }
+
+    async function launchEdgeBot() {
+      try {
+        showToast("正在启动 Edge 挂机发书机器人...", "info");
+        const res = await fetch("/api/fanqie/launch_edge_bot", { method: "POST" });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast("🚀 Edge 挂机机器人已唤起！请在弹出的浏览器中登录番茄作家后台", "success");
+        } else {
+          showToast(data.message || "唤起失败", "error");
+        }
+      } catch (e) {
+        showToast("调用机器人接口失败: " + e.message, "error");
+      }
+    }
+
+    function copyTampermonkeyUrl() {
+      const url = window.location.origin + "/api/fanqie/script.user.js";
+      navigator.clipboard.writeText(url).then(() => {
+        showToast("已复制油猴脚本直链: " + url, "success");
+      }).catch(() => {
+        prompt("请复制油猴脚本直链:", url);
+      });
     }
 
     function renderPublishChaptersList(chaps) {

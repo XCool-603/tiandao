@@ -1,0 +1,12 @@
+# 行尾统一：Windows 上 core.autocrlf=true 会把文件检出成 CRLF，
+# 对这几个文件是硬伤：
+#   Dockerfile    → 续行符变成 "\" + CR，RUN 里的命令会带上 \r
+#   .dockerignore → 规则变成 "node_modules/\r"，静默失配，上下文重新变大
+#   *.sh          → shebang 变 /bin/sh^M，容器里报 bad interpreter
+Dockerfile        text eol=lf
+.dockerignore     text eol=lf
+*.sh              text eol=lf
+
+# Windows 批处理必须是 CRLF
+*.bat             text eol=crlf
+*.cmd             text eol=crlf
