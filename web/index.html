@@ -1992,10 +1992,31 @@
         renderChapterList(data.chapters || []);
 
         if (refreshFullView) {
-          // 如果当前章节未加载过正文，则加载
           if (data.chapters && data.chapters.length > 0) {
             const chap = data.chapters.find(c => c.id === currentChapterId) || data.chapters[0];
             selectChapter(chap.id);
+          } else {
+            currentChapterId = 0;
+            const titleEl = document.getElementById("currentChapHeaderTitle");
+            const metaEl = document.getElementById("currentChapHeaderMeta");
+            const box = document.getElementById("readerContentBox");
+            if (titleEl) titleEl.innerText = data.book_id ? `${data.title} · 尚未开始推演` : "书库为空 · 暂无作品";
+            if (metaEl) metaEl.innerText = "0 字 · 章节列表为空";
+            if (box) {
+              box.innerHTML = `
+                <div style="padding: 60px 20px; text-align: center; color: var(--text-secondary); max-width: 520px; margin: 0 auto; user-select: none;">
+                  <div style="font-size: 40px; margin-bottom: 16px;">📖</div>
+                  <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">
+                    ${data.book_id ? '本书暂无章节' : '书库为空，暂无作品'}
+                  </div>
+                  <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                    ${data.book_id 
+                      ? '当前为全新纯净起步状态（0章节）。请在下方控制台点击【⚡ 单步演化】或【🚀 连续推演】，由天道多智能体为您推演开辟真正的第一章！' 
+                      : '请点击右上角【➕ 新建作品】创建你的第一本小说作品！'}
+                  </div>
+                </div>
+              `;
+            }
           }
           renderForeshadowings(data.foreshadowings || []);
           renderCharacters(data.characters || []);
@@ -2010,6 +2031,10 @@
     function renderTopBookSelector(books, activeId) {
       const select = document.getElementById("bookSelectDropdown");
       if (!select) return;
+      if (!books || books.length === 0) {
+        select.innerHTML = `<option value="">(书库为空，请点击右侧➕新建)</option>`;
+        return;
+      }
       select.innerHTML = (books || []).map(b => {
         const count = b.chapter_count ?? b.chapters_count ?? 0;
         const bTitle = b.title || "未命名小说";
@@ -2103,8 +2128,8 @@
 
     // 渲染左侧书籍元数据
     function renderSideBookInfo(data) {
-      document.getElementById("sideBookTitle").innerText = data.title || "未命名小说";
-      document.getElementById("sideBookGenre").innerText = data.genre || "修真仙侠";
+      document.getElementById("sideBookTitle").innerText = data.book_id ? (data.title || "未命名小说") : "暂无作品";
+      document.getElementById("sideBookGenre").innerText = data.book_id ? (data.genre || "未设定") : "--";
       const chaps = data.chapters || [];
       const totalWords = chaps.reduce((acc, c) => acc + (c.word_count || (c.content ? c.content.length : 0)), 0);
       document.getElementById("sideBookTotalWords").innerText = `${totalWords.toLocaleString()} 字`;

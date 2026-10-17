@@ -720,6 +720,8 @@ class SimulationManager:
 
     def step(self, divine_decree="", force_mock=False, auto_spawn=False):
         """执行单步演化"""
+        if not self.active_book.id:
+            return {"error": "当前书库为空，请先点击【➕ 新建作品】创建一部小说！"}
         if self.is_busy:
             return {"error": "推演引擎正忙，请稍候..."}
 
@@ -1252,6 +1254,9 @@ class SimulationManager:
 
         try:
             target_book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
+            if not target_book or not target_book.id:
+                yield {"type": "error", "message": "当前书库为空，请先点击顶部【➕ 新建作品】开辟一部小说！"}
+                return
 
             # 计算目标章节数 (支持自定义章数或全书深度标准)
             if custom_count and int(custom_count) > 0:
