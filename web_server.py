@@ -1491,7 +1491,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
         super().end_headers()
 
     def is_admin_authenticated(self, req_data=None):
-        admin_key = os.getenv("ADMIN_KEY", "admin888").strip()
+        load_dotenv()
+        admin_key = (os.getenv("ADMIN_KEY") or os.getenv("ADMIN_PASSWORD") or "admin888").strip()
         auth_header = self.headers.get("Authorization", "")
         token = ""
         if auth_header.startswith("Bearer "):
@@ -1499,7 +1500,11 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
         if not token:
             token = self.headers.get("X-Admin-Token", "").strip()
         if not token and req_data and isinstance(req_data, dict):
-            token = req_data.get("admin_token", "").strip()
+            token = (
+                str(req_data.get("admin_token", "")).strip()
+                or str(req_data.get("admin_password", "")).strip()
+                or str(req_data.get("password", "")).strip()
+            )
         return bool(token and token == admin_key)
 
 
@@ -2019,6 +2024,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             if path in ("/api/book/delete", "/api/admin/delete_book"):
+                if not self.is_admin_authenticated(req_data):
+                    self.send_response(403)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "权限不足：删除作品需要验证管理员密码！", "need_auth": True}, ensure_ascii=False).encode("utf-8"))
+                    return
                 bid = req_data.get("book_id", "")
                 success = book_mgr.delete_book(bid)
                 self.send_response(200)
@@ -2028,6 +2039,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/chapter/delete":
+                if not self.is_admin_authenticated(req_data):
+                    self.send_response(403)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "权限不足：删除章节需要验证管理员密码，不允许随便修改！", "need_auth": True}, ensure_ascii=False).encode("utf-8"))
+                    return
                 bid = req_data.get("book_id", "") or sim_mgr.active_book.id
                 cid = req_data.get("chapter_id", None)
                 success = book_mgr.delete_chapter(bid, cid)
@@ -2038,6 +2055,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/chapter/clear_all":
+                if not self.is_admin_authenticated(req_data):
+                    self.send_response(403)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "权限不足：清空章节需要验证管理员密码，不允许随便修改！", "need_auth": True}, ensure_ascii=False).encode("utf-8"))
+                    return
                 bid = req_data.get("book_id", "") or sim_mgr.active_book.id
                 success = book_mgr.clear_chapters(bid)
                 self.send_response(200)
@@ -2047,6 +2070,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/admin/reset_book":
+                if not self.is_admin_authenticated(req_data):
+                    self.send_response(403)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "权限不足：重置作品需要验证管理员密码！", "need_auth": True}, ensure_ascii=False).encode("utf-8"))
+                    return
                 bid = req_data.get("book_id", "") or sim_mgr.active_book.id
                 success = book_mgr.reset_book(bid)
                 self.send_response(200)
@@ -2184,6 +2213,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             if path in ("/api/chapter/save", "/api/chapter/update"):
+                if not self.is_admin_authenticated(req_data):
+                    self.send_response(403)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "权限不足：修改或精修章节内容需要管理员密码，不允许随便修改！", "need_auth": True}, ensure_ascii=False).encode("utf-8"))
+                    return
                 bid = req_data.get("book_id", "")
                 cid = req_data.get("chapter_id")
                 new_content = req_data.get("content", "")
