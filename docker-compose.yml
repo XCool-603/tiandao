@@ -7,8 +7,8 @@ services:
     container_name: tiandao
     restart: unless-stopped
     ports:
-      - "8088:8088"  # Web 沉浸式控制台与 RESTful API
-      - "8089:8089"  # WebSocket 实时全双工流式推演信道
+      - "${TIANDAO_PORT:-8088}:8088"        # Web 控制台与 RESTful API (可自定义宿主机端口)
+      - "${TIANDAO_WS_PORT:-8089}:8089"     # WebSocket 流式推演信道 (可自定义宿主机端口)
     env_file:
       - path: .env
         required: false
