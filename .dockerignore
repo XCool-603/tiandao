@@ -1,0 +1,13 @@
+.git
+.github
+.env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+output/
+.temp_edge
+.delivery
+.vscode
+.idea
+*.log

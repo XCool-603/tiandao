@@ -54,9 +54,66 @@
 
 ---
 
-## 🚀 启动方式
+## 🐳 Docker 一键部署（推荐云端 / 服务器部署 🌟）
 
-### 方式一：网页沉浸式控制台（强烈推荐 🌟）
+项目已全面容器化，支持 Docker & Docker Compose 极速一键部署，提供开箱即用的高并发隔离与长程自动存盘支持。
+
+### 1. 快速启动（推荐）
+```bash
+# 1. 克隆代码仓库
+git clone https://github.com/XCool-603/tiandao.git
+cd tiandao
+
+# 2. 复制环境配置文件（填入你的大模型 API KEY，留空亦可直接使用沙盒模拟模式）
+cp .env.example .env
+
+# 3. 一键构建并后台启动
+docker compose up -d --build
+```
+> **提示**：
+> - **Linux / macOS 用户**：可直接运行快捷脚本 `./docker-run.sh`
+> - **Windows 用户**：可直接双击根目录下的 [`docker-run.bat`](file:///c:/Work/天道/docker-run.bat)
+
+### 2. Docker 原生命令直接运行
+```bash
+# 构建镜像
+docker build -t tiandao:latest .
+
+# 启动容器（映射 8088 与 8089 端口，并挂载本地正文输出目录）
+docker run -d \
+  --name tiandao \
+  --restart unless-stopped \
+  -p 8088:8088 \
+  -p 8089:8089 \
+  -v $(pwd)/output:/app/output \
+  --env-file .env \
+  tiandao:latest
+```
+
+### 3. 端口与持久化说明
+| 宿主机端口 | 容器内端口 | 说明 |
+| :--- | :--- | :--- |
+| **`8088`** | `8088` | **Web 创作者 Studio 控制台** 及 RESTful API（浏览器打开 `http://<IP>:8088`） |
+| **`8089`** | `8089` | **WebSocket 全双工推演通道**（拟真打字机流式输出专属信道） |
+
+* **数据持久化**：挂载的 `./output:/app/output` 会实时持久化已生成的全书长篇小说章节（`novel_chapter_xx.md`）、分卷细纲总账与世界历史，容器销毁重建数据永不丢失。
+* **容器常用命令**：
+  ```bash
+  # 查看运行日志与推演进度
+  docker compose logs -f
+
+  # 重启服务
+  docker compose restart
+
+  # 停止并移除容器
+  docker compose down
+  ```
+
+---
+
+## 🚀 本地原生启动方式
+
+### 方式一：网页沉浸式控制台（双击启动）
 直接双击运行 [`start_web.bat`](file:///c:/Work/天道/start_web.bat) 或在终端执行：
 ```powershell
 python web_server.py 8088
