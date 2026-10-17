@@ -2,6 +2,7 @@ import time
 from typing import List, Dict, Any, Iterator, Optional
 from llm_client import LLMClient
 from world_state import RoundLog, WorldState
+from config import classify_genre
 
 class ChroniclerAgent:
     """
@@ -17,17 +18,17 @@ class ChroniclerAgent:
 
     def _build_genre_style(self, genre: str, book_title: str) -> Dict[str, str]:
         """根据小说题材动态匹配文学宗师风格设定，支持全流派小说创作"""
-        genre_lower = (genre or "").lower()
-        if any(k in genre_lower for k in ["都市", "逆袭", "战神", "神豪", "甜宠", "奶爸"]):
+        cat = classify_genre(genre, book_title)
+        if cat == "urban":
             return {
-                "role_desc": "顶级都市爽文与商战逆袭宗师级作家，文风凌厉霸道、节奏明快、戏剧张力拉满",
+                "role_desc": "顶级现代都市爽文与商战逆袭宗师级作家，文风凌厉霸道、节奏明快、戏剧张力拉满",
                 "core_rule": (
                     "突出各方角色的身份反差、暗中势力盘根错节、豪门倾轧与快意恩仇。"
                     "既要写出商战暗算与人情冷暖的残酷真实，又要写出绝地反杀的酣畅淋漓！"
                 ),
                 "tone": "都市冷峻博弈，热血逆袭，装逼打脸收放自如，对话极具现代张力与情绪价值。"
             }
-        elif any(k in genre_lower for k in ["大明", "历史", "权谋", "两宋", "三国", "朝堂", "种田"]):
+        elif cat == "history":
             return {
                 "role_desc": "顶级历史权谋与明清正剧宗师级作家，精研《大明王朝1566》与高阳式历史大作",
                 "core_rule": (
@@ -36,7 +37,7 @@ class ChroniclerAgent:
                 ),
                 "tone": "沉稳厚重，史笔如铁，刀光隐于奏折朝堂，言辞古雅考究，格局恢弘。"
             }
-        elif any(k in genre_lower for k in ["科幻", "星际", "末世", "赛博", "废土", "机甲", "硬核科幻"]):
+        elif cat == "scifi":
             return {
                 "role_desc": "顶级硬核科幻与星海争霸宗师级作家，文风宏大深邃，充满冷酷机械与星空美学",
                 "core_rule": (
@@ -45,7 +46,7 @@ class ChroniclerAgent:
                 ),
                 "tone": "宏大深邃，理性冷彻，太空战争压迫感十足，科技感与史诗感并重。"
             }
-        elif any(k in genre_lower for k in ["悬疑", "惊悚", "诡异", "怪谈", "规则", "克苏鲁", "盗墓", "灵异"]):
+        elif cat == "suspense":
             return {
                 "role_desc": "顶级悬疑惊悚与规则怪谈宗师级作家，文风细思极恐、密室压迫感拉满",
                 "core_rule": (
@@ -54,7 +55,7 @@ class ChroniclerAgent:
                 ),
                 "tone": "阴冷窒息，细思极恐，惊心动魄，推理严密，反转扣人心弦。"
             }
-        elif any(k in genre_lower for k in ["西幻", "魔法", "奇幻", "领主", "中世纪", "骑士", "巨龙"]):
+        elif cat == "fantasy":
             return {
                 "role_desc": "顶级西方史诗奇幻与剑与魔法宗师级作家，精研冰与火之歌与龙与地下城美学",
                 "core_rule": (
@@ -63,7 +64,7 @@ class ChroniclerAgent:
                 ),
                 "tone": "庄重雄浑，史诗感拉满，魔幻色彩浓郁，骑士精神与冷酷权谋交织。"
             }
-        elif any(k in genre_lower for k in ["游戏", "网游", "电竞", "无限", "诸天", "系统", "数据流"]):
+        elif cat == "gaming":
             return {
                 "role_desc": "顶级无限流与游戏数据流宗师级作家，文风快节奏、机制严密、爽感密集",
                 "core_rule": (
@@ -72,7 +73,7 @@ class ChroniclerAgent:
                 ),
                 "tone": "快节奏，高燃刺激，机制智斗，副本悬念层出不穷。"
             }
-        elif any(k in genre_lower for k in ["武侠", "江湖", "剑客", "快意"]):
+        elif cat == "wuxia":
             return {
                 "role_desc": "顶级传统武侠与新派武侠宗师级作家，精研金古温梁武侠神韵",
                 "core_rule": (
@@ -273,7 +274,9 @@ class ChroniclerAgent:
         c2 = chars[1]["name"] if len(chars) > 1 else "沈炼"
         c3 = chars[2]["name"] if len(chars) > 2 else "赵青鸾"
 
-        if any(k in genre for k in ["都市", "逆袭", "战神", "神豪"]):
+        cat = classify_genre(genre, book_title)
+
+        if cat == "urban":
             return f"""{title_suffix}
 
 夜色沉郁，暴雨倾盆。江城顶层的旋转玻璃幕墙外，霓虹在水汽中模糊成一片斑驳的光晕。
@@ -294,7 +297,7 @@ class ChroniclerAgent:
 
 轰然之间，雷鸣划破夜空。命运的齿轮在这一刻疯狂咬合，所有的隐忍与蛰伏，终在此夜化作焚尽一切的滔天狂澜！"""
 
-        elif any(k in genre for k in ["大明", "历史", "权谋", "穿越", "宋", "明"]):
+        elif cat == "history":
             return f"""{title_suffix}
 
 奉天殿外的玉阶之上，九卿重臣面面相觑，寒风猎猎，将猩红的大理寺仪仗锦旗吹得猎猎作响。
@@ -309,7 +312,7 @@ class ChroniclerAgent:
 
 {c2}与{c3}对视一眼，皆从对方眼中看到了彻骨的寒意。天子震怒，伏尸百万，这场席卷朝野的大清洗，才不过刚刚掀开冰山一角……"""
 
-        elif any(k in genre for k in ["科幻", "星际", "末世", "赛博", "废土", "机甲"]):
+        elif cat == "scifi":
             return f"""{title_suffix}
 
 猩红的警报光束如脉冲般撕裂了第七重轨道的深冷真空。重力偏转力场发出刺耳的高频过载嘶鸣，全息视界被铺天盖地的乱码警示染成血红。
@@ -324,7 +327,7 @@ class ChroniclerAgent:
 
 “航向已锁定，超频解限。”{c1}缓缓吐出一口混杂着金属机油味的血雾，嘴角掠过一抹冰冷的弧度，“传令全舰——人类退役舰队第七联队，今日绝不在虚空中悄无声息地熄灭。主炮……全功率过载发射！”"""
 
-        elif any(k in genre for k in ["悬疑", "惊悚", "诡异", "怪谈", "规则", "克苏鲁", "灵异"]):
+        elif cat == "suspense":
             return f"""{title_suffix}
 
 走廊尽头的老旧挂钟发出沉闷而粘稠的“咔哒”声，指针停在诡异的十一点六十一分。
@@ -344,7 +347,7 @@ class ChroniclerAgent:
 
 就在此时，头顶天花板发出轻微的异响。{c3}不知何时已如倒挂的蝙蝠般潜伏在房梁暗影中，苍白干瘦的手指轻轻抵在唇边，示意他看向猫眼——在那里，正有一只没有瞳仁的猩红眼球，死死贴在玻璃内侧，贪婪地窥视着屋内！"""
 
-        elif any(k in genre for k in ["西幻", "魔法", "奇幻", "领主", "中世纪", "骑士"]):
+        elif cat == "fantasy":
             return f"""{title_suffix}
 
 暴风雪无情地肆虐着黑石堡巍峨的角楼，寒鸦在冻结的箭垛上发出凄厉的啼鸣。
@@ -359,7 +362,7 @@ class ChroniclerAgent:
 
 “巨龙的血裔从未真正灭绝。”{c1}缓缓拔出巨剑，金色的斗气自手臂向剑锋轰然蔓延，“敲响集结钟，告诉城墙上的每一个守卫——以破晓黎明的名义，向所有入侵者发起决死冲锋！”"""
 
-        elif any(k in genre for k in ["游戏", "网游", "电竞", "无限", "系统", "数据流"]):
+        elif cat == "gaming":
             return f"""{title_suffix}
 
 【叮！全服系统通告：终焉副本“虚空竞技场”S级难度已激活，当前存活玩家：3/100！】
@@ -376,6 +379,31 @@ class ChroniclerAgent:
 阴影之中，虚空游侠{c3}的重型狙击弩机已经发出充能完毕的嗡鸣，终极奥义的锁定红线穿透毒雾，死死钉在核心弱点之上！
 
 “胜负已分。”随着键盘微操般的一记极限折线位移，{c1}的身影在0.01秒内完成三段判定突刺，整片虚空在技能交汇的璀璨光爆中轰然破碎！"""
+
+        elif cat == "wuxia":
+            return f"""{title_suffix}
+
+关外大雪，封冻了黑石驿站外三千里的苍茫古道。
+
+破旧的黄泥酒垆里，炭火盆泛着幽微的暗红，门外狂风裹挟着冰粒子，将残破的酒旗扯得猎猎作响。
+
+{c1}头戴破斗笠，一袭洗得发白的粗布麻衣上落满了残雪。他独坐于角落长凳，一言不发，唯有一双布满冻疮与老茧的手掌，始终按在桌角那柄缠着渗血麻布的生锈铁刀刀柄之上。十年塞外饮冰，他在等一个人，也在等一场迟到了十年的生死宿怨。
+
+“吱呀——”
+
+两扇单薄的木门轰然被狂暴的真气震碎！四溢的风雪狂涌而入，{c2}手持一柄泛着森森寒光的出鞘长剑，踏雪而入，身后更有数十名头戴青铜面具的黑衣刀客将酒肆四方围得水泄不通。
+
+“姓{c1[0]}的，当年名门大比你废了我兄长双足，今夜塞外风雪正紧，正好送你归西！”{c2}厉声喝道，剑尖微颤，空气中瞬间爆发出刺耳的风雷爆鸣。
+
+{c1}连眼皮都未曾抬起半分，只是缓缓提起酒壶，往嘴里灌了一大口辛辣刺喉的烧刀子：“当年之事，是非曲直江湖自有公论。你的剑太慢，心也太急。”
+
+“找死！”
+
+剑光乍现，如匹练经天，直取咽喉！
+
+就在这电光石火的一刹那，酒肆梁上忽然传来一声清脆的折扇合拢之音。{c3}不知何时已如孤鸿般掠下，一柄金丝软鞭在虚空中划出一道凌厉弧线，生生荡开了那必杀的一剑：“上官家做事，何时轮得到你们这些名门伪君子在关外越俎代庖？他的命，是我上官家的！”
+
+风雪呼啸，杀气四溢。三股深沉的内力气机在逼仄的酒垆中剧烈碰撞，生锈的铁刀微微震颤，发出饥渴的清吟……刀客拔刀，不为名利，只为心头这一抹未凉的热血！"""
 
         else:
             return f"""{title_suffix}

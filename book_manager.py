@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 from world_state import WorldState, RoundLog, CharacterAction
-from config import load_dotenv
+from config import load_dotenv, classify_genre
 
 BOOKS_DIR = Path(__file__).parent / "output" / "books"
 BOOKS_DIR.mkdir(parents=True, exist_ok=True)
@@ -163,6 +163,7 @@ class BookManager:
                 try:
                     data = json.loads(bf.read_text(encoding="utf-8"))
                     book = Book.from_dict(data)
+                    self._self_heal_book_genre(book)
                     self.books[book.id] = book
                 except Exception as e:
                     print(f"[读取书籍失败] {bf}: {e}")
@@ -172,6 +173,25 @@ class BookManager:
                 self.active_book_id = list(self.books.keys())[0]
         else:
             self.active_book_id = ""
+
+    def _self_heal_book_genre(self, book: Book):
+        """自动纠偏：若现代都市作品此前因关键词误判被赋予了古代大明人物或大纲，执行自我纠偏修复"""
+        if not book or not book.id:
+            return
+        cat = classify_genre(book.genre, book.title, book.theme_prompt or book.synopsis)
+        if cat == "urban":
+            needs_heal = False
+            if book.outline and any(k in str(book.outline) for k in ["大明", "老朱", "朱元璋", "奉天殿", "戴枷七品知县"]):
+                needs_heal = True
+                book.outline = {}
+            if book.world and book.world.characters:
+                char_names = [c.get("name") for c in book.world.characters.values()]
+                if any(n in ["顾长风", "萧景琰", "李斯年"] for n in char_names):
+                    needs_heal = True
+                    self._populate_new_book_archetypes(book, book.genre, book.theme_prompt or book.synopsis)
+            if needs_heal:
+                book.save()
+                print(f"[天道自愈纠偏] 成功修正现代都市书籍《{book.title}》的题材与人物设定！")
 
     def get_active_book(self) -> Book:
         if self.active_book_id and self.active_book_id in self.books:
@@ -248,15 +268,9 @@ class BookManager:
 
     def _populate_new_book_archetypes(self, book: Book, genre: str, theme: str):
         """根据管理员选定的风格题材，自动捏造初始极具张力的人物与第一章正文"""
-        g = genre or ""
-        is_urban = any(k in g for k in ["都市", "神豪", "逆袭", "战神", "商战", "职场"])
-        is_history = any(k in g for k in ["穿", "历史", "大明", "权谋", "宋", "三国", "朝堂"])
-        is_scifi = any(k in g for k in ["科幻", "星际", "末世", "赛博", "废土", "机甲"])
-        is_suspense = any(k in g for k in ["悬疑", "惊悚", "诡异", "怪谈", "规则", "克苏鲁", "灵异"])
-        is_fantasy = any(k in g for k in ["西幻", "魔法", "奇幻", "领主", "中世纪", "骑士"])
-        is_gaming = any(k in g for k in ["游戏", "网游", "电竞", "无限", "系统", "数据流"])
+        cat = classify_genre(genre, book.title, theme)
 
-        if is_urban:
+        if cat == "urban":
             book.world.characters = {
                 "c1": {
                     "name": "沈凌霄",
@@ -289,7 +303,7 @@ class BookManager:
                     "status": "alive"
                 }
             }
-        elif is_history:
+        elif cat == "history":
             book.world.characters = {
                 "c1": {
                     "name": "顾长风",
@@ -322,7 +336,7 @@ class BookManager:
                     "status": "alive"
                 }
             }
-        elif is_scifi:
+        elif cat == "scifi":
             book.world.characters = {
                 "c1": {
                     "name": "陈雷",
@@ -355,7 +369,7 @@ class BookManager:
                     "status": "alive"
                 }
             }
-        elif is_suspense:
+        elif cat == "suspense":
             book.world.characters = {
                 "c1": {
                     "name": "陆巡",
@@ -388,7 +402,7 @@ class BookManager:
                     "status": "alive"
                 }
             }
-        elif is_fantasy:
+        elif cat == "fantasy":
             book.world.characters = {
                 "c1": {
                     "name": "凯恩",
@@ -421,7 +435,7 @@ class BookManager:
                     "status": "alive"
                 }
             }
-        elif is_gaming:
+        elif cat == "gaming":
             book.world.characters = {
                 "c1": {
                     "name": "苏夜",
@@ -451,6 +465,39 @@ class BookManager:
                     "public_profile": "身披伪装迷彩披风，操作微型机械蜘蛛探测器，总能在安全区外贩售稀有道具与BOSS坐标。",
                     "secret_profile": "【通吃双方】暗中挑动顶级公会与独行高手的血战，借机大发横财收割掉落遗产。",
                     "inventory": ["折跃隐形披风", "微型自爆机械蛛x5", "全服广播喇叭"],
+                    "status": "alive"
+                }
+            }
+        elif cat == "wuxia":
+            book.world.characters = {
+                "c1": {
+                    "name": "燕十三",
+                    "title": "落魄寒刀客",
+                    "camp": "关外浪人",
+                    "cultivation_level": "天榜刀魁 (隐匿重伤)",
+                    "public_profile": "一袭残破蓑衣，斗笠压低，腰悬一柄生锈铁刀，眼神如苍鹰般森冷孤绝。",
+                    "secret_profile": "【十三绝命】刀出必饮血，十步之内不论王公巨寇，绝无生还之人。",
+                    "inventory": ["生锈寒铁刀", "半葫芦烧刀子", "染血镖银"],
+                    "status": "alive"
+                },
+                "c2": {
+                    "name": "白凝霜",
+                    "title": "点苍派当代掌门女",
+                    "camp": "名门名宿",
+                    "cultivation_level": "点苍回风剑真传",
+                    "public_profile": "素白劲装，背负双剑，眉目如画却冷若冰霜，行走江湖只问青红皂白。",
+                    "secret_profile": "【寻仇血誓】宗门惨遭神秘势力血洗，誓要手刃真凶，绝不惜身。",
+                    "inventory": ["青霜软剑", "九花玉露丸", "点苍掌门信物"],
+                    "status": "alive"
+                },
+                "c3": {
+                    "name": "上官枭",
+                    "title": "七十二路黑道总瓢把子",
+                    "camp": "绿林邪魁",
+                    "cultivation_level": "金钟罩大圆满",
+                    "public_profile": "魁梧如山，锦衣狐裘，指戴九枚血玉扳指，谈笑间伏尸百步。",
+                    "secret_profile": "【枭雄之志】暗中联合朝廷鹰犬，欲将江湖九大派一网打尽，独霸武林。",
+                    "inventory": ["金丝盘龙鞭", "霹雳透骨钉", "绿林调兵令牌"],
                     "status": "alive"
                 }
             }
@@ -736,46 +783,44 @@ class BookManager:
             except Exception as e:
                 print(f"[大纲生成异常] {e}，将采用智能算法生成高质量结构化大纲...")
 
-        # 智能模板与题材自适应大纲 (高质量兜底)
-        g = book.genre or ""
-        is_urban = any(k in g for k in ["都市", "神豪", "逆袭", "战神", "商战", "职场"])
-        is_history = any(k in g for k in ["大明", "历史", "穿越", "官场", "朝堂", "三国", "宋"])
-        is_scifi = any(k in g for k in ["科幻", "星际", "末世", "赛博", "废土", "机甲"])
-        is_suspense = any(k in g for k in ["悬疑", "惊悚", "诡异", "怪谈", "规则", "克苏鲁", "灵异"])
-        is_fantasy = any(k in g for k in ["西幻", "魔法", "奇幻", "领主", "中世纪", "骑士"])
-        is_gaming = any(k in g for k in ["游戏", "网游", "电竞", "无限", "系统", "数据流"])
+        # 智能模板与题材自适应大纲 (高质量动态兜底)
+        cat = classify_genre(book.genre, book.title, book.theme_prompt or book.synopsis)
+        title_core = (book.title or "当前作品").replace("《", "").replace("》", "").strip()
+        theme_core = (book.theme_prompt or book.synopsis or "").strip()
 
-        if is_urban:
+        if cat == "urban":
+            syn_text = f"聚焦{theme_core}。" if theme_core else "表面由四大千亿财阀与隐秘商会垄断，地下暗流涌动。"
             outline = {
-                "world_view": f"当代繁华都市江州，表面由四大千亿财阀与隐秘商会垄断，地下暗流涌动。{book.synopsis}",
-                "power_system": "微末赘婿 -> 隐匿黑卡至尊 -> 江南商会魁首 -> 镇国至尊龙王",
-                "main_plot": "三年隐忍期满，墨龙至尊令彻底解封！主角以雷霆手段肃清当年背叛陷害自己的世家仇敌，横推江南豪门，重夺至尊之位！",
-                "protagonist_setting": "行事冷峻果决，底牌无穷，恩怨分明，视权贵为蝼蚁。",
+                "world_view": f"当代繁华都市江城与现代资本市场。{syn_text} 各大家族与跨国资本集团暗流涌动，豪门博弈与名利角逐层出不穷。",
+                "power_system": "草根蛰伏/低谷逆风 -> 初掌乾坤(千万资本/行业翘楚) -> 商业巨擘(掌控千亿商会) -> 镇国财阀(制定全球产业格局)",
+                "main_plot": f"围绕《{title_core}》展开：主角在困局中破局崛起，以雷霆手腕与超前眼界横扫当年背叛与陷害自己的强敌，打脸豪门财阀，最终登顶现代都市巅峰！{('核心设定：' + theme_core) if theme_core else ''}",
+                "protagonist_setting": "行事冷峻果决，底牌无穷，恩怨分明，擅长商战洞察与绝地反击。",
                 "volumes": [
-                    {"volume_num": 1, "title": "第一卷 · 龙王出渊", "theme": "寿宴打脸退婚，江南豪门震动", "climax_event": "江州至尊峰会，万人俯首称臣"},
-                    {"volume_num": 2, "title": "第二卷 · 商海覆雨", "theme": "扫平东南财阀联盟，夺回家族重器", "climax_event": "千亿跨国对赌，一举定乾坤"},
-                    {"volume_num": 3, "title": "第三卷 · 镇国天下", "theme": "域外黑榜暗杀与终极至尊争锋", "climax_event": "龙王殿三千战神合流，封狼居胥"}
+                    {"volume_num": 1, "title": "第一卷 · 龙腾云起", "theme": "微末破局，打脸豪门伪君子与初掌资本锋芒", "climax_event": "江州至尊商界晚宴，当众撕开阴谋伪证，全场震颤"},
+                    {"volume_num": 2, "title": "第二卷 · 商海覆雨", "theme": "横扫东南财阀联盟，强力整合核心产业", "climax_event": "千亿跨国资本对赌决战，一举击穿做空主力"},
+                    {"volume_num": 3, "title": "第三卷 · 鼎立天下", "theme": "制定全球行业新标准，成就不可撼动的财阀神话", "climax_event": "全球首富峰会加冕，执掌商业帝国牛耳"}
                 ],
                 "chapter_outlines": []
             }
-        elif is_history:
+        elif cat == "history":
+            syn_text = f"围绕{theme_core}展开。" if theme_core else "紫禁城风云变幻，庙堂杀机四伏，百官战栗。"
             outline = {
-                "world_view": f"大明洪武二十五年初冬，南京紫禁城暴雨如注，老朱铁腕反贪，百官战栗。{book.synopsis}",
-                "power_system": "戴枷七品知县 -> 钦差提刑按察使 -> 都察院御史 -> 文华殿大学士 / 当朝首辅",
-                "main_plot": "主角以现代刑侦物证与法医心理学为利剑，在奉天殿上当朝撕开贪案伪证，自证清白！随后受老朱密令，手持尚方宝剑巡按江南，肃清江南士绅蛀虫，一步步重构大明赋税与刑狱，位极人臣！",
-                "protagonist_setting": "现代首席法医刑侦专家穿越，心细如发，微表情测谎，精通数理格物，不畏强权。",
+                "world_view": f"古代王朝波诡云谲的庙堂历史风云。{syn_text} 官场倾轧、藩王割据与士绅门阀盘根错节，天下大势系于一线。",
+                "power_system": "戴枷微末寒士 -> 钦差提刑官 -> 都察院御史 -> 参知政事 / 当朝首辅",
+                "main_plot": f"围绕《{title_core}》展开：主角以缜密谋略与格物新政为刃，在金殿朝堂之上自证清白并撕开弥天大案！随后持天子剑整肃吏治，平定四方边患，位极人臣！",
+                "protagonist_setting": "心细如发，微表情测谎，深谙帝王心术与律法刑名，不畏强权。",
                 "volumes": [
-                    {"volume_num": 1, "title": "第一卷 · 奉天惊雷", "theme": "戴枷自辩，力挽狂澜破江南税银案", "climax_event": "当庭手撕假账，老朱赐尚方宝剑"},
-                    {"volume_num": 2, "title": "第二卷 · 江南血案", "theme": "巡抚衙门密室杀人与秦淮河沉银", "climax_event": "连斩七名四品大员，震慑东南门阀"},
-                    {"volume_num": 3, "title": "第三卷 · 治隆唐宋", "theme": "革新大明宝钞与开海通商，帝师首辅", "climax_event": "奉天殿封公拜相，开创盛世"}
+                    {"volume_num": 1, "title": "第一卷 · 金殿惊雷", "theme": "戴枷自辩，力挽狂澜破江南税银大案", "climax_event": "当庭手撕假账伪证，天子赐尚方宝剑"},
+                    {"volume_num": 2, "title": "第二卷 · 江南血案", "theme": "巡抚衙门密室惊变与官绅门阀围剿", "climax_event": "连斩贪墨大员，震慑东南百年士族"},
+                    {"volume_num": 3, "title": "第三卷 · 治隆盛世", "theme": "革新赋税钱粮，开海通商，帝师首辅", "climax_event": "奉天殿封公拜相，开创万世太平"}
                 ],
                 "chapter_outlines": []
             }
-        elif is_scifi:
+        elif cat == "scifi":
             outline = {
                 "world_view": f"太阳系柯伊伯带外围，第七深空舰队在硅基机械蜂群与高维天灾的夹缝中苦苦支撑。{book.synopsis}",
                 "power_system": "军用义体三阶 -> 轨道重装突击队长 -> 星际巡洋舰长 -> 戴森球执政官 -> 高维机械飞升",
-                "main_plot": "面对巨型财阀的残酷剥削与深空外星蜂群的灭顶之灾，主角凭借绝密先驱密钥与硬核舰队战术，率领底层拾荒者与退役老兵绝地反攻，撕碎高维文明的灭世阴谋，为人类文明抢下生存火种！",
+                "main_plot": f"面对巨型财阀的残酷剥削与深空外星蜂群的灭顶之灾，主角凭借绝密先驱密钥与硬核舰队战术，率领底层拾荒者与退役老兵绝地反攻，撕碎高维文明的灭世阴谋！",
                 "protagonist_setting": "冷酷理性，超频神经反应，兼具深空星舰战术大师与底层义体游侠风骨。",
                 "volumes": [
                     {"volume_num": 1, "title": "第一卷 · 废土锈带", "theme": "底层空间站拾荒觉醒，破解先驱幽灵密钥", "climax_event": "单兵突入轨道空间港，抢夺泰坦巡洋舰"},
@@ -784,11 +829,11 @@ class BookManager:
                 ],
                 "chapter_outlines": []
             }
-        elif is_suspense:
+        elif cat == "suspense":
             outline = {
                 "world_view": f"表世界平静繁华，里世界怪谈横行。在不可逆的规则污染下，常识被全面颠覆。{book.synopsis}",
                 "power_system": "守夜执灯人 -> 禁忌收容级调查员 -> 规则解构大师 -> 序列零·不可名状主宰",
-                "main_plot": "每当午夜降临，诡异规则怪谈无差别吞噬生灵。主角觉醒‘直视规则裂隙’异能，在红衣公寓、午夜列车、迷失古村等绝境收容副本中，以命为饵推演生存守则，揭开全城诡异降临背后的终极灾厄真相！",
+                "main_plot": f"每当午夜降临，诡异规则怪谈无差别吞噬生灵。主角觉醒‘直视规则裂隙’异能，在绝境收容副本中以命为饵推演生存守则，揭开全城诡异降临背后的终极灾厄真相！",
                 "protagonist_setting": "极度理智克制，抗San值狂降，善于从荒诞死局的字里行间抓出规则逻辑漏洞。",
                 "volumes": [
                     {"volume_num": 1, "title": "第一卷 · 迷雾公寓", "theme": "破解租客守则十三条，逃离红衣诡异追杀", "climax_event": "反向利用敲门杀人规则，封印房东真身"},
@@ -797,11 +842,11 @@ class BookManager:
                 ],
                 "chapter_outlines": []
             }
-        elif is_fantasy:
+        elif cat == "fantasy":
             outline = {
                 "world_view": f"艾泽兰德古大陆，七大人类王国受深渊黑潮侵蚀，巨龙沉睡，圣堂神权衰微。{book.synopsis}",
                 "power_system": "青铜扈从 -> 白银剑士 -> 黄金阶圣殿骑士 -> 传奇魔剑圣 -> 半神位面领主",
-                "main_plot": "黑石堡领地危在旦夕，主角觉醒沉睡千年的破晓龙皇血脉，内惩腐败贵族与审判庭猎巫狂热，外抗深渊食尸鬼与荒原兽人入侵，一步步征服四方领地，铸就永恒不落的黎明帝国！",
+                "main_plot": f"黑石堡领地危在旦夕，主角觉醒沉睡千年的破晓龙皇血脉，内惩腐败贵族与审判庭猎巫狂热，外抗深渊食尸鬼与荒原兽人入侵，一步步征服四方领地，铸就永恒不落的黎明帝国！",
                 "protagonist_setting": "沉稳果敢，精通领地经营与冷兵器军团战术，拥有至高龙息金焰。",
                 "volumes": [
                     {"volume_num": 1, "title": "第一卷 · 黑石破晓", "theme": "守卫孤堡黑石崖，抗击兽人军团第一波血战", "climax_event": "雪夜斩首兽人统领，觉醒黄金龙鳞斗气"},
@@ -810,16 +855,29 @@ class BookManager:
                 ],
                 "chapter_outlines": []
             }
-        elif is_gaming:
+        elif cat == "gaming":
             outline = {
                 "world_view": f"划时代沉浸潜行网游《神域纪元》公测，实则是神级文明筛选生灵的诸天竞技场。{book.synopsis}",
                 "power_system": "新人学徒(LV.1~10) -> 进阶职业(LV.20~40) -> 觉醒圣域(LV.60~80) -> 诸天神祇(LV.100+)",
-                "main_plot": "身为重生封弊者的主角带着前世十年的攻略记忆开局，首杀隐藏神级隐藏BOSS，疯狂叠加唯一被动与神装词条，单挑超级公会垄断联盟，最终带领全服玩家打破虚空壁垒！",
+                "main_plot": f"身为重生封弊者的主角带着前世十年的攻略记忆开局，首杀隐藏神级隐藏BOSS，疯狂叠加唯一被动与神装词条，单挑超级公会垄断联盟，最终带领全服玩家打破虚空壁垒！",
                 "protagonist_setting": "极限微操独狼，机制怪，冷酷无情，利益最大化，深谙游戏底层数值逻辑。",
                 "volumes": [
                     {"volume_num": 1, "title": "第一卷 · 幽影觉醒", "theme": "新手村通关地狱隐藏副本，夺得唯一神级匕首", "climax_event": "单人团灭霸天公会百人精英团，名震全服"},
                     {"volume_num": 2, "title": "第二卷 · 公会争霸", "theme": "抢占天下第一公会要塞，首通跨服深渊秘境", "climax_event": "要塞守城决战，以一敌万激活禁咒神罚"},
                     {"volume_num": 3, "title": "第三卷 · 终焉神选", "theme": "全球跨服总决赛与世界壁垒降临之战", "climax_event": "弑神之战，打破虚拟现实边界成就至高"}
+                ],
+                "chapter_outlines": []
+            }
+        elif cat == "wuxia":
+            outline = {
+                "world_view": f"风雨飘摇的大熙江湖，名门正派与绿林七十二道各怀宿怨，朝廷鹰犬与塞外胡虏虎视眈眈。{book.synopsis}",
+                "power_system": "三流趟子手 -> 二流镖师/名宿真传 -> 一流刀剑客 -> 绝顶地榜宗师 -> 天榜神话",
+                "main_plot": f"围绕《{title_core}》展开：主角一人一刀踏入腥风血雨的江湖，斩破名门伪君子的重重陷阱与魔门阴谋，快意恩仇，踏平天下不平事！",
+                "protagonist_setting": "冷峻萧瑟，孤胆仗义，信守承诺，拔刀必见血。",
+                "volumes": [
+                    {"volume_num": 1, "title": "第一卷 · 关外寒刀", "theme": "雪夜破杀局，斩断名门追杀令", "climax_event": "黑风寨雪夜决死战，一人一刀斩三十六骑"},
+                    {"volume_num": 2, "title": "第二卷 · 龙门风云", "theme": "入中原追查灭门真相，名门大会问剑", "climax_event": "华山顶问剑天下名宿，撕开武林盟主伪善面具"},
+                    {"volume_num": 3, "title": "第三卷 · 绝顶沧桑", "theme": "抗击塞外大军围城，孤身直捣敌营", "climax_event": "千军万马前刀斩敌酋，留名青史拂衣去"}
                 ],
                 "chapter_outlines": []
             }

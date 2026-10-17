@@ -20,7 +20,8 @@ if sys.platform.startswith("win"):
 
 from config import (
     API_KEY, BASE_URL, DEFAULT_MODEL, TIANDAO_MODEL,
-    CHRONICLER_MODEL, MAX_ROUNDS, AUTO_GENERATE_NOVEL, load_dotenv
+    CHRONICLER_MODEL, MAX_ROUNDS, AUTO_GENERATE_NOVEL, load_dotenv,
+    classify_genre
 )
 from llm_client import LLMClient
 from world_state import WorldState, RoundLog, CharacterAction
@@ -36,24 +37,22 @@ OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 def get_fanqie_category_tags(genre: str):
-    g = (genre or "").lower()
-    if "都市" in g or "战神" in g or "逆袭" in g:
+    cat = classify_genre(genre)
+    if cat == "urban":
         return ["都市生活", "战神归来", "都市脑洞", "神豪打脸"]
-    elif "大明" in g or "历史" in g:
+    elif cat == "history":
         return ["历史古代", "两宋元明", "架空历史", "穿越权谋"]
-    elif "修仙" in g or "仙侠" in g:
-        return ["玄幻仙侠", "传统修真", "凡人流", "无敌杀伐"]
-    elif "科幻" in g or "星际" in g:
+    elif cat == "scifi":
         return ["科幻未来", "星际文明", "机械科技", "末世求生"]
-    elif "重生" in g or "商战" in g:
-        return ["都市日常", "商业大亨", "重生逆袭", "时代纪实"]
-    elif "怪谈" in g or "悬疑" in g:
+    elif cat == "suspense":
         return ["悬疑脑洞", "规则怪谈", "惊悚无限", "诡异复苏"]
-    elif "魔法" in g or "奇幻" in g:
+    elif cat == "fantasy":
         return ["奇幻仙侠", "领主种田", "剑与魔法", "巨龙血脉"]
-    elif "游戏" in g or "无限" in g:
+    elif cat == "gaming":
         return ["游戏动漫", "无限诸天", "数据流", "超神词条"]
-    return ["原创综合", "脑洞故事", "主线爽文"]
+    elif cat == "wuxia":
+        return ["传统武侠", "江湖恩怨", "剑客快意", "名门争霸"]
+    return ["玄幻仙侠", "传统修真", "凡人流", "无敌杀伐"]
 
 def clean_fanqie_content(title: str, content: str) -> str:
     lines = content.split("\n")
@@ -433,8 +432,59 @@ class SimulationManager:
 
         if use_mock or not custom_prompt:
             # 根据当前书籍题材智能匹配备选库
-            g = target_genre
-            if any(k in g for k in ["科幻", "星际", "赛博", "末世", "机甲"]):
+            cat = classify_genre(target_genre, target_title)
+            if cat == "urban":
+                mock_pool = [
+                    {
+                        "name": "赵铁手",
+                        "title": "南岭战神殿暗影统领",
+                        "camp": "战神暗卫",
+                        "cultivation_level": "暗劲巅峰武宗",
+                        "public_profile": "一袭黑色修身西装，戴着墨镜与战术耳麦，双手布满老茧，眼神如鹰隼般锐利。",
+                        "secret_profile": "【奉令护主】携三十六天罡令秘密潜入江州，誓死保卫龙王少主，敢冒犯者格杀勿论。",
+                        "inventory": ["消音格洛克", "战神贴身密令", "军用止血针"]
+                    },
+                    {
+                        "name": "万三千",
+                        "title": "海外神秘风投巨鳄",
+                        "camp": "中立资本联盟",
+                        "cultivation_level": "千亿级对冲操盘手",
+                        "public_profile": "身披羊绒大衣，指间夹着古巴雪茄，谈笑间可瞬间调动百亿跨国资金击垮对手盘口。",
+                        "secret_profile": "【资本猎手】趁江州豪门内讧做空其核心资产，以低至一折的价格强行兼并蚕食。",
+                        "inventory": ["全球瑞士银行黑卡", "股权质押通牒", "防弹专车车钥匙"]
+                    },
+                    {
+                        "name": "苏晓曼",
+                        "title": "金牌财经调查记者",
+                        "camp": "舆论界名记",
+                        "cultivation_level": "全网千万大V",
+                        "public_profile": "身穿米色风衣，手持微型专业录音笔与单反相机，眼神敏锐如电，敢于撕开一切内幕伪善。",
+                        "secret_profile": "【曝光黑幕】掌握着豪门洗钱做空的核心账本线索，正寻找可靠的破局者联合发难。",
+                        "inventory": ["加密录音笔", "云端备份手机", "防狼防身电击器"]
+                    }
+                ]
+            elif cat == "history":
+                mock_pool = [
+                    {
+                        "name": "沈炼",
+                        "title": "锦衣卫北镇抚司百户",
+                        "camp": "天子鹰犬",
+                        "cultivation_level": "后天圆满 / 绣春刀真传",
+                        "public_profile": "身穿飞鱼服，腰挎绣春刀，面容刚毅冷峻，行事沉稳内敛，深得镇抚使重用。",
+                        "secret_profile": "【暗藏心事】厌恶朝堂党争与锦衣卫滥杀，暗中庇护忠良遗孤，随时准备反出死局。",
+                        "inventory": ["精钢绣春刀", "飞鱼蟒袍", "北镇抚司驾帖"]
+                    },
+                    {
+                        "name": "严世蕃",
+                        "title": "内阁小阁老 / 权倾朝野",
+                        "camp": "首辅严党",
+                        "cultivation_level": "当朝重臣",
+                        "public_profile": "独眼微眯，锦衣玉带，摇折扇而谈笑自若，一言可定百官升黜与抄家灭族。",
+                        "secret_profile": "【贪婪智囊】精研天下赋税与兵马粮饷，视天下官吏为棋子，疯狂敛财中饱私囊。",
+                        "inventory": ["内阁首辅信印", "九边将领名单", "密折通牒"]
+                    }
+                ]
+            elif cat == "scifi":
                 mock_pool = [
                     {
                         "name": "零度幽灵",
@@ -455,7 +505,7 @@ class SimulationManager:
                         "inventory": ["转管机炮", "战术吸附雷x3", "过载强化肾上腺素"]
                     }
                 ]
-            elif any(k in g for k in ["悬疑", "惊悚", "诡异", "怪谈", "规则", "克苏鲁"]):
+            elif cat == "suspense":
                 mock_pool = [
                     {
                         "name": "白九思",
@@ -476,7 +526,7 @@ class SimulationManager:
                         "inventory": ["滴血红油纸伞", "引魂骨梳"]
                     }
                 ]
-            elif any(k in g for k in ["西幻", "魔法", "奇幻", "领主", "骑士"]):
+            elif cat == "fantasy":
                 mock_pool = [
                     {
                         "name": "罗兰",
@@ -497,25 +547,46 @@ class SimulationManager:
                         "inventory": ["剧毒魔药坩埚", "蛇骨法杖", "假死迷雾石"]
                     }
                 ]
-            elif any(k in g for k in ["都市", "神豪", "逆袭", "战神", "商战"]):
+            elif cat == "gaming":
                 mock_pool = [
                     {
-                        "name": "赵铁手",
-                        "title": "南岭战神殿暗影统领",
-                        "camp": "战神暗卫",
-                        "cultivation_level": "暗劲巅峰武宗",
-                        "public_profile": "一袭黑色修身西装，戴着墨镜与战术耳麦，双手布满老茧，眼神如鹰隼般锐利。",
-                        "secret_profile": "【奉令护主】携三十六天罡令秘密潜入江州，誓死保卫龙王少主，敢冒犯者格杀勿论。",
-                        "inventory": ["消音格洛克", "战神贴身密令", "军用止血针"]
+                        "name": "苏夜",
+                        "title": "封弊者 / 极限独狼刺客",
+                        "camp": "独行玩家",
+                        "cultivation_level": "LV.45 影舞者 (全敏加点)",
+                        "public_profile": "一身玄黑轻甲，面戴半截黑骨面具，双手各反握一柄泛着幽暗微光的短刃，身姿鬼魅。",
+                        "secret_profile": "【神级被动】拥有内测遗留唯一专属被动“绝对弱点洞悉”，暴击伤害无视一切护甲上限。",
+                        "inventory": ["幽影双子短刃", "瞬移逃脱卷轴", "特级生命恢复药剂x5"]
                     },
                     {
-                        "name": "万三千",
-                        "title": "海外神秘风投巨鳄",
-                        "camp": "中立资本联盟",
-                        "cultivation_level": "千亿级对冲操盘手",
-                        "public_profile": "身披羊绒大衣，指间夹着古巴雪茄，谈笑间可瞬间调动百亿跨国资金击垮对手盘口。",
-                        "secret_profile": "【资本猎手】趁江州豪门内讧做空其核心资产，以低至一折的价格强行兼并蚕食。",
-                        "inventory": ["全球瑞士银行黑卡", "股权质押通牒", "防弹专车车钥匙"]
+                        "name": "霸天傲神",
+                        "title": "霸天神域公会会长",
+                        "camp": "十大超级公会联盟",
+                        "cultivation_level": "LV.48 圣堂重骑士 (全身史诗)",
+                        "public_profile": "全身暗金重装铠甲，手持三米金光巨盾与裁决战锤，麾下数十名精锐簇拥，威势滔天。",
+                        "secret_profile": "【唯我独尊】垄断副本首杀与关键建帮令，视散人玩家为蝼蚁炮灰，敢阻其公会霸业者必全服追杀。",
+                        "inventory": ["泰坦之壁暗金大盾", "圣裁战锤", "公会集结令"]
+                    }
+                ]
+            elif cat == "wuxia":
+                mock_pool = [
+                    {
+                        "name": "燕十三",
+                        "title": "落魄寒刀客",
+                        "camp": "关外浪人",
+                        "cultivation_level": "天榜刀魁 (隐匿重伤)",
+                        "public_profile": "一袭残破蓑衣，斗笠压低，腰悬一柄生锈铁刀，眼神如苍鹰般森冷孤绝。",
+                        "secret_profile": "【十三绝命】刀出必饮血，十步之内不论王公巨寇，绝无生还之人。",
+                        "inventory": ["生锈寒铁刀", "半葫芦烧刀子", "染血镖银"]
+                    },
+                    {
+                        "name": "白凝霜",
+                        "title": "点苍派当代掌门女",
+                        "camp": "名门名宿",
+                        "cultivation_level": "点苍回风剑真传",
+                        "public_profile": "素白劲装，背负双剑，眉目如画却冷若冰霜，行走江湖只问青红皂白。",
+                        "secret_profile": "【寻仇血誓】宗门惨遭神秘势力血洗，誓要手刃真凶，绝不惜身。",
+                        "inventory": ["青霜软剑", "九花玉露丸", "点苍掌门信物"]
                     }
                 ]
             else:
@@ -1958,6 +2029,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 req_data = {}
 
             if path == "/api/outline/generate":
+                load_dotenv()
                 bid = req_data.get("book_id", "")
                 target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
                 llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
