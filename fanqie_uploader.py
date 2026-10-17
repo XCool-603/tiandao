@@ -134,10 +134,28 @@ def clean_chapter_for_fanqie(title: str, content: str) -> str:
         cleaned_lines.append(f"　　{line}")
     return "\n\n".join(cleaned_lines)
 
+def launch_browser(p, headless: bool = True):
+    """
+    智能优选浏览器驱动：
+    1. 优先尝试系统原生 Microsoft Edge（毫秒级拉起，无需单独下载 200MB Chromium）
+    2. 其次尝试系统原生 Google Chrome
+    3. 最后回退至 Playwright 自带 Chromium
+    """
+    errors = []
+    for channel in ["msedge", "chrome", None]:
+        try:
+            if channel:
+                return p.chromium.launch(channel=channel, headless=headless)
+            else:
+                return p.chromium.launch(headless=headless)
+        except Exception as e:
+            errors.append(f"{channel or 'default'}: {e}")
+    raise RuntimeError(f"未能启动可用浏览器内核: {'; '.join(errors)}")
+
 def start_browser_login_async(headless: bool = True) -> dict:
     """
     异步启动番茄作家专区扫码登录流程：
-    在后台拉起 Chromium，打开登录页，截图二维码供前端扫码，
+    在后台拉起 Chromium/Edge，打开登录页，截图二维码供前端扫码，
     用户微信/抖音/番茄作家 App 扫码成功后，自动落盘 auth_state.json。
     """
     global _login_status
@@ -164,7 +182,7 @@ def start_browser_login_async(headless: bool = True) -> dict:
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=headless)
+                browser = launch_browser(p, headless=headless)
                 context = browser.new_context(
                     viewport={"width": 1280, "height": 800},
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -277,7 +295,7 @@ def native_upload_chapter(book_title: str, chapter_title: str, chapter_content: 
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = launch_browser(p, headless=True)
             context = browser.new_context(
                 storage_state=str(AUTH_STATE_PATH),
                 viewport={"width": 1280, "height": 800},
