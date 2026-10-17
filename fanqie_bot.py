@@ -40,7 +40,7 @@ def launch_edge_browser():
         f"--user-data-dir={str(EDGE_USER_DATA)}",
         "--no-first-run",
         "--no-default-browser-check",
-        "https://fanqienovel.com/main/writer"
+        "https://fanqienovel.com/writer/zone"
     ]
     print(f"🚀 正在启动 Edge 独立发布浏览器...")
     print(f"📁 会话数据保存目录: {EDGE_USER_DATA}")

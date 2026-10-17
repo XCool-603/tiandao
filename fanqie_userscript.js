@@ -4,6 +4,7 @@
 // @version      1.1.0
 // @description  连接天道本地推演引擎，自动将新推演章节无缝填入番茄作家后台草稿箱，实现写一章传一章全自动挂机！
 // @author       Tiandao AI
+// @match        https://fanqienovel.com/writer/zone*
 // @match        https://fanqienovel.com/main/writer*
 // @match        https://fanqienovel.com/creator*
 // @grant        GM_xmlhttpRequest
