@@ -1705,6 +1705,31 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
             return
 
+        # 全量数据一键备份下载包 (包含所有书籍、章节正文、因果总账、系统配置与番茄免密凭证)
+        if path in ("/api/admin/backup", "/api/system/backup"):
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+                if OUTPUT_DIR.exists():
+                    for root_dir, dirs, files in os.walk(OUTPUT_DIR):
+                        for f in files:
+                            file_path = Path(root_dir) / f
+                            arcname = file_path.relative_to(OUTPUT_DIR)
+                            z.write(file_path, arcname=f"output/{arcname}")
+                # 同时也把项目根目录现存的 .env 加入备份
+                root_env = BASE_DIR / ".env"
+                if root_env.exists():
+                    z.write(root_env, arcname=".env")
+            buf.seek(0)
+            zip_bytes = buf.getvalue()
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="tiandao_full_backup_{ts}.zip"')
+            self.send_header("Content-Length", str(len(zip_bytes)))
+            self.end_headers()
+            self.wfile.write(zip_bytes)
+            return
+
         if path in ("/api/stream/simulate", "/api/simulate_stream"):
             parsed_qs = urllib.parse.parse_qs(parsed.query)
             mode = parsed_qs.get("mode", ["single"])[0]
