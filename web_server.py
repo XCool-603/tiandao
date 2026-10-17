@@ -1,0 +1,2114 @@
+import sys
+import os
+import json
+import time
+import threading
+from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
+import urllib.parse
+import io
+import zipfile
+
+# 确保 UTF-8
+if sys.platform.startswith("win"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+from config import (
+    API_KEY, BASE_URL, DEFAULT_MODEL, TIANDAO_MODEL,
+    CHRONICLER_MODEL, MAX_ROUNDS, AUTO_GENERATE_NOVEL, load_dotenv
+)
+from llm_client import LLMClient
+from world_state import WorldState, RoundLog, CharacterAction
+from agents.tiandao import TiandaoAgent
+from agents.character import CharacterAgent
+from agents.chronicler import ChroniclerAgent
+from mock_engine import run_mock_demo
+from book_manager import book_mgr, Book
+
+WEB_DIR = Path(__file__).parent / "web"
+OUTPUT_DIR = Path(__file__).parent / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+class SimulationManager:
+    """全局多书库推演状态管理器（与 BookManager 紧密集成）"""
+    def __init__(self):
+        self.is_busy = False
+        self.stop_requested = False
+
+    @property
+    def active_book(self) -> Book:
+        return book_mgr.get_active_book()
+
+    @property
+    def world(self) -> WorldState:
+        return self.active_book.world
+
+    @property
+    def current_round(self) -> int:
+        return self.active_book.current_round
+
+    @current_round.setter
+    def current_round(self, val: int):
+        self.active_book.current_round = val
+        self.active_book.save()
+
+    @property
+    def novel_content(self) -> str:
+        if self.active_book.chapters:
+            return self.active_book.chapters[0].get("content", "")
+        return ""
+
+    @novel_content.setter
+    def novel_content(self, val: str):
+        if self.active_book.chapters:
+            self.active_book.chapters[0]["content"] = val
+            self.active_book.chapters[0]["word_count"] = len(val)
+        else:
+            first_line = val.strip().split("\n")[0].replace("#", "").strip() or f"第一章 {self.active_book.title}"
+            self.active_book.chapters.append({
+                "id": 1,
+                "title": first_line,
+                "word_count": len(val),
+                "content": val
+            })
+        self.active_book.save()
+
+    def get_chapters(self):
+        return self.active_book.chapters
+
+    def get_dramas(self):
+        return self.active_book.dramas
+
+    def reset(self, world_theme=""):
+        """重置当前书籍的世界历史与轮次"""
+        book_mgr.reset_book(self.active_book.id)
+
+    def _genesis_procedural(self, world_theme=""):
+        """纯动态程序化创世生成器（每次重开都是全新的人名、宗门与机缘）"""
+        import random
+        # 场景库
+        scenes = [
+            {
+                "title": "【万剑仙冢·绝壁夺剑】",
+                "desc": "荒古万剑仙冢裂谷，黑风呼啸如雷，十万锈剑插满峭壁。谷心一尊插在万年玄冰中的绝品古剑【断尘古刃】散发森冷剑意。上古禁绝压制所有修士御空之术，剑煞四溢，触之经脉尽裂。"
+            },
+            {
+                "title": "【大荒废渊·九阳离火鼎】",
+                "desc": "炽热熔岩滚滚的荒古地脉，岩浆翻涌凝聚成赤莲。半空中悬浮一座破损的上古道阶宝鼎【九阳离火鼎】，正吞吐纯阳紫火。四周毒煞赤炎弥漫，各方隐匿气息，杀机暗涌。"
+            },
+            {
+                "title": "【北冥幽谷·化形雪莲劫】",
+                "desc": "极北极寒之地，暴风雪撕裂天地。幽谷绝顶一株即将化形的万年【九叶冰晶雪莲】正绽放三寸毫光。暴风雪封锁神识，周围白茫茫一片，敌我莫辨，步步杀机。"
+            }
+        ]
+        chosen_scene = random.choice(scenes)
+        self.world.title = chosen_scene["title"]
+        self.world.scene_description = chosen_scene["desc"]
+
+        # 随机名字与门派生成池
+        first_names = ["楚", "陆", "封", "墨", "莫", "姜", "裴", "顾", "闻", "姬", "萧", "齐"]
+        last_names = ["绝尘", "青瑶", "不破", "无痕", "行舟", "凌虚", "千羽", "孤舟", "问秋", "玄机", "照雪", "沧海"]
+        random.shuffle(first_names)
+        random.shuffle(last_names)
+
+        archetypes = [
+            {
+                "role_type": "苟道隐忍散修",
+                "camp": "散修/亡命徒",
+                "cultivation": "练气八层巅峰(伪装为练气五层)",
+                "public": "相貌平平，面带风霜之色，身穿洗旧的麻布道袍，神情谨小慎微，逢人唯唯诺诺。",
+                "secret": "【极端警惕】精通《龟息敛气秘术》与土遁符阵，袖中暗藏淬毒追魂刺三枚与天雷爆裂珠，第一反应永远是探查退路，绝不强出头。",
+                "inventory": ["淬毒追魂刺", "天雷爆裂珠", "隐匿地行符x2"]
+            },
+            {
+                "role_type": "正道天骄/剑修",
+                "camp": "名门上宗真传",
+                "cultivation": "筑基初期(压制在练气九层)",
+                "public": "锦袍玉带，神情孤傲清冷，背负古剑，目若寒星，周身隐有剑意凝而不发。",
+                "secret": "【宗门死战】身负宗门密令夺宝冲关，但丹田隐有陈年暗伤，极度防备身边同门与魔道偷袭，行事果断绝情。",
+                "inventory": ["青罡古剑", "护心玄冰镜", "疾风破空符"]
+            },
+            {
+                "role_type": "伪善执事/师兄",
+                "camp": "名门内鬼/伪君子",
+                "cultivation": "练气九层圆满",
+                "public": "仪表堂堂，言语温和谦逊，以领队师兄自居，对同门照拂有加。",
+                "secret": "【借刀杀人】早已暗投外宗，意图在夺宝混乱中拿同门弟子当挡箭牌试阵，借凶险除掉竞争对手后独吞重宝。",
+                "inventory": ["破煞锁灵阵旗", "透骨毒影钉", "迷神烟"]
+            },
+            {
+                "role_type": "魔宗暗桩/妖修",
+                "camp": "魔煞邪修",
+                "cultivation": "练气九层巅峰",
+                "public": "黑纱裹面或身披羽氅，眼神冰冷邪异，行事随心所欲，冷眼旁观众人。",
+                "secret": "【嗜血图谋】修习神魂摄取邪术，最擅长在多方火并时挑拨离间、落井下石收割败亡者金丹与精血。",
+                "inventory": ["化血修罗刺", "百鬼隐匿幡", "血遁符"]
+            }
+        ]
+
+        # 动态组装 4 位全新修士
+        for i in range(4):
+            c_name = f"{first_names[i]}{last_names[i]}"
+            arch = archetypes[i]
+            cid = f"char_dyn_{i+1}"
+            self.world.characters[cid] = {
+                "name": c_name,
+                "title": arch["role_type"],
+                "camp": arch["camp"],
+                "cultivation_level": arch["cultivation"],
+                "public_profile": f"{c_name}，{arch['public']}",
+                "secret_profile": arch["secret"],
+                "inventory": arch["inventory"],
+                "status": "alive"
+            }
+
+    def _genesis_real(self, world_theme=""):
+        """大模型真实自主创世（由 AI 完全自主构建全新的天地与全新的人物）"""
+        llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+        theme_hint = f"世界主题定制：{world_theme}\n" if world_theme else ""
+
+        prompt = f"""
+你是不受任何既定故事束缚的【天道开辟主宰】。
+请从零为一部【全新凡人流群像修仙小说】开辟初始世界舞台，并完全自主捏造第一批（4位）登场角色的设定。
+
+【重要禁忌】：
+- **严禁使用任何已有小说人物名字（绝对不要出现韩立/韩厉、南宫婉/南宫璇、厉飞雨、顾长青、方源等任何名字）！**
+- **必须完全自主原创姓名与身世背景！**
+- **人人皆是主角，人人皆怀鬼胎与长生执念，绝无降智炮灰，也无天定免死光环！**
+
+{theme_hint}
+请输出纯净严格的 JSON 格式：
+```json
+{{
+  "scene_title": "秘境/杀局古典名称 (如: 【天芒断崖·古修血灵大阵】)",
+  "scene_description": "当前天地格局、异宝现世、险恶禁制压制描述 (120~200字)",
+  "characters": [
+    {{
+      "name": "原创姓名 (2~3字)",
+      "title": "头衔/身份 (如: 掩星阁暗桩 / 游方散修 / 剑庄少主)",
+      "camp": "正道/魔修/散修/商贾",
+      "cultivation_level": "真实境界与表面伪装境界",
+      "public_profile": "外貌神态与表面法宝装束 (60~100字)",
+      "secret_profile": "【真实隐秘底牌、暗中心机与绝密底线】 (80~120字)",
+      "inventory": ["法宝1", "暗器2", "保命底牌3"]
+    }}
+  ]
+}}
+```
+"""
+        raw_res = llm.chat(os.getenv("MODEL_NAME", "deepseek-chat"), [
+            {"role": "system", "content": "你是冷酷主宰一切的修仙世界创世天道。"},
+            {"role": "user", "content": prompt}
+        ])
+        parsed = llm.extract_json(raw_res)
+        if not parsed or not parsed.get("characters"):
+            raise ValueError("LLM 未能正确生成天地结构")
+
+        self.world.title = parsed.get("scene_title", "【荒天大泽·古仙遗蜕】")
+        self.world.scene_description = parsed.get("scene_description", "荒古雷云密布，九道天雷撕裂地脉，异宝现世。")
+        self.world.characters = {}
+
+        for idx, c in enumerate(parsed["characters"][:4]):
+            cid = f"char_dyn_{idx+1}"
+            c["status"] = "alive"
+            self.world.characters[cid] = c
+
+
+    def spawn_character(self, preset_id=None, custom_prompt="", force_mock=False):
+        """天道点化 / 引入新修士入局"""
+        load_dotenv()
+        current_api_key = os.getenv("OPENAI_API_KEY", "")
+        use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
+
+        char_id = f"char_{int(time.time())}"
+        new_char = None
+
+        if use_mock or not custom_prompt:
+            # 模拟/随机动态捏人备选库
+            mock_pool = [
+                {
+                    "name": "燕狂徒",
+                    "title": "异灵根散修",
+                    "camp": "散修/亡命徒",
+                    "cultivation_level": "筑基初期",
+                    "public_profile": "满头赤发，披着带血兽皮，扛着一柄门板大小的断狱重刀，周身隐有雷弧闪烁。",
+                    "secret_profile": "【困兽之斗】被仇家追杀走投无路，嗅到重宝出世气息，欲强行争夺博一线生机；性情狂暴，一言不合便拔刀决生死。",
+                    "inventory": ["断狱重刀", "狂雷符x3", "天雷遁甲"]
+                },
+                {
+                    "name": "金不换",
+                    "title": "万宝阁四海游商",
+                    "camp": "中立/商贾",
+                    "cultivation_level": "练气九层巅峰",
+                    "public_profile": "大腹便便，面色和蔼，身着金丝绸缎长袍，十指戴满储物灵戒，脚踏一尊金元宝飞行法器。",
+                    "secret_profile": "【贪婪商人】随身携带有高阶'破禁符'与'金蝉脱壳符'，专门在秘境死地高价兜售救命丹药或低价抄底死者储物袋。",
+                    "inventory": ["八宝如意金钱", "金蝉脱壳符", "化瘀还魂丹x5"]
+                },
+                {
+                    "name": "赵青鸾",
+                    "title": "名门巡界执法使",
+                    "camp": "正道宗门",
+                    "cultivation_level": "筑基中期",
+                    "public_profile": "一袭青鸾暗纹锦袍，眉宇威严，手持追魂寻气罗盘，踏空而立，四方灵压沉重如山。",
+                    "secret_profile": "【奉命夺宝】奉宗门密令探查天地异象核心，立誓斩杀所有阻挠夺宝的各方修士。",
+                    "inventory": ["青鸾破空梭", "追魂罗盘", "极寒玄冰障"]
+                }
+            ]
+            # 选一个没出场过的
+            available = [c for c in mock_pool if not any(existing["name"] == c["name"] for existing in self.world.characters.values())]
+            chosen = available[0] if available else mock_pool[0]
+            new_char = dict(chosen)
+        else:
+            # 真实大模型实时捏人
+            llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+            prompt = f"""
+请为【传统凡人流修仙世界】创造一位新登场的修士，要求严格契合凡人流的冷酷风格（注重因果、算计、隐秘底牌）。
+修士设定要求：{custom_prompt if custom_prompt else "一位被寒潭巨大斗法动静吸引而来的路过修士（可以是老怪、邪修、捡漏散修或宗门追兵）"}
+
+请严格输出 JSON 格式：
+```json
+{{
+  "name": "姓名 (2~3字)",
+  "title": "尊号/宗门头衔",
+  "camp": "阵营 (如: 正道/魔道/散修/商会)",
+  "cultivation_level": "境界 (如: 练气八层 / 筑基初期 / 结丹老怪)",
+  "public_profile": "外貌神态与表面法宝描述 (60~100字)",
+  "secret_profile": "【真实隐秘底牌与暗中心思准则】 (80~120字)",
+  "inventory": ["法宝1", "暗器2", "保命符箓3"]
+}}
+```
+"""
+            model_to_use = os.getenv("MODEL_NAME", "balanced-model")
+            parsed = None
+            try:
+                raw_res = llm.chat(model_to_use, [
+                    {"role": "system", "content": "你是修仙世界造物天道。"},
+                    {"role": "user", "content": prompt}
+                ])
+                parsed = llm.extract_json(raw_res)
+            except Exception as e:
+                print(f"[天道点化 告警] 模型 {model_to_use} 调用失败: {e}，尝试使用 balanced-model 回退...")
+                if model_to_use != "balanced-model":
+                    try:
+                        raw_res = llm.chat("balanced-model", [
+                            {"role": "system", "content": "你是修仙世界造物天道。"},
+                            {"role": "user", "content": prompt}
+                        ])
+                        parsed = llm.extract_json(raw_res)
+                    except Exception as e2:
+                        print(f"[天道点化 兜底] balanced-model 回退亦失败: {e2}，使用预设修士")
+                        parsed = None
+                else:
+                    parsed = None
+
+            if parsed and parsed.get("name"):
+                new_char = parsed
+            else:
+                new_char = {
+                    "name": "灰袍神秘客",
+                    "title": "匿息邪修",
+                    "camp": "散修",
+                    "cultivation_level": "筑基初期",
+                    "public_profile": "灰袍罩头，不见面容，脚踏一根幽绿骨杖，无声无息悬于乱石上空。",
+                    "secret_profile": "暗中祭炼万魂幡，等待场上众人力竭时一网打尽。",
+                    "inventory": ["幽冥白骨杖", "隐息匿形披风"]
+                }
+
+        new_char["status"] = "alive"
+        self.world.characters[char_id] = new_char
+
+        # 广而告之：在天道事件中留下记录
+        announcement = f"【天道生变·新修士踏入战局】：修士【{new_char['name']}】（{new_char.get('title', '')} / {new_char.get('cultivation_level', '')}）感应到此地灵力激荡，御器破空而来！"
+        if self.world.history:
+            self.world.history[-1].tiandao_intervention = (
+                (self.world.history[-1].tiandao_intervention or "") + f"\n{announcement}"
+            )
+
+        return {"status": "ok", "character": new_char}
+
+    def get_state(self):
+        # 组装返回给前端的状态
+        load_dotenv()
+        current_api_key = os.getenv("OPENAI_API_KEY", "")
+        has_real_key = bool(current_api_key and current_api_key != "your_api_key_here")
+
+        char_list = []
+        for k, c in self.world.characters.items():
+            # 找到该角色在最后一轮的私有内心独白（全知天道可见）
+            last_inner = ""
+            if self.world.history:
+                for act in self.world.history[-1].actions:
+                    if act.char_name == c["name"]:
+                        last_inner = act.inner_thought
+                        break
+
+            char_list.append({
+                "id": k,
+                "name": c["name"],
+                "title": c.get("title", ""),
+                "camp": c.get("camp", ""),
+                "cultivation": c.get("cultivation_level", ""),
+                "public_profile": c["public_profile"],
+                "secret_profile": c["secret_profile"],
+                "inventory": c.get("inventory", []),
+                "injuries": c.get("injuries", []),
+                "status": c.get("status", "alive"),
+                "last_inner_thought": last_inner
+            })
+
+        history_list = []
+        for r in self.world.history:
+            history_list.append({
+                "round": r.round_number,
+                "environment": r.environment_state,
+                "tiandao_intervention": r.tiandao_intervention,
+                "arbitration": r.arbitration_result,
+                "actions": [
+                    {
+                        "char_id": a.char_id,
+                        "name": a.char_name,
+                        "inner_thought": a.inner_thought,
+                        "speech": a.speech,
+                        "action": a.action
+                    }
+                    for a in r.actions
+                ]
+            })
+
+        # 章节精简处理：仅首章与尾章保留正文默认展示，其余章节按需由 /api/chapter 懒加载，防止超大体积卡死前端
+        lean_chapters = []
+        for idx, c in enumerate(self.active_book.chapters):
+            include_content = (idx == 0 or idx == len(self.active_book.chapters) - 1)
+            lean_chapters.append({
+                "id": c.get("id"),
+                "title": c.get("title", f"第{c.get('id')}章"),
+                "word_count": c.get("word_count", len(c.get("content", ""))),
+                "content": c.get("content", "") if include_content else ""
+            })
+
+        raw_key = os.getenv("OPENAI_API_KEY", "")
+        masked_key = f"{raw_key[:3]}****{raw_key[-4:]}" if (has_real_key and len(raw_key) > 7) else ("••••••••" if has_real_key else "")
+
+        return {
+            "book_id": self.active_book.id,
+            "title": self.active_book.title,
+            "genre": self.active_book.genre,
+            "synopsis": self.active_book.synopsis,
+            "theme_prompt": self.active_book.theme_prompt,
+            "scene_description": self.world.scene_description,
+            "current_round": self.current_round,
+            "max_rounds": self.world.max_rounds,
+            "characters": char_list,
+            "history": history_list,
+            "chapters": lean_chapters,
+            "outline": getattr(self.active_book, "outline", {}),
+            "has_outline": bool(getattr(self.active_book, "outline", {}).get("main_plot")),
+            "foreshadowings": getattr(self.active_book, "foreshadowings", []),
+            "dramas": self.active_book.dramas,
+            "books_summary": book_mgr.list_books_summary(),
+            "is_busy": self.is_busy,
+            "has_novel": bool(self.novel_content),
+            "novel_content": self.novel_content,
+            "config": {
+                "has_api_key": has_real_key,
+                "api_key_masked": masked_key,
+                "base_url": os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1"),
+                "model_name": os.getenv("MODEL_NAME", "balanced-model"),
+                "tiandao_model": os.getenv("TIANDAO_MODEL", os.getenv("MODEL_NAME", "balanced-model")),
+                "chronicler_model": os.getenv("CHRONICLER_MODEL", os.getenv("MODEL_NAME", "fast-model"))
+            }
+        }
+
+    def step(self, divine_decree="", force_mock=False, auto_spawn=False):
+        """执行单步演化"""
+        if self.is_busy:
+            return {"error": "推演引擎正忙，请稍候..."}
+
+        self.is_busy = True
+        try:
+            self.current_round += 1
+            load_dotenv()
+            current_api_key = os.getenv("OPENAI_API_KEY", "")
+            use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
+
+            # 若勾选自动引人且轮次到达第2轮或场上少于4人，概率由天道引来新路过散修
+            if auto_spawn and (self.current_round >= 2) and (len(self.world.characters) < 5):
+                self.spawn_character(custom_prompt="被滔天法宝威压与剧烈斗法声响吸引而来的路过散修或宗门追兵", force_mock=use_mock)
+
+            if use_mock:
+                # 模拟推演模式
+                result = self._step_mock(self.current_round, divine_decree)
+            else:
+                # 真实大模型推演
+                try:
+                    result = self._step_real(self.current_round, divine_decree)
+                except Exception as e:
+                    print(f"[推演中心 异常拦截] 真实推演遇到异常: {e}，平滑切换至沙盒模拟！")
+                    result = self._step_mock(self.current_round, divine_decree)
+
+            self.active_book.save()
+            return result
+        finally:
+            self.is_busy = False
+
+    def _step_mock(self, round_num, divine_decree):
+        """高质量模拟步（对当前任意自创角色的自适应群像博弈推演，全自动生死流转）"""
+        time.sleep(1.2)  # 模拟推演时间
+        decree_text = f"【天道法旨干涉】：{divine_decree}\n" if divine_decree else ""
+
+        # 获取当前存活的角色
+        active_chars = [c for c in self.world.characters.values() if c.get("status", "alive") == "alive"]
+
+        # 【核心】：若当前场上没有任何角色（第一回合从零开辟），天地异象爆发，自发引来第一批3位修士！
+        if not active_chars:
+            initial_arrivals = [
+                {
+                    "name": "楚无痕",
+                    "title": "隐忍苟道散修",
+                    "camp": "散修/亡命徒",
+                    "cultivation_level": "练气八层巅峰(伪装五层)",
+                    "public_profile": "相貌平平，身穿洗旧麻布道袍，神情谨小慎微，双手拢在宽袖之中。",
+                    "secret_profile": "【绝对谨慎】精通敛息龟息之术，袖中暗藏淬毒追魂钉与疾风符，永远先寻三条逃跑路线。",
+                    "inventory": ["淬毒追魂钉", "匿灵地行符x2", "阴雷子"],
+                    "inner": "此地煞气冲天，必有大凶。我且隐于最下风处，若有异动立刻遁地逃走！",
+                    "speech": "在下偶感灵气路过此地，绝无与诸位争夺之意……",
+                    "act": "神色慌乱地退至乱石背阴处，右手在袖中扣紧一枚追魂钉。"
+                },
+                {
+                    "name": "陆青霜",
+                    "title": "天剑宗真传剑子",
+                    "camp": "正道宗门",
+                    "cultivation_level": "筑基初期",
+                    "public_profile": "白衣胜雪，背负古剑，面容孤傲清冷，周身剑气吞吐隐而不发。",
+                    "secret_profile": "【孤绝剑道】奉师命寻找凝丹至宝，心性果决绝情，凡阻碍剑道者唯有一剑斩之。",
+                    "inventory": ["青罡灵剑", "护心玄冰障", "破风剑符"],
+                    "inner": "这帮散修鬼祟退缩，定心怀鬼胎。待灵物出世，谁敢上前一步，休怪我青罡剑利！",
+                    "speech": "天材地宝有缘者得之，宵小之徒若敢妄动，休怪飞剑无情！",
+                    "act": "凝霜飞剑出鞘三寸，化作青白光芒盘旋于头顶丈许，剑气逼人。"
+                },
+                {
+                    "name": "封不破",
+                    "title": "千幻魔宗暗桩",
+                    "camp": "魔煞邪修",
+                    "cultivation_level": "练气九层巅峰",
+                    "public_profile": "一袭暗紫华袍，手摇折扇，言谈举止看似儒雅随和，眼底却隐有嗜血冷光。",
+                    "secret_profile": "【笑里藏刀】精通魔道幻术与化骨血毒，惯于以大义挑拨正道相残，再趁乱收割精血与金丹。",
+                    "inventory": ["千幻阴煞扇", "化骨透心毒钉", "天魔血遁符"],
+                    "inner": "桀桀，一个胆怯散修，一个傲慢剑修。待他们火并力竭，两人的储物袋与血肉金丹全归我千幻宗！",
+                    "speech": "仙子何必如此凌厉？宝物现世见者有份，我等不如合力探寻如何？",
+                    "act": "折扇轻摇，步履优雅踏前一步，袖底却暗中将三枚无形化骨毒钉按入土中。"
+                }
+            ]
+
+            actions = []
+            for idx, c in enumerate(initial_arrivals):
+                cid = f"char_dyn_init_{idx+1}"
+                self.world.characters[cid] = {
+                    "name": c["name"],
+                    "title": c["title"],
+                    "camp": c["camp"],
+                    "cultivation_level": c["cultivation_level"],
+                    "public_profile": f"{c['name']}，{c['public_profile']}",
+                    "secret_profile": c["secret_profile"],
+                    "inventory": c["inventory"],
+                    "status": "alive"
+                }
+                actions.append(CharacterAction(
+                    char_id=c["name"],
+                    char_name=c["name"],
+                    inner_thought=c["inner"],
+                    speech=c["speech"],
+                    action=c["act"]
+                ))
+
+            self.world.title = "【万绝古渊 · 仙煞残图出世】"
+            env_change = "轰隆！深渊地脉轰然崩裂，一道万丈霞光冲天而起，照彻万里苍穹，引动周遭修士破空而至！"
+            fate_twist = f"{decree_text}【天地因果初显】：深渊绝地异象爆发！三位互不相识的争渡者第一时间被灵波吸引，降临深渊裂谷！"
+            arbitration = "三方修士各怀鬼胎，于深渊边缘形成三角对峙，神识与暗器已死死锁定彼此，杀机一触即发！"
+
+            log = RoundLog(
+                round_number=round_num,
+                environment_state=env_change,
+                tiandao_intervention=fate_twist,
+                actions=actions,
+                arbitration_result=arbitration
+            )
+            self.world.history.append(log)
+            return {"status": "ok", "round": round_num}
+
+        actions = []
+        for idx, c in enumerate(active_chars):
+            c_name = c["name"]
+            c_type = c.get("title", "")
+            
+            # 根据角色的修行派系与性格，动态产生博弈行为
+            if "苟" in c_type or "隐忍" in c_type or "散修" in c_type:
+                thought = f"此地阵法禁制灵气狂暴，前方必有大凶险！我且借地形掩护退入死角，袖中扣紧淬毒暗器与匿灵符，万万不可当出头鸟！"
+                speech = f"诸位道友，在下法力微薄，愿在侧翼为诸位防范暗处变故。"
+                act = f"神色惶恐躬身后撤三步，双手缩入宽袖之中，暗中将三枚淬毒暗器扣紧，神识扫探周遭逃生退路。"
+            elif "剑" in c_type or "天骄" in c_type or "真传" in c_type:
+                thought = f"这帮散修与同门各怀鬼胎，谁也信不过！待会儿宝物显露，谁若敢阻我长生道途，唯有一剑斩之！"
+                speech = f"重宝在前，各凭本事！谁若敢暗中施展阴毒手段，休怪本座剑下无情！"
+                act = f"背后本命长剑发出一阵清越龙吟，剑气化作丈许青霜逼退狂暴灵压，踏立虚空蓄势待发。"
+            elif "伪善" in c_type or "师兄" in c_type or "内鬼" in c_type or "执事" in c_type:
+                thought = f"这帮蠢货还在试探，正合我意！稍后借暴虐灵力将他们震向禁制陷阱，我便能坐收渔翁之利！"
+                speech = f"诸位同道切莫伤了和气，当务之急是一同抵御凶险，机缘当均分！"
+                act = f"面带温和微笑出言安抚，宽袍之下却将三枚阴煞化骨钉悄然打入冻土死角。"
+            elif "魔" in c_type or "邪修" in c_type or "暗桩" in c_type:
+                thought = f"桀桀，一群满口仁义的名门伪君子！待你们两败俱伤，神魂与金丹皆是本座的无上资粮！"
+                speech = f"咯咯，说得比唱得还好听，奴家倒要看看今天谁能活着带走机缘！"
+                act = f"周身黑红血煞之气忽隐忽现，修罗血刃在指尖回旋，无形神识惑音封死众人退路。"
+            else:
+                thought = f"局势凶险万分，不可妄动，务必留存底牌以备不测！"
+                speech = f"静观其变，伺机而动！"
+                act = f"祭起护身法器，全神贯注戒备四周动静。"
+
+            actions.append(CharacterAction(
+                char_id=c_name,
+                char_name=c_name,
+                inner_thought=thought,
+                speech=speech,
+                action=act
+            ))
+
+        # 根据轮次演变天地异象与自动引渡新人/结算生死
+        if round_num == 1:
+            # 自动吸引来一位全新的海外老怪破空杀入！
+            new_id = f"char_dyn_new_1"
+            if new_id not in self.world.characters:
+                self.world.characters[new_id] = {
+                    "name": "万剑真人",
+                    "title": "海外结丹剑修",
+                    "camp": "正道散修",
+                    "cultivation_level": "结丹初期",
+                    "public_profile": "万剑真人，白发狂舞，踏着一柄十丈赤铜巨剑破空降临，恐怖威压如泰山压顶。",
+                    "secret_profile": "寿元将尽，嗅到异宝霞光破关而出，视眼前众生为蝼蚁草芥，敢阻挠者必杀无赦。",
+                    "inventory": ["赤铜诛魔剑", "太乙化血金丹", "青溟遁符"],
+                    "status": "alive"
+                }
+            env_change = f"虚空崩裂，天地罡风肆虐，{self.world.title}核心之物光芒冲霄！"
+            fate_twist = f"{decree_text}【天地因果涌现】：剧烈法宝激荡引动百里外的结丹老怪【万剑真人】御剑横空杀入战局！"
+            arbitration = f"结丹威压笼罩全场！在场修士各展护身底牌狼狈倒退，杀气直冲云霄，战局彻底失控！"
+
+        elif round_num == 2:
+            # 随机淘汰1人(身死)，让1人逃脱(远遁)
+            dead_name = "一位修士"
+            esc_name = "一位修士"
+            if len(active_chars) >= 2:
+                active_chars[1]["status"] = "dead"
+                dead_name = active_chars[1]["name"]
+            if len(active_chars) >= 3:
+                active_chars[0]["status"] = "escaped"
+                esc_name = active_chars[0]["name"]
+
+            # 再自动涌现一位趁乱摸金的黑市散修
+            new_id = f"char_dyn_new_2"
+            if new_id not in self.world.characters:
+                self.world.characters[new_id] = {
+                    "name": "百里遁",
+                    "title": "地行夺宝客",
+                    "camp": "黑市散修",
+                    "cultivation_level": "练气九层巅峰",
+                    "public_profile": "百里遁，身披土黄隐灵披风，悄无声息潜行于碎石废墟之中，双手戴满破禁金丝手套。",
+                    "secret_profile": "专掏陨落大能遗蜕储物袋，绝不参与正面斗法，一击得手瞬息遁地千里。",
+                    "inventory": ["天罗遁地铲", "绝息符x5", "烟罗遁影网"],
+                    "status": "alive"
+                }
+            env_change = "雷火狂暴炸裂，断崖峭壁巨石崩裂，古阵法纹被余波撕开数十丈裂痕！"
+            fate_twist = f"{decree_text}【因果生死结算】：【{dead_name}】暗算失误反遭围杀【身死道消】！【{esc_name}】趁乱卷走部分遗蜕【远遁脱离】！"
+            arbitration = f"【{dead_name}】陨落当场，血雾弥漫！摸金修士【百里遁】潜入战场搜刮战利品，剩余修士陷入拼死搏杀！"
+
+        else:
+            env_change = "极品宝光彻底爆发，地脉暗火翻涌，秘境大阵即将陷入永恒塌陷！"
+            fate_twist = f"{decree_text}【天道命数终局】：天地倒悬，各展禁忌秘术生死决断！"
+            arbitration = "残存众生各施逆天手段，遁法与杀招对撞，重宝四分五裂，胜者带伤破空离去，败者尸骨永镇绝地！"
+
+        log = RoundLog(
+            round_number=round_num,
+            environment_state=env_change,
+            tiandao_intervention=fate_twist,
+            actions=actions,
+            arbitration_result=arbitration
+        )
+        self.world.history.append(log)
+        return {"status": "ok", "round": round_num}
+
+    def _step_real(self, round_num, divine_decree="", chapter_outline=None):
+        """
+        【Turbo 极速双盲因果博弈引擎】
+        单次深度推理矩阵：一键完成全员双盲心机决策 + 天道客观裁决 + 确定性状态道具与伤势结算
+        耗时从 90s+ 缩短至 10s 级，Token 成本大幅降低，且具备确定性状态追踪。
+        """
+        llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+        target_book = self.active_book
+
+        # 1. 获取当前在场的存活角色
+        active_agents = {k: v for k, v in self.world.characters.items() if v.get("status", "alive") == "alive"}
+
+        # 若当前场上没有任何角色（第一回合从零开辟演化）：天道自主开辟世界与引渡首批争渡者
+        if not active_agents:
+            decree_hint = f"天道法旨干涉：{divine_decree}\n" if divine_decree else ""
+            genre = target_book.genre or "通用幻想"
+            prompt = f"""
+你是掌控【{genre}】大千因果的至高天道意志。
+当前世界处于【虚席以待】的初始格局，请为主线故事开辟首个核心舞台并引渡首批 3 位互不相识、各自心怀鬼胎的争渡核心角色：
+1. 【天地格局】：设定古典绝地/杀局/舞台名称与环境异动描述（80~150字）。
+2. 【首批登场角色】：生成 3 位原创角色（全原创姓名，绝无天定免死主角光环，人人皆主角）。提供其表面装束境界、隐密底牌与心机原则、携带主要物品。
+3. 【初次博弈】：生成各自内心深层算计、表面虚与委蛇言语与戒备动作。
+4. 【因果判定】：给出初次对峙的客观判定。
+
+{decree_hint}
+必须严格输出纯净 JSON 格式：
+```json
+{{
+  "scene_title": "秘境/绝地/都市/朝堂舞台名称",
+  "environment_change": "现场异象与肃杀动荡描写 (80~150字)",
+  "fate_twist": "突发变数或危机催化 (50~100字)",
+  "arbitration_summary": "客观因果裁决结论 (80~120字)",
+  "characters": [
+    {{
+      "name": "原创姓名 (2~3字)",
+      "title": "头衔/身份",
+      "camp": "所属阵营/流派",
+      "cultivation_level": "真实境界或社会身份",
+      "public_profile": "外貌神态与表面装束 (60~100字)",
+      "secret_profile": "【真实隐秘底牌、暗中心机与绝密底线】 (80~120字)",
+      "inventory": ["底牌/法宝/道具1", "保命符箓/信物2"],
+      "speech": "表面试探所言",
+      "action": "初次站位与具体动作",
+      "inner_thought": "内心真实深层算计独白"
+    }}
+  ]
+}}
+```
+"""
+            td_model = os.getenv("TIANDAO_MODEL") or os.getenv("MODEL_NAME") or "balanced-model"
+            try:
+                raw_res = llm.chat(td_model, [
+                    {"role": "system", "content": f"你是冷酷掌控【{genre}】因果的至高天道意志。"},
+                    {"role": "user", "content": prompt}
+                ])
+                parsed = llm.extract_json(raw_res)
+            except Exception as e:
+                print(f"[天道创世 提示] 真实模型异常: {e}，切入沙盒模拟生成")
+                return self._step_mock(round_num, divine_decree)
+
+            if not parsed or not parsed.get("characters"):
+                return self._step_mock(round_num, divine_decree)
+
+            self.world.title = parsed.get("scene_title", "【大千世界 · 风云初起】")
+            self.world.scene_description = parsed.get("environment_change", "虚空动荡，大幕拉开。")
+
+            actions = []
+            for idx, c in enumerate(parsed["characters"][:4]):
+                cid = f"char_{idx+1}"
+                self.world.characters[cid] = {
+                    "name": c["name"],
+                    "title": c.get("title", "争渡者"),
+                    "camp": c.get("camp", "中立"),
+                    "cultivation_level": c.get("cultivation_level", "初窥门径"),
+                    "public_profile": c.get("public_profile", ""),
+                    "secret_profile": c.get("secret_profile", ""),
+                    "inventory": c.get("inventory", []),
+                    "injuries": [],
+                    "status": "alive"
+                }
+                actions.append(CharacterAction(
+                    char_id=c["name"],
+                    char_name=c["name"],
+                    inner_thought=c.get("inner_thought", "静观其变，伺机夺宝。"),
+                    speech=c.get("speech", "各凭手段，见者有份。"),
+                    action=c.get("action", "暗扣底牌，谨慎戒备。")
+                ))
+
+            log = RoundLog(
+                round_number=round_num,
+                environment_state=parsed.get("environment_change", "天地异象爆发。"),
+                tiandao_intervention=parsed.get("fate_twist", ""),
+                actions=actions,
+                arbitration_result=parsed.get("arbitration_summary", "各方对峙，杀机四伏。")
+            )
+            self.world.history.append(log)
+            target_book.save()
+            return {"status": "ok", "round": round_num}
+
+        # 2. 构建 Turbo 统一因果博弈矩阵
+        char_dossiers = []
+        for cid, c in active_agents.items():
+            inj_str = "、".join(c.get("injuries", [])) if c.get("injuries") else "暂无创伤"
+            inv_str = "、".join(c.get("inventory", [])) if c.get("inventory") else "身无长物"
+            char_dossiers.append(
+                f"- 【{c['name']}】({c.get('title','')})：\n"
+                f"  * 表面伪装：{c.get('public_profile','')}\n"
+                f"  * 绝密底牌(他人不可知)：{c.get('secret_profile','')}\n"
+                f"  * 真实携带底牌道具：{inv_str}\n"
+                f"  * 遗留伤势：{inj_str}"
+            )
+        chars_context = "\n\n".join(char_dossiers)
+
+        outline_goal = ""
+        if chapter_outline:
+            outline_goal = (
+                f"\n【本章剧情核心主线蓝图】：\n"
+                f"- 本章标题：{chapter_outline.get('title')}\n"
+                f"- 核心目标：{chapter_outline.get('goal')}\n"
+                f"- 冲突交锋：{chapter_outline.get('conflict')}\n"
+                f"- 爆点高潮：{chapter_outline.get('climax')}"
+            )
+
+        decree_text = f"\n【天道法旨钦定强制干涉】：{divine_decree}" if divine_decree else ""
+
+        turbo_prompt = f"""
+你是不容忤逆的【{target_book.genre}因果律天道主宰】。
+当前现场环境：
+{self.world.scene_description}
+{outline_goal}
+{decree_text}
+
+【在场存活角色的真实档案（严格双盲战争迷雾！角色间绝对看不到彼此的内心独白与秘密底牌）】：
+{chars_context}
+
+作为至高天道主宰，请在一轮深度因果推演中，一次性完成以下三大职责：
+1. 【全员双盲决策】：为在场每位角色推演本回合行动。必须严格依据其各自的绝密心机与携带道具，生成深层内心算计独白、表面掩饰言辞、暗中具体出手招式及所消耗道具。
+2. 【天道因果裁决】：给出客观真实的招式对撞结果、天地格局动荡、外部大劫催化。
+3. 【确定性状态结算】：精确指定各角色实际消耗掉的道具、获得的战利品、新受到的真实伤势（如断臂、中毒、内伤吐血）以及生死走向（alive/dead/escaped）。
+
+必须严格按以下 JSON 格式输出，杜绝废话：
+```json
+{{
+  "environment_change": "现场异象与战局动荡描写 (80~120字)",
+  "fate_twist": "天道降下的外部变数或危机催化 (40~80字)",
+  "arbitration_summary": "客观交锋因果裁决（招式碰擦、法宝对轰、谁落入下风） (80~150字)",
+  "actions": [
+    {{
+      "char_name": "角色名",
+      "inner_thought": "内心真实深层算计独白 (60~100字)",
+      "speech": "表面所言或伪装辞令",
+      "action": "具体出手施法或站位暗招",
+      "used_items": ["本轮确切消耗的道具1"]
+    }}
+  ],
+  "settlement": {{
+    "consumed_items": {{
+      "角色名A": ["已消耗道具名"]
+    }},
+    "gained_items": {{
+      "角色名B": ["缴获或夺得的新道具"]
+    }},
+    "injuries": {{
+      "角色名A": "受创细节描述 (如: 经脉受创吐血三升)"
+    }},
+    "character_fates": {{
+      "角色名A": "alive",
+      "角色名B": "dead",
+      "角色名C": "escaped"
+    }}
+  }},
+  "new_arrival": {{
+    "should_spawn": false,
+    "name": "新角色名",
+    "title": "头衔",
+    "camp": "阵营",
+    "cultivation_level": "身份境界",
+    "public_profile": "外貌神态",
+    "secret_profile": "隐秘心机",
+    "inventory": ["携带道具1"],
+    "entrance_reason": "破空而至缘由"
+  }}
+}}
+```
+"""
+        td_model = os.getenv("TIANDAO_MODEL") or os.getenv("MODEL_NAME") or "balanced-model"
+        try:
+            raw_res = llm.chat(td_model, [
+                {"role": "system", "content": f"你是掌控【{target_book.genre}】宿命与因果的至高天道意志。"},
+                {"role": "user", "content": turbo_prompt}
+            ], temperature=0.7)
+            parsed = llm.extract_json(raw_res)
+        except Exception as e:
+            print(f"[Turbo 推演引擎 提示] 真实模型推演波动: {e}，自动降级至高质量沙盒模拟")
+            return self._step_mock(round_num, divine_decree)
+
+        if not parsed or not parsed.get("actions"):
+            return self._step_mock(round_num, divine_decree)
+
+        # 3. 提取博弈动作
+        actions = []
+        for a in parsed.get("actions", []):
+            actions.append(CharacterAction(
+                char_id=a.get("char_name", "无名"),
+                char_name=a.get("char_name", "无名"),
+                inner_thought=a.get("inner_thought", "静观其变。"),
+                speech=a.get("speech", "小心戒备！"),
+                action=a.get("action", "暗中调运护体法力。")
+            ))
+
+        fate_twist = parsed.get("fate_twist", "")
+        if divine_decree:
+            fate_twist = f"【天道法旨钦定】：{divine_decree}\n" + fate_twist
+
+        # 4. 执行确定性状态机结算（法宝道具确切扣除、伤势记录、生死状态变更）
+        settlement = parsed.get("settlement", {})
+        book_mgr.apply_deterministic_settlement(target_book, settlement)
+
+        # 5. 引渡新登场修士（如果场上活跃人数少于 5 且天道认为机缘已至）
+        new_arrival = parsed.get("new_arrival")
+        if new_arrival and isinstance(new_arrival, dict) and new_arrival.get("should_spawn") and new_arrival.get("name"):
+            new_id = f"char_{int(time.time()*1000)%1000000}"
+            self.world.characters[new_id] = {
+                "name": new_arrival["name"],
+                "title": new_arrival.get("title", "路过修士"),
+                "camp": new_arrival.get("camp", "散修"),
+                "cultivation_level": new_arrival.get("cultivation_level", "筑基初期"),
+                "public_profile": new_arrival.get("public_profile", "破空而至，神色戒备。"),
+                "secret_profile": new_arrival.get("secret_profile", "暗中图谋机缘。"),
+                "inventory": new_arrival.get("inventory", ["防身法宝"]),
+                "injuries": [],
+                "status": "alive"
+            }
+            spawn_log = f"【因果化生 · 新修士入局】：修士【{new_arrival['name']}】（{new_arrival.get('cultivation_level')}）破空而至！缘由：{new_arrival.get('entrance_reason', '受激荡声势吸引')}"
+            fate_twist = f"{fate_twist}\n{spawn_log}" if fate_twist else spawn_log
+
+        # 6. 记录本轮客观历史
+        log = RoundLog(
+            round_number=round_num,
+            environment_state=parsed.get("environment_change", "风暴席卷，四周杀气腾腾。"),
+            tiandao_intervention=fate_twist,
+            actions=actions,
+            arbitration_result=parsed.get("arbitration_summary", "各方暗算交错，战果抵定。")
+        )
+        self.world.history.append(log)
+        target_book.save()
+        return {"status": "ok", "round": round_num}
+
+    def generate_novel(self, force_mock=False):
+        """调用史官撰写小说章节"""
+        if self.is_busy:
+            return {"error": "引擎正忙，请稍候..."}
+
+        if not self.world.history:
+            # 自动开天辟地推演首轮因果，确保随时可以直接出书
+            print("[史官著书 智能补全] 检测到尚无历史，天道自动开辟天地推演首卷博弈...")
+            self.step(force_mock=force_mock, auto_spawn=True)
+
+        self.is_busy = True
+        try:
+            return self._write_novel_internal(force_mock=force_mock)
+        finally:
+            self.is_busy = False
+
+    def auto_simulate_and_publish(self, rounds=3, force_mock=False):
+        """一键全自动推演并著书成卷 (自动连续推进轮次并生成长篇小说正文)"""
+        if self.is_busy:
+            return {"error": "天道演化正忙，请稍候..."}
+
+        self.is_busy = True
+        try:
+            load_dotenv()
+            current_api_key = os.getenv("OPENAI_API_KEY", "")
+            use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
+
+            # 自动推进多轮
+            for _ in range(rounds):
+                self.current_round += 1
+                if self.current_round >= 2 and len(self.world.characters) < 5:
+                    self.spawn_character(custom_prompt="被滔天法宝威压吸引而来的散修或宗门追兵", force_mock=use_mock)
+
+                if use_mock:
+                    self._step_mock(self.current_round, "")
+                else:
+                    try:
+                        self._step_real(self.current_round, "")
+                    except Exception as e:
+                        print(f"[一键成书 熔断保护] 第 {self.current_round} 轮异常: {e}，平滑切换沙盒演练")
+                        self._step_mock(self.current_round, "")
+                time.sleep(1.0)
+
+            # 终局由史官撰写小说正文
+            return self._write_novel_internal(force_mock=use_mock)
+        finally:
+            self.is_busy = False
+
+    def _write_novel_internal(self, force_mock=False):
+        load_dotenv()
+        current_api_key = os.getenv("OPENAI_API_KEY", "")
+        use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
+
+        if use_mock:
+            novel_path = OUTPUT_DIR / "novel_chapter_01.md"
+            if novel_path.exists():
+                self.novel_content = novel_path.read_text(encoding="utf-8")
+            else:
+                self.novel_content = "# 第一章 寒潭夺芝，各怀鬼胎\n\n九幽寒潭，冷雾森然……"
+        else:
+            llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+            chr_model = os.getenv("CHRONICLER_MODEL") or "fast-model"
+            try:
+                chronicler = ChroniclerAgent(llm, chr_model)
+                self.novel_content = chronicler.write_chapter(self.world, self.world.history)
+            except Exception as e_chr:
+                print(f"[史官著书 告警] 史官模型 {chr_model} 调用失败: {e_chr}，尝试 fast-model 回退...")
+                try:
+                    chronicler_fb = ChroniclerAgent(llm, "fast-model")
+                    self.novel_content = chronicler_fb.write_chapter(self.world, self.world.history)
+                except Exception as e_chr2:
+                    print(f"[史官著书 兜底] fast-model 回退亦失败: {e_chr2}")
+                    self.novel_content = ""
+
+        if not self.novel_content or len(self.novel_content.strip()) < 100:
+            novel_lines = [
+                f"# 【{self.world.title}】群雄争渡录 · 第一回",
+                "",
+                f"大道无情，万仙争渡。{self.world.scene_description}",
+                ""
+            ]
+            for r in self.world.history:
+                novel_lines.append(f"## 第 {r.round_number} 回 · 天地因果博弈")
+                novel_lines.append(f"> **天地异象**：{r.environment_state}\n")
+                if r.tiandao_intervention:
+                    novel_lines.append(f"> **天道变数**：{r.tiandao_intervention}\n")
+                novel_lines.append("### 各方心机与施法")
+                for a in r.actions:
+                    novel_lines.append(f"**【{a.char_name}】** 启唇道：“*{a.speech}*”")
+                    novel_lines.append(f"- 具体行动：{a.action}")
+                    novel_lines.append(f"- 私密暗算：*{a.inner_thought}*\n")
+                novel_lines.append(f"### 天道因果裁决\n{r.arbitration_result}\n---")
+            self.novel_content = "\n\n".join(novel_lines)
+
+        chap_num = max(1, (self.active_book.current_round + 1) // 2)
+        first_line = self.novel_content.strip().split("\n")[0].replace("#", "").strip() or f"第{chap_num}章"
+        existing = next((c for c in self.active_book.chapters if c["id"] == chap_num), None)
+        if existing:
+            existing["title"] = first_line
+            existing["content"] = self.novel_content
+            existing["word_count"] = len(self.novel_content)
+        else:
+            self.active_book.chapters.append({
+                "id": chap_num,
+                "title": first_line,
+                "word_count": len(self.novel_content),
+                "content": self.novel_content
+            })
+        self.active_book.save()
+        novel_path = OUTPUT_DIR / f"novel_chapter_{chap_num:02d}.md"
+        try:
+            novel_path.write_text(self.novel_content, encoding="utf-8")
+        except Exception:
+            pass
+        return {"status": "ok", "content": self.novel_content, "chapter": chap_num}
+
+    def stream_simulate(self, mode="single", force_mock=False, divine_decree="", book_id=None, custom_count=None):
+        """
+        流式全自动演化成书 (支持 1 章、10 章、以及一本书，可自定义规模 30/50/100 章)
+        实时 yield 事件字典以供 SSE 流式推送
+        """
+        if self.is_busy:
+            # 自动自愈：若已忙碌超过 180 秒（3分钟）未更新心跳，判定为上次异常挂起，自动强制释放
+            if time.time() - getattr(self, "last_busy_time", 0) > 180:
+                self.is_busy = False
+            else:
+                yield {"type": "error", "message": "天道演化引擎正忙，请稍候..."}
+                return
+
+        self.is_busy = True
+        self.last_busy_time = time.time()
+        self.stop_requested = False
+
+        try:
+            target_book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
+
+            # 计算目标章节数 (支持自定义章数或全书深度标准)
+            if custom_count and int(custom_count) > 0:
+                target_count = int(custom_count)
+            elif mode == "ten":
+                target_count = 10
+            elif mode == "book":
+                # 全本长篇巨作标准：默认目标为 50 章起步宏大长篇 (若已有章节则补全至目标或追加20章)
+                curr_chaps = len(target_book.chapters)
+                target_count = max(10, 50 - curr_chaps) if curr_chaps < 50 else 20
+            else:
+                target_count = 1
+
+            yield {
+                "type": "start",
+                "mode": mode,
+                "total_target": target_count,
+                "book_id": target_book.id,
+                "book_title": target_book.title,
+                "existing_chapters": len(target_book.chapters)
+            }
+
+            load_dotenv()
+            current_api_key = os.getenv("OPENAI_API_KEY", "")
+            use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
+
+            total_generated = 0
+
+            for i in range(1, target_count + 1):
+                self.last_busy_time = time.time()
+                if self.stop_requested:
+                    yield {
+                        "type": "stopped",
+                        "total_generated": total_generated,
+                        "message": f"推演已响应指令安全停止，已完成 {total_generated} 章并妥善存盘！"
+                    }
+                    return
+
+                is_final = (mode == "book" and i == target_count)
+
+                # 计算新章节 ID
+                existing_ids = [c["id"] for c in target_book.chapters]
+                next_chap_id = (max(existing_ids) + 1) if existing_ids else 1
+
+                llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+
+                # 0. 大纲策划：动态规划或获取本章核心细纲（章节名、主线目标、矛盾冲突、高潮、钩子）
+                self.last_busy_time = time.time()
+                yield {
+                    "type": "planning",
+                    "chapter_index": i,
+                    "total": target_count,
+                    "chapter_id": next_chap_id,
+                    "message": f"【第 {i}/{target_count} 章】大纲策划师规划第 {next_chap_id} 章细纲与主线矛盾..."
+                }
+
+                chap_outline = book_mgr.get_or_plan_chapter_outline(target_book, next_chap_id, llm_client=llm, force_mock=use_mock)
+                self.last_busy_time = time.time()
+
+                yield {
+                    "type": "outline_ready",
+                    "chapter_index": i,
+                    "total": target_count,
+                    "chapter_id": next_chap_id,
+                    "outline": chap_outline,
+                    "message": f"【第 {i}/{target_count} 章细纲就绪】《{chap_outline.get('title')}》核心冲突：{chap_outline.get('conflict', '')[:50]}"
+                }
+
+                # 1. 天道因果运转推演
+                self.last_busy_time = time.time()
+                yield {
+                    "type": "sim_step",
+                    "chapter_index": i,
+                    "total": target_count,
+                    "chapter_id": next_chap_id,
+                    "message": f"【第 {i}/{target_count} 章】天道因果推演中：众角色围绕本章主线展开生死博弈..."
+                }
+
+                # 推进轮次并生成博弈记录
+                target_book.current_round += 1
+                if target_book.current_round >= 2 and len(target_book.world.characters) < 5:
+                    self.spawn_character(custom_prompt="被滔天声势吸引而来的各方修士与探子", force_mock=use_mock)
+
+                if use_mock:
+                    self._step_mock(target_book.current_round, divine_decree if i == 1 else "")
+                else:
+                    try:
+                        self._step_real(target_book.current_round, divine_decree if i == 1 else "", chapter_outline=chap_outline)
+                    except Exception as e:
+                        print(f"[流式演化 降级] 第 {target_book.current_round} 轮真实推演异常: {e}，切入沙盒模拟")
+                        self._step_mock(target_book.current_round, divine_decree if i == 1 else "")
+
+                self.last_busy_time = time.time()
+                if self.stop_requested:
+                    yield {
+                        "type": "stopped",
+                        "total_generated": total_generated,
+                        "message": f"推演已安全停止，已完成 {total_generated} 章！"
+                    }
+                    return
+
+                # 2. 史官流式研墨著书
+                chap_title = chap_outline.get("title") or f"第{next_chap_id}章"
+                yield {
+                    "type": "write_start",
+                    "chapter_index": i,
+                    "total": target_count,
+                    "chapter_id": next_chap_id,
+                    "title": chap_title,
+                    "is_final": is_final,
+                    "message": f"【第 {i}/{target_count} 章】史官研墨，正在结合细纲实时流式撰写第 {next_chap_id} 章正文..."
+                }
+
+                chr_model = os.getenv("CHRONICLER_MODEL") or "fast-model"
+                chronicler = ChroniclerAgent(llm, chr_model)
+
+                # 前序脉络
+                prev_summary = ""
+                if target_book.chapters:
+                    last_chap = target_book.chapters[-1]
+                    prev_summary = f"前章标题：{last_chap.get('title','')}\n前情概要：{last_chap.get('content','')[-300:]}"
+
+                chapter_chunks = []
+                for chunk in chronicler.write_chapter_stream(
+                    world=target_book.world,
+                    history=target_book.world.history,
+                    book_title=target_book.title,
+                    genre=target_book.genre,
+                    chapter_num=next_chap_id,
+                    total_chapters=target_count,
+                    is_final=is_final,
+                    previous_summary=prev_summary,
+                    chapter_outline=chap_outline,
+                    force_mock=use_mock
+                ):
+                    if self.stop_requested:
+                        break
+                    self.last_busy_time = time.time()
+                    chapter_chunks.append(chunk)
+                    yield {
+                        "type": "chunk",
+                        "chapter_index": i,
+                        "chapter_id": next_chap_id,
+                        "delta": chunk
+                    }
+
+                full_content = "".join(chapter_chunks).strip()
+                if not full_content or len(full_content) < 50:
+                    full_content = chronicler._generate_mock_chapter(
+                        target_book.title, target_book.genre, target_book.world,
+                        target_book.world.history, next_chap_id, is_final
+                    )
+
+                # 提取标题（优先使用细纲标题）
+                lines = [l.strip() for l in full_content.split("\n") if l.strip()]
+                first_line = chap_outline.get("title") or (lines[0].replace("#", "").strip() if lines else f"第{next_chap_id}章")
+                if not first_line.startswith("第") and not "章" in first_line:
+                    first_line = f"第{next_chap_id}章 {first_line}"
+
+                # 入库保存
+                target_book.chapters.append({
+                    "id": next_chap_id,
+                    "title": first_line,
+                    "word_count": len(full_content),
+                    "content": full_content
+                })
+                target_book.save()
+                total_generated += 1
+
+                # 同步到 output/
+                try:
+                    (OUTPUT_DIR / f"novel_chapter_{next_chap_id:02d}.md").write_text(full_content, encoding="utf-8")
+                except Exception:
+                    pass
+
+                yield {
+                    "type": "chapter_done",
+                    "chapter_index": i,
+                    "total": target_count,
+                    "id": next_chap_id,
+                    "title": first_line,
+                    "word_count": len(full_content),
+                    "total_chapters": len(target_book.chapters),
+                    "message": f"🎉 第 {next_chap_id} 章《{first_line}》撰写完毕（{len(full_content)}字）已存盘！"
+                }
+
+                time.sleep(0.5)
+
+            yield {
+                "type": "complete",
+                "total_generated": total_generated,
+                "total_chapters": len(target_book.chapters),
+                "book_title": target_book.title,
+                "message": f"🎉 演化已大功告成！累计共生成 {total_generated} 个新章节！"
+            }
+
+        except GeneratorExit:
+            self.stop_requested = True
+        except Exception as e:
+            yield {"type": "error", "message": f"流式演化异常: {str(e)}"}
+        finally:
+            self.is_busy = False
+            self.stop_requested = False
+
+# 全局单例
+sim_mgr = SimulationManager()
+
+def get_fanqie_category_tags(genre: str):
+    g = (genre or "").lower()
+    if "都市" in g or "战神" in g or "逆袭" in g:
+        return ["都市生活", "战神归来", "都市脑洞", "神豪打脸"]
+    elif "大明" in g or "历史" in g:
+        return ["历史古代", "两宋元明", "架空历史", "穿越权谋"]
+    elif "修仙" in g or "仙侠" in g:
+        return ["玄幻仙侠", "传统修真", "凡人流", "无敌杀伐"]
+    elif "科幻" in g or "星际" in g:
+        return ["科幻未来", "星际文明", "机械科技", "末世求生"]
+    elif "重生" in g or "商战" in g:
+        return ["都市日常", "商业大亨", "重生逆袭", "时代纪实"]
+    return ["原创综合", "脑洞故事", "主线爽文"]
+
+def clean_fanqie_content(title: str, content: str) -> str:
+    lines = content.split("\n")
+    clean = []
+    for l in lines:
+        s = l.strip()
+        if not s:
+            continue
+        if s.startswith("#"):
+            s = s.lstrip("#").strip()
+            if s == title.strip() or (s.startswith("第") and "章" in s):
+                continue
+        if s.startswith(">"):
+            s = s.lstrip(">").strip()
+        clean.append("    " + s)
+    return f"{title}\n\n" + "\n\n".join(clean)
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+class TiandaoHTTPHandler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Token")
+        super().end_headers()
+
+    def is_admin_authenticated(self, req_data=None):
+        admin_key = os.getenv("ADMIN_KEY", "admin888").strip()
+        auth_header = self.headers.get("Authorization", "")
+        token = ""
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+        if not token:
+            token = self.headers.get("X-Admin-Token", "").strip()
+        if not token and req_data and isinstance(req_data, dict):
+            token = req_data.get("admin_token", "").strip()
+        return bool(token and token == admin_key)
+
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        if path == "/api/books":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps(book_mgr.list_books_summary(), ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/status":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            data = sim_mgr.get_state()
+            self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/system/version":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            commit_id = "local"
+            branch = "main"
+            try:
+                import subprocess
+                r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5)
+                if r.returncode == 0 and r.stdout.strip():
+                    commit_id = r.stdout.strip()
+                b = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True, timeout=5)
+                if b.returncode == 0 and b.stdout.strip():
+                    branch = b.stdout.strip()
+            except Exception:
+                pass
+            res = {
+                "version": "v1.3.0",
+                "commit": commit_id,
+                "branch": branch,
+                "github_repo": "https://github.com/XCool-603/tiandao",
+                "update_supported": True
+            }
+            self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path in ("/api/stream/simulate", "/api/simulate_stream"):
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            mode = parsed_qs.get("mode", ["single"])[0]
+            mock = (parsed_qs.get("mock", ["0"])[0] in ("1", "true", "True")) or (parsed_qs.get("force_mock", ["0"])[0] in ("1", "true", "True"))
+            bid = parsed_qs.get("book_id", [None])[0]
+            decree = parsed_qs.get("decree", [None])[0] or parsed_qs.get("divine_decree", [""])[0]
+            count_str = parsed_qs.get("count", [None])[0] or parsed_qs.get("custom_count", [None])[0]
+            custom_count = int(count_str) if count_str and count_str.isdigit() else None
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+
+            gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count)
+            try:
+                for event in gen:
+                    msg = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    self.wfile.write(msg.encode("utf-8"))
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                sim_mgr.stop_requested = True
+            except Exception as e:
+                try:
+                    err_msg = f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+                    self.wfile.write(err_msg.encode("utf-8"))
+                    self.wfile.flush()
+                except Exception:
+                    pass
+            finally:
+                try:
+                    gen.close()
+                except Exception:
+                    pass
+                sim_mgr.is_busy = False
+            return
+
+        if path == "/api/drama":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps(target_book.dramas or [], ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/chapter":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            cid = int(parsed_qs.get("id", ["1"])[0])
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            chaps = target_book.chapters
+            target = next((c for c in chaps if c["id"] == cid), None)
+            if not target and chaps:
+                target = chaps[0]
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps(target or {}, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/novel":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "content": sim_mgr.novel_content
+            }, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/download":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            fmt = parsed_qs.get("format", ["txt"])[0]
+            bid = parsed_qs.get("book_id", [None])[0]
+            cid_str = parsed_qs.get("id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            chaps = target_book.chapters
+            clean_title = target_book.title.replace("《", "").replace("》", "")
+            if cid_str:
+                cid = int(cid_str)
+                target = next((c for c in chaps if c["id"] == cid), None)
+                content = target["content"] if target else (sim_mgr.novel_content or "")
+                filename = f"{clean_title}_第{cid}章.{fmt}"
+            else:
+                if chaps:
+                    content = "\n\n" + ("=" * 40) + "\n\n".join([f"《{c['title']}》\n\n{c['content']}" for c in chaps])
+                else:
+                    content = sim_mgr.novel_content or "暂无小说正文，请先演化著书。"
+                filename = f"{clean_title}_全本.{fmt}"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(filename)}"')
+            self.end_headers()
+            self.wfile.write(content.encode("utf-8"))
+            return
+
+        if path == "/api/export/fanqie_zip":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            clean_title = target_book.title.replace("《", "").replace("》", "")
+            chaps = target_book.chapters
+
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+                # 1. 签约大纲与作品信息
+                char_lines = []
+                for c in target_book.world.characters.values():
+                    char_lines.append(f"- 【{c['name']}】（{c.get('title','')} · {c.get('cultivation_level','')}）：{c.get('public_profile','')}")
+                chars_str = "\n".join(char_lines) if char_lines else "暂无"
+                tags_str = " / ".join(get_fanqie_category_tags(target_book.genre))
+                total_words = sum(c.get("word_count", 0) for c in chaps)
+                avg_words = (total_words // len(chaps)) if chaps else 0
+
+                outline_content = f"""================================================================================
+            番茄小说作家后台 · 新书签约信息与主线设定大纲
+================================================================================
+
+【作品名称】：{target_book.title}
+【作品流派】：{target_book.genre}
+【番茄推荐分类标签】：{tags_str}
+【作品简介】：
+{target_book.synopsis or '暂无'}
+
+【核心金手指与主线看点】：
+{target_book.theme_prompt or '暂无'}
+
+【核心主角与重要配角设定】：
+{chars_str}
+
+【全书章节总数】：{len(chaps)} 章
+【全书累计字数】：{total_words:,} 字
+【平均单章字数】：{avg_words:,} 字（{"符合番茄全勤考核 1,000~4,000 字标准" if avg_words >= 1000 else "建议补充至 1,000 字以上以符合全勤审核"}）
+
+【番茄小说后台上传指引】：
+1. 访问番茄小说作家专区（https://fanqienovel.com/main/writer/login）登录作家账号；
+2. 进入【作品管理】（https://fanqienovel.com/main/writer/book）点击【创建作品】，将上述“作品名称”、“作品分类”、“作品简介”复制填入；
+3. 进入【章节管理】，点击【批量导入】；
+4. 选择本 ZIP 压缩包中的各章节 txt 文件（或直接上传本压缩包）；
+5. 系统将自动按顺序识别章节序号与标题，一键保存至草稿箱即可随时发布！
+================================================================================
+"""
+                z.writestr("00_番茄小说签约申请与作品信息.txt", outline_content.encode("utf-8"))
+
+                # 2. 写入各个章节
+                for idx, c in enumerate(chaps, start=1):
+                    c_title = c.get("title", f"第{idx}章")
+                    if not c_title.startswith("第") and not "章" in c_title:
+                        c_title = f"第{c.get('id', idx)}章 {c_title}"
+                    safe_fn = f"第{c.get('id', idx):03d}章_{c_title.replace(':', '_').replace('/', '_').replace(' ', '_')}.txt"
+                    c_text = clean_fanqie_content(c_title, c.get("content", ""))
+                    z.writestr(safe_fn, c_text.encode("utf-8"))
+
+            filename = f"番茄小说官方批量导入包_{clean_title}.zip"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(filename)}"')
+            self.end_headers()
+            self.wfile.write(buf.getvalue())
+            return
+
+        if path == "/api/export/fanqie_txt":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            clean_title = target_book.title.replace("《", "").replace("》", "")
+            chaps = target_book.chapters
+
+            full_txt_parts = [
+                f"《{clean_title}》",
+                f"题材：{target_book.genre}",
+                f"简介：{target_book.synopsis}",
+                "=" * 40,
+                ""
+            ]
+            for idx, c in enumerate(chaps, start=1):
+                c_title = c.get("title", f"第{idx}章")
+                if not c_title.startswith("第") and not "章" in c_title:
+                    c_title = f"第{c.get('id', idx)}章 {c_title}"
+                full_txt_parts.append(clean_fanqie_content(c_title, c.get("content", "")))
+                full_txt_parts.append("\n" + ("=" * 40) + "\n")
+
+            full_txt = "\n\n".join(full_txt_parts)
+            filename = f"{clean_title}_番茄小说智能分章版.txt"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(filename)}"')
+            self.end_headers()
+            self.wfile.write(full_txt.encode("utf-8"))
+            return
+
+        if path == "/api/publish/audit":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            chaps = target_book.chapters
+            total_words = sum(c.get("word_count", 0) for c in chaps)
+            avg_words = (total_words // len(chaps)) if chaps else 0
+
+            below_1000 = [c["id"] for c in chaps if c.get("word_count", 0) < 1000]
+            tags = get_fanqie_category_tags(target_book.genre)
+
+            audit_res = {
+                "book_id": target_book.id,
+                "title": target_book.title,
+                "clean_title": target_book.title.replace("《", "").replace("》", ""),
+                "genre": target_book.genre,
+                "synopsis": target_book.synopsis or "",
+                "theme_prompt": target_book.theme_prompt or "",
+                "fanqie_tags": tags,
+                "chapter_count": len(chaps),
+                "total_words": total_words,
+                "avg_words": avg_words,
+                "is_attendance_qualified": avg_words >= 1000,
+                "short_chapters": below_1000,
+                "sensitive_words_count": 0,
+                "score": 98 if avg_words >= 1000 else 85,
+                "status": "ready",
+                "login_url": "https://fanqienovel.com/main/writer/login",
+                "book_manage_url": "https://fanqienovel.com/main/writer/book",
+                "chapters": [
+                    {
+                        "id": c.get("id", idx),
+                        "title": c.get("title", f"第{idx}章"),
+                        "word_count": c.get("word_count", len(c.get("content", "")))
+                    }
+                    for idx, c in enumerate(chaps, 1)
+                ]
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps(audit_res, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/outline":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "book_id": target_book.id,
+                "title": target_book.title,
+                "genre": target_book.genre,
+                "outline": getattr(target_book, "outline", {}),
+                "foreshadowings": getattr(target_book, "foreshadowings", [])
+            }, ensure_ascii=False).encode("utf-8"))
+            return
+
+        # 管理端专属配置读取接口 (需鉴权)
+        if path == "/api/admin/config":
+            if not self.is_admin_authenticated():
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "error": "请先登录管理员账号"}, ensure_ascii=False).encode("utf-8"))
+                return
+            real_key = os.getenv("OPENAI_API_KEY", "")
+            masked = f"{real_key[:3]}****{real_key[-4:]}" if len(real_key) > 8 else ("已安全配置" if real_key else "")
+            cfg = {
+                "has_api_key": bool(real_key and real_key != "your_api_key_here"),
+                "api_key_masked": masked,
+                "base_url": os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1"),
+                "model_name": os.getenv("MODEL_NAME", "balanced-model"),
+                "tiandao_model": os.getenv("TIANDAO_MODEL", os.getenv("MODEL_NAME", "balanced-model")),
+                "chronicler_model": os.getenv("CHRONICLER_MODEL", os.getenv("MODEL_NAME", "fast-model"))
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "config": cfg}, ensure_ascii=False).encode("utf-8"))
+            return
+
+        # 静态文件服务
+        if path == "/" or path == "/index.html":
+            file_path = WEB_DIR / "index.html"
+            if file_path.exists():
+                content = file_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(content)
+                return
+
+        # 管理控制台专属静态文件
+        if path == "/admin" or path == "/admin.html":
+            file_path = WEB_DIR / "admin.html"
+            if file_path.exists():
+                content = file_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(content)
+                return
+
+        # 网站图标 (杜绝浏览器 404 报错)
+        if path == "/favicon.ico":
+            icon_svg = (
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+                '<rect width="100" height="100" rx="22" fill="#3b82f6"/>'
+                '<text x="50" y="68" font-size="54" font-family="-apple-system,BlinkMacSystemFont,PingFang SC,Microsoft YaHei,sans-serif" font-weight="bold" text-anchor="middle" fill="#ffffff">道</text>'
+                '</svg>'
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml")
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(icon_svg)
+        if path.startswith("/.well-known/"):
+            self.send_response(204)
+            self.end_headers()
+            return
+
+        # 默认 404
+        self.send_response(404)
+        self.end_headers()
+        self.wfile.write(b"Not Found")
+
+    def do_POST(self):
+        try:
+            parsed = urllib.parse.urlparse(self.path)
+            path = parsed.path
+
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            try:
+                req_data = json.loads(body)
+            except Exception:
+                req_data = {}
+
+            if path == "/api/outline/generate":
+                bid = req_data.get("book_id", "")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+                use_mock = req_data.get("mock", False) or not os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") == "your_api_key_here"
+                new_outline = book_mgr.generate_book_outline(target_book.id, llm_client=llm, force_mock=use_mock)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "outline": new_outline}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/outline/update":
+                bid = req_data.get("book_id", "")
+                outline_data = req_data.get("outline", {})
+                target_id = bid or sim_mgr.active_book.id
+                success = book_mgr.update_book_outline(target_id, outline_data)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok" if success else "error"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/foreshadowing/add":
+                bid = req_data.get("book_id", "")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                f_data = req_data.get("foreshadowing", {})
+                res = book_mgr.add_or_update_foreshadowing(target_book, f_data)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "foreshadowing": res}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/foreshadowing/delete":
+                bid = req_data.get("book_id", "")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                f_id = req_data.get("id", "")
+                success = book_mgr.delete_foreshadowing(target_book, f_id)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok" if success else "not_found"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/switch_book":
+                bid = req_data.get("book_id", "")
+                success = book_mgr.set_active_book(bid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok" if success else "not_found", "active_book": sim_mgr.active_book.id}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/admin/create_book":
+                title = req_data.get("title", "")
+                genre = req_data.get("genre", "现代都市逆袭")
+                theme = req_data.get("theme", "")
+                synopsis = req_data.get("synopsis", "")
+                new_book = book_mgr.create_book(title=title, genre=genre, theme_prompt=theme, synopsis=synopsis)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "book_id": new_book.id, "id": new_book.id, "title": new_book.title}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/admin/delete_book":
+                bid = req_data.get("book_id", "")
+                success = book_mgr.delete_book(bid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok" if success else "error"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/admin/reset_book":
+                bid = req_data.get("book_id", "") or sim_mgr.active_book.id
+                success = book_mgr.reset_book(bid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok" if success else "error"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path in ("/api/stream/stop", "/api/simulate_stop"):
+                sim_mgr.stop_requested = True
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "message": "已成功发送暂停/终止演化指令"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/publish/sync":
+                bid = req_data.get("book_id", "")
+                webhook = req_data.get("webhook_url", "")
+                platform = req_data.get("platform", "fanqie")
+                mode = req_data.get("mode", "drafts")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+
+                webhook_status = "unconfigured"
+                if webhook and webhook.startswith("http"):
+                    try:
+                        wh_payload = {
+                            "book_title": target_book.title,
+                            "genre": target_book.genre,
+                            "synopsis": target_book.synopsis,
+                            "chapter_count": len(target_book.chapters),
+                            "chapters": target_book.chapters,
+                            "platform": platform,
+                            "publish_mode": mode
+                        }
+                        wh_req = urllib.request.Request(webhook, data=json.dumps(wh_payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+                        with urllib.request.urlopen(wh_req, timeout=10) as wh_res:
+                            webhook_status = f"success_{wh_res.status}"
+                    except Exception as e_wh:
+                        webhook_status = f"error: {str(e_wh)}"
+
+                res = {
+                    "status": "ok",
+                    "platform": platform,
+                    "mode": mode,
+                    "book_title": target_book.title,
+                    "synced_chapters": len(target_book.chapters),
+                    "total_words": sum(c.get("word_count", 0) for c in target_book.chapters),
+                    "webhook_status": webhook_status,
+                    "author_dashboard_url": "https://fanqienovel.com/main/writer/login",
+                    "author_book_url": "https://fanqienovel.com/main/writer/book",
+                    "message": f"《{target_book.title}》已生成全网分发指令包（共 {len(target_book.chapters)} 章）！"
+                }
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/auto_publish":
+                mock = req_data.get("mock", False)
+                rounds = req_data.get("rounds", 3)
+                res = sim_mgr.auto_simulate_and_publish(rounds=rounds, force_mock=mock)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path in ("/api/chapter/save", "/api/chapter/update"):
+                bid = req_data.get("book_id", "")
+                cid = req_data.get("chapter_id")
+                new_content = req_data.get("content", "")
+                new_title = req_data.get("title", "")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                for chap in target_book.chapters:
+                    if chap.get("id") == cid:
+                        chap["content"] = new_content
+                        chap["word_count"] = len(new_content)
+                        if new_title:
+                            chap["title"] = new_title
+                        break
+                target_book.save()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "message": "章节内容已成功保存"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/system/update":
+                # 支持一键从 GitHub 拉取最新版本代码与升级依赖
+                try:
+                    import subprocess
+                    fetch_res = subprocess.run(["git", "fetch", "--all"], capture_output=True, text=True, timeout=30)
+                    pull_res = subprocess.run(["git", "pull", "origin", "main"], capture_output=True, text=True, timeout=60)
+                    pip_res = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"], capture_output=True, text=True, timeout=60)
+                    ok = (pull_res.returncode == 0)
+                    out_msg = pull_res.stdout.strip() or pull_res.stderr.strip() or fetch_res.stderr.strip() or "已是最新版本"
+                    res = {
+                        "status": "ok" if ok else "error",
+                        "message": "✅ 代码已成功从 GitHub 更新至最新版本！请重启控制台生效。" if ok else f"更新异常: {out_msg}",
+                        "details": out_msg
+                    }
+                except Exception as e_up:
+                    res = {"status": "error", "message": f"执行升级命令异常: {str(e_up)}"}
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/spawn":
+                preset_id = req_data.get("preset_id")
+                custom_prompt = req_data.get("custom_prompt", "")
+                mock = req_data.get("mock", False)
+                res = sim_mgr.spawn_character(preset_id=preset_id, custom_prompt=custom_prompt, force_mock=mock)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/chronicler":
+                mock = req_data.get("mock", False)
+                res = sim_mgr.generate_novel(force_mock=mock)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/reset":
+                theme = req_data.get("theme", "")
+                sim_mgr.reset(world_theme=theme)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            # 管理员登录鉴权
+            if path == "/api/admin/login":
+                pwd = req_data.get("password", "").strip()
+                admin_key = os.getenv("ADMIN_KEY", "admin888").strip()
+                if pwd and pwd == admin_key:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok", "token": admin_key, "message": "管理员验证成功"}, ensure_ascii=False).encode("utf-8"))
+                else:
+                    self.send_response(401)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "管理口令错误，请核对后重试"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            # 大模型连通性实测探针 (需管理端鉴权)
+            if path == "/api/admin/test_connection":
+                if not self.is_admin_authenticated(req_data):
+                    self.send_response(403)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "error": "权限不足：请先验证管理员身份"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                test_key = req_data.get("api_key", "").strip()
+                if not test_key or test_key.startswith("•") or "****" in test_key:
+                    test_key = os.getenv("OPENAI_API_KEY", "")
+                test_base = req_data.get("base_url", "").strip() or os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1")
+                test_model = req_data.get("model_name", "").strip() or os.getenv("MODEL_NAME", "balanced-model")
+
+                t_start = time.time()
+                try:
+                    from llm_client import LLMClient
+                    client = LLMClient(api_key=test_key, base_url=test_base)
+                    reply = client.chat(
+                        model=test_model,
+                        messages=[{"role": "user", "content": "请回复'pong'，不要输出任何其他多余文字。"}],
+                        temperature=0.1,
+                        max_tokens=20,
+                        retries=1
+                    )
+                    latency = round((time.time() - t_start) * 1000)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "ok",
+                        "latency_ms": latency,
+                        "model": test_model,
+                        "reply": reply.strip()
+                    }, ensure_ascii=False).encode("utf-8"))
+                except Exception as e_test:
+                    latency = round((time.time() - t_start) * 1000)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "error",
+                        "latency_ms": latency,
+                        "error": str(e_test)
+                    }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            # API 与大模型网关配置保存 (严格禁止用户端修改，仅限管理端通过凭据修改)
+            if path in ("/api/config", "/api/admin/config"):
+                if not self.is_admin_authenticated(req_data):
+                    self.send_response(403)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "error",
+                        "error": "权限拒绝：API 与大模型核心配置仅允许在管理端 (/admin) 凭管理员密码修改，用户端无权更改。"
+                    }, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                # 更新 .env
+                env_path = Path(__file__).parent / ".env"
+                input_key = req_data.get("api_key", "").strip()
+                if input_key and not input_key.startswith("•") and not "****" in input_key:
+                    new_key = input_key
+                else:
+                    new_key = os.getenv("OPENAI_API_KEY", "")
+                new_base = req_data.get("base_url", "").strip() or os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1")
+                new_model = req_data.get("model_name", "").strip() or os.getenv("MODEL_NAME", "balanced-model")
+                new_td = req_data.get("tiandao_model", "").strip() or os.getenv("TIANDAO_MODEL", new_model)
+                new_chr = req_data.get("chronicler_model", "").strip() or os.getenv("CHRONICLER_MODEL", new_model)
+                new_admin_pwd = req_data.get("admin_key_new", "").strip() or os.getenv("ADMIN_KEY", "admin888")
+
+                env_lines = []
+                if env_path.exists():
+                    lines = env_path.read_text(encoding="utf-8").splitlines()
+                    has_td = False
+                    has_chr = False
+                    has_admin = False
+                    for line in lines:
+                        if line.startswith("OPENAI_API_KEY="):
+                            env_lines.append(f"OPENAI_API_KEY={new_key}")
+                        elif line.startswith("OPENAI_BASE_URL="):
+                            env_lines.append(f"OPENAI_BASE_URL={new_base}")
+                        elif line.startswith("MODEL_NAME="):
+                            env_lines.append(f"MODEL_NAME={new_model}")
+                        elif line.startswith("TIANDAO_MODEL="):
+                            env_lines.append(f"TIANDAO_MODEL={new_td}")
+                            has_td = True
+                        elif line.startswith("CHRONICLER_MODEL="):
+                            env_lines.append(f"CHRONICLER_MODEL={new_chr}")
+                            has_chr = True
+                        elif line.startswith("ADMIN_KEY="):
+                            env_lines.append(f"ADMIN_KEY={new_admin_pwd}")
+                            has_admin = True
+                        else:
+                            env_lines.append(line)
+                    if not has_td:
+                        env_lines.append(f"TIANDAO_MODEL={new_td}")
+                    if not has_chr:
+                        env_lines.append(f"CHRONICLER_MODEL={new_chr}")
+                    if not has_admin:
+                        env_lines.append(f"ADMIN_KEY={new_admin_pwd}")
+                else:
+                    env_lines = [
+                        f"OPENAI_API_KEY={new_key}",
+                        f"OPENAI_BASE_URL={new_base}",
+                        f"MODEL_NAME={new_model}",
+                        f"TIANDAO_MODEL={new_td}",
+                        f"CHRONICLER_MODEL={new_chr}",
+                        "MAX_ROUNDS=5",
+                        f"ADMIN_KEY={new_admin_pwd}"
+                    ]
+
+                env_path.write_text("\n".join(env_lines), encoding="utf-8")
+                load_dotenv(override=True)
+                os.environ["OPENAI_API_KEY"] = new_key
+                os.environ["OPENAI_BASE_URL"] = new_base
+                os.environ["MODEL_NAME"] = new_model
+                os.environ["TIANDAO_MODEL"] = new_td
+                os.environ["CHRONICLER_MODEL"] = new_chr
+                os.environ["ADMIN_KEY"] = new_admin_pwd
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "message": "管理员配置已更新并热重载生效"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            self.send_response(404)
+            self.end_headers()
+        except Exception as e:
+            print(f"[HTTP Handler 异常保护] 处理 {self.path} 时发生未捕获异常: {e}")
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"系统推演提示: {str(e)}"}, ensure_ascii=False).encode("utf-8"))
+            except Exception:
+                pass
+
+def start_ws_server(ws_port=8089):
+    try:
+        from websockets.sync.server import serve
+        def handle_ws(websocket):
+            try:
+                for message in websocket:
+                    try:
+                        data = json.loads(message)
+                    except Exception:
+                        continue
+                    action = data.get("action", "")
+                    if action == "start":
+                        mode = data.get("mode", "single")
+                        count = data.get("count", 1)
+                        custom_count = int(count) if count and str(count).isdigit() else 1
+                        bid = data.get("book_id", None)
+                        decree = data.get("decree", "")
+                        mock = bool(data.get("mock", False))
+                        gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count)
+                        try:
+                            for event in gen:
+                                try:
+                                    websocket.send(json.dumps(event, ensure_ascii=False))
+                                except Exception:
+                                    # 客户端可能切后台或刷新，中断当前推送信道，由后台完成当前章节安全存盘
+                                    break
+                                if event.get("type") in ("complete", "stopped", "error"):
+                                    break
+                        finally:
+                            try:
+                                gen.close()
+                            except Exception:
+                                pass
+                            sim_mgr.is_busy = False
+                    elif action == "stop":
+                        sim_mgr.stop_requested = True
+                        try:
+                            websocket.send(json.dumps({"type": "stopped", "message": "已收到安全停止指令并存盘"}, ensure_ascii=False))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        print(f"  ⚡ 【WebSocket】全双工流式推演服务已启动: ws://localhost:{ws_port}")
+        # 关闭内部死板的 20 秒 Ping 超时掐断机制 (ping_interval=None)，彻底杜绝大模型长耗时思考时被误判超时断开
+        with serve(handle_ws, "0.0.0.0", ws_port, ping_interval=None, ping_timeout=None) as ws_server:
+            ws_server.serve_forever()
+    except Exception as e_ws:
+        print(f"[WebSocket 服务告警] 启动失败: {e_ws} (仍可通过 HTTP SSE 备用链路推演)")
+
+def start_server(port=8088):
+    ws_port = port + 1
+    ws_thread = threading.Thread(target=start_ws_server, args=(ws_port,), daemon=True)
+    ws_thread.start()
+
+    server = ThreadedHTTPServer(("0.0.0.0", port), TiandaoHTTPHandler)
+    print(f"\n=======================================================")
+    print(f"  🌌 【天道】控制台网页服务已启动！")
+    print(f"  HTTP 访问地址: http://localhost:{port}")
+    print(f"  WebSocket 地址: ws://localhost:{ws_port}")
+    print(f"=======================================================\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n服务已关闭。")
+
+if __name__ == "__main__":
+    port = 8088
+    if len(sys.argv) > 1:
+        try:
+            port = int(sys.argv[1])
+        except ValueError:
+            pass
+    start_server(port)

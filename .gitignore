@@ -1,0 +1,22 @@
+# 敏感凭据配置（严禁上传到 GitHub）
+.env
+.env.local
+*.env
+
+# Python 字节码与缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# 本地推演产物与用户小说数据库（保护用户创作数据与本地缓存）
+output/
+*.log
+
+# 临时构建与开发工具目录
+.temp_edge/
+.delivery/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

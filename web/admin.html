@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>天道 · 大模型与网关管理控制台</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%233b82f6'/><text x='50' y='68' font-size='54' font-family='sans-serif' font-weight='bold' text-anchor='middle' fill='%23ffffff'>道</text></svg>">
+
+  <style>
+    :root {
+      --bg-base: #0a0c10;
+      --bg-surface: #12151e;
+      --bg-elevated: #181d2a;
+      --bg-input: #0e1118;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-medium: rgba(255, 255, 255, 0.16);
+      --border-focus: #3b82f6;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-blue-hover: #2563eb;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --accent-gold: #f59e0b;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 顶部导航 */
+    .admin-header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .admin-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 16px;
+      color: #fff;
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* 按钮规范 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--accent-blue);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-blue-hover);
+    }
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-medium);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+    .btn-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .btn-success:hover {
+      background: rgba(16, 185, 129, 0.25);
+    }
+
+    /* 容器布局 */
+    .admin-main {
+      max-width: 980px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 24px 60px 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* 卡片规范 */
+    .admin-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* 表单组件 */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group.full {
+      grid-column: span 2;
+    }
+    .form-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .form-input {
+      background: var(--bg-input);
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      color: var(--text-primary);
+      padding: 10px 14px;
+      font-size: 13.5px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--border-focus);
+      background: var(--bg-elevated);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+    .form-hint {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* 快捷预设药丸 */
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .preset-pill {
+      font-size: 11px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      padding: 3px 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .preset-pill:hover {
+      border-color: var(--accent-blue);
+      color: var(--text-primary);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    /* 诊断反馈框 */
+    .diagnostic-panel {
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      display: none;
+    }
+    .diagnostic-panel.success {
+      display: block;
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.05);
+      color: #34d399;
+    }
+    .diagnostic-panel.error {
+      display: block;
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.05);
+      color: #f87171;
+    }
+
+    /* 徽章 */
+    .pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .pill-green {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .pill-blue {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    /* 登录锁屏遮罩 */
+    .auth-gate {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 16, 0.95);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-medium);
+      border-radius: 14px;
+      padding: 32px 28px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .auth-header {
+      text-align: center;
+    }
+    .auth-icon {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+    .auth-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .auth-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. 管理员身份锁屏验证屏障 -->
+  <div id="authGate" class="auth-gate" style="display: flex;">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-icon">🔐</div>
+        <div class="auth-title">天道管理端鉴权</div>
+        <div class="auth-desc">
+          API 与大模型网关配置已移交管理端统一接管。<br>
+          请输入管理员口令（默认：<code>admin888</code>，或于本地 <code>.env</code> 查看）。
+        </div>
+      </div>
+      <div class="form-group">
+        <input type="password" id="adminPwdInput" class="form-input" placeholder="输入管理员口令..." autofocus onkeydown="if(event.key==='Enter') verifyAdminLogin()">
+        <div id="authErrMsg" style="font-size: 12px; color: var(--accent-red); display: none;"></div>
+      </div>
+      <button class="btn btn-primary" style="padding: 10px; justify-content: center; font-size: 14px;" onclick="verifyAdminLogin()">
+        <span>验证并进入管理控制台</span>
+      </button>
+      <div style="text-align: center; margin-top: 4px;">
+        <a href="/" style="font-size: 12px; color: var(--text-muted); text-decoration: none;">← 返回创作者 Studio</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 管理端顶部导航 -->
+  <header class="admin-header">
+    <div class="admin-brand">
+      <div class="brand-icon">道</div>
+      <div>
+        <div class="brand-title">天道 · 核心模型与网关管理控制台</div>
+        <div class="brand-sub">GATEWAY & MODEL INFRASTRUCTURE CONSOLE</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="pill pill-green" id="authStatusBadge">🛡️ 管理端已授权</span>
+      <a href="/" class="btn btn-secondary">
+        <span>📖 返回创作 Studio</span>
+      </a>
+      <button class="btn btn-danger" onclick="adminLogout()">
+        <span>🚪 退出管理</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 3. 管理端主体面板 -->
+  <main class="admin-main">
+    
+    <!-- 卡片 1: 权限与安全声明 -->
+    <div class="admin-card" style="border-left: 4px solid var(--accent-blue);">
+      <div style="display: flex; gap: 14px; align-items: flex-start;">
+        <div style="font-size: 24px;">🛡️</div>
+        <div>
+          <div style="font-weight: 700; font-size: 14.5px; margin-bottom: 4px;">核心 API 与模型参数安全隔离机制</div>
+          <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;">
+            系统已完成<b>创作者端/管理端严格分权</b>。创作者 Studio 前端完全屏蔽 API Key 及大模型接口修改入口，普通创作者仅保留创作推演与排版设置权限；后端对配置变更接口启用管理员凭证强拦截，非管理端请求一律 403 拒绝，彻底根除 API 密钥泄露与盗用风险。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 卡片 2: 大模型与网关配置面板 -->
+    <div class="admin-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">⚙️ 大模型网关与接口参数</div>
+          <div class="card-desc">配置将直接持久化至服务器根目录 <code>.env</code> 文件，保存后即刻热重载生效，无需重启进程。</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="runPingDiagnostic()" id="btnPingDiagnostic">
+            <span>⚡ 连通性测试 (Ping)</span>
+          </button>
+          <button class="btn btn-primary" onclick="saveAdminConfig()" id="btnSaveConfig">
+            <span>💾 保存并热重载配置</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <!-- API KEY -->
+        <div class="form-group full">
+          <label class="form-label">
+            <span>OpenAI 兼容 API Key</span>
+            <span class="pill pill-blue">本地 .env 强加密落盘</span>
+          </label>
+          <input type="password" id="adminApiKey" class="form-input" placeholder="输入新 Key 覆盖，或留空保留现有安全配置">
+          <div class="form-hint">
+            💡 密钥仅存储于服务器本地环境。输入新 Key 保存将覆盖；若无需更改请留空，系统自动沿用当前 Key。
+          </div>
+        </div>
+
+        <!-- BASE URL -->
+        <div class="form-group full">
+          <label class="form-label">API Base URL (端点接口)</label>
+          <input type="text" id="adminBaseUrl" class="form-input" placeholder="http://dxcool.cn:7863/v1">
+          <div class="preset-row">
+            <span style="font-size: 11px; color: var(--text-muted); align-self: center;">快捷填入：</span>
+            <span class="preset-pill" onclick="setBaseUrl('http://dxcool.cn:7863/v1')">dxcool 聚合网关 (推荐)</span>
+            <span class="preset-pill" onclick="setBaseUrl('https://api.deepseek.com/v1')">DeepSeek 官方</span>
+            <span class="preset-pill" onclick="setBaseUrl('https://api.siliconflow.cn/v1')">SiliconFlow 硅基流动</span>
+            <span class="preset-pill" onclick="setBaseUrl('https://api.openai.com/v1')">OpenAI 官方</span>
+            <span class="preset-pill" onclick="setBaseUrl('http://127.0.0.1:11434/v1')">本地 Ollama</span>
+          </div>
+        </div>
+
+        <!-- 默认模型 -->
+        <div class="form-group">
+          <label class="form-label">默认主模型 (MODEL_NAME)</label>
+          <input type="text" id="adminModelName" class="form-input" placeholder="global:deepseek-v4.1-flash">
+          <div class="preset-row">
+            <span class="preset-pill" onclick="setModelName('global:deepseek-v4.1-flash')">deepseek-v4.1-flash</span>
+            <span class="preset-pill" onclick="setModelName('balanced-model')">balanced-model</span>
+            <span class="preset-pill" onclick="setModelName('deepseek-chat')">deepseek-chat</span>
+          </div>
+        </div>
+
+        <!-- 天道意志模型 -->
+        <div class="form-group">
+          <label class="form-label">天道推演仲裁模型 (TIANDAO_MODEL)</label>
+          <input type="text" id="adminTiandaoModel" class="form-input" placeholder="balanced-model">
+          <div class="preset-row">
+            <span class="preset-pill" onclick="setTiandaoModel('balanced-model')">balanced-model (抗限流)</span>
+            <span class="preset-pill" onclick="setTiandaoModel('deepseek-reasoner')">deepseek-reasoner (深度思考)</span>
+          </div>
+        </div>
+
+        <!-- 史官著书模型 -->
+        <div class="form-group">
+          <label class="form-label">史官著书撰写模型 (CHRONICLER_MODEL)</label>
+          <input type="text" id="adminChroniclerModel" class="form-input" placeholder="fast-model">
+          <div class="preset-row">
+            <span class="preset-pill" onclick="setChroniclerModel('fast-model')">fast-model (极速出文)</span>
+            <span class="preset-pill" onclick="setChroniclerModel('balanced-model')">balanced-model (文笔丰满)</span>
+          </div>
+        </div>
+
+        <!-- 修改管理端密码 -->
+        <div class="form-group">
+          <label class="form-label">修改管理端管理员口令 (ADMIN_KEY)</label>
+          <input type="text" id="adminKeyNew" class="form-input" placeholder="留空则保持当前管理员口令不变">
+          <div class="form-hint">留空则不更改。设置后请牢记新口令。</div>
+        </div>
+      </div>
+
+      <!-- 诊断测试结果面板 -->
+      <div id="diagnosticPanel" class="diagnostic-panel"></div>
+    </div>
+
+    <!-- 卡片 3: 服务端运行健康度 -->
+    <div class="admin-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🖥️ 后端服务运行度量</div>
+          <div class="card-desc">当前后台推演内核服务状态一览</div>
+        </div>
+        <button class="btn btn-secondary" onclick="loadAdminConfig()">
+          <span>🔄 刷新状态</span>
+        </button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">服务侦听端口</div>
+          <div style="font-size: 16px; font-weight: 700; color: var(--accent-blue);">8088 (HTTP / SSE)</div>
+        </div>
+        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">API 鉴权保护</div>
+          <div style="font-size: 16px; font-weight: 700; color: var(--accent-green);">已启用 (管理端独占)</div>
+        </div>
+        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">当前推演模式</div>
+          <div id="metricEngineMode" style="font-size: 16px; font-weight: 700; color: var(--text-primary);">加载中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 卡片 4: 系统在线更新与版本管理 -->
+    <div class="admin-card">
+      <div class="card-title">
+        <span>🔄 系统版本与在线升级 (GitHub 同步)</span>
+      </div>
+      <div class="card-desc">
+        支持从 GitHub 官方仓库一键拉取最新代码并热重载服务，自动保持多智能体因果推演与打字机引擎为最新版本。
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
+        <div style="background: var(--bg-input); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">当前系统版本</div>
+          <div id="adminSysVer" style="font-size: 15px; font-weight: 700; color: var(--accent-gold);">v1.3.0</div>
+        </div>
+        <div style="background: var(--bg-input); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">当前 Git Commit</div>
+          <div id="adminSysCommit" style="font-size: 14px; font-family: monospace; color: var(--accent-blue);">local</div>
+        </div>
+        <div style="background: var(--bg-input); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">当前主干分支</div>
+          <div id="adminSysBranch" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">main</div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <button id="btnAdminUpdate" class="btn btn-primary" onclick="adminRunUpdate()">
+          <span>⚡ 立即拉取 GitHub 最新代码并升级</span>
+        </button>
+        <button class="btn btn-secondary" onclick="adminCheckVersion()">
+          <span>🔍 检查当前版本</span>
+        </button>
+        <a href="https://github.com/XCool-603/tiandao" target="_blank" class="btn btn-secondary" style="text-decoration: none;">
+          <span>🌐 访问 GitHub 开源仓库</span>
+        </a>
+      </div>
+      <div id="adminUpdateLog" style="display: none; margin-top: 14px; padding: 12px; background: var(--bg-input); border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap;"></div>
+    </div>
+
+  </main>
+
+  <script>
+    // ==========================================
+    // 凭据管理与页面鉴权
+    // ==========================================
+    const TOKEN_KEY = "tiandao_admin_token";
+
+    function getAdminToken() {
+      return sessionStorage.getItem(TOKEN_KEY) || "";
+    }
+
+    function setAdminToken(token) {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    }
+
+    function clearAdminToken() {
+      sessionStorage.removeItem(TOKEN_KEY);
+    }
+
+    function checkAuthGate() {
+      const token = getAdminToken();
+      const gate = document.getElementById("authGate");
+      if (token) {
+        gate.style.display = "none";
+        loadAdminConfig();
+      } else {
+        gate.style.display = "flex";
+      }
+    }
+
+    async function verifyAdminLogin() {
+      const pwd = document.getElementById("adminPwdInput").value.trim();
+      const errMsg = document.getElementById("authErrMsg");
+      if (!pwd) {
+        errMsg.innerText = "请输入管理员口令！";
+        errMsg.style.display = "block";
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: pwd })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          setAdminToken(data.token);
+          document.getElementById("authGate").style.display = "none";
+          errMsg.style.display = "none";
+          loadAdminConfig();
+        } else {
+          errMsg.innerText = data.error || "口令错误，请核对！";
+          errMsg.style.display = "block";
+        }
+      } catch (e) {
+        errMsg.innerText = "请求失败，请检查后端服务是否正常运行。";
+        errMsg.style.display = "block";
+      }
+    }
+
+    function adminLogout() {
+      clearAdminToken();
+      window.location.reload();
+    }
+
+    // ==========================================
+    // 配置加载与更新
+    // ==========================================
+    async function loadAdminConfig() {
+      const token = getAdminToken();
+      if (!token) return;
+
+      try {
+        const res = await fetch("/api/admin/config", {
+          headers: { "X-Admin-Token": token }
+        });
+        if (res.status === 403) {
+          clearAdminToken();
+          checkAuthGate();
+          return;
+        }
+        const data = await res.json();
+        if (data.status === "ok" && data.config) {
+          const cfg = data.config;
+          const keyInput = document.getElementById("adminApiKey");
+          keyInput.value = "";
+          keyInput.placeholder = cfg.has_api_key ? `•••••••• (${cfg.api_key_masked} · 留空保持现有配置)` : "sk-... (未检测到 Key，请输入)";
+          
+          document.getElementById("adminBaseUrl").value = cfg.base_url || "";
+          document.getElementById("adminModelName").value = cfg.model_name || "";
+          document.getElementById("adminTiandaoModel").value = cfg.tiandao_model || "";
+          document.getElementById("adminChroniclerModel").value = cfg.chronicler_model || "";
+          document.getElementById("adminKeyNew").value = "";
+
+          document.getElementById("metricEngineMode").innerText = cfg.has_api_key ? "大模型真实推演" : "本地沙盒模拟";
+        }
+      } catch (e) {
+        console.error("加载配置失败:", e);
+      }
+    }
+
+    async function saveAdminConfig() {
+      const token = getAdminToken();
+      if (!token) {
+        alert("未登录管理员账号！");
+        return;
+      }
+
+      const apiKey = document.getElementById("adminApiKey").value.trim();
+      const baseUrl = document.getElementById("adminBaseUrl").value.trim();
+      const modelName = document.getElementById("adminModelName").value.trim();
+      const tiandaoModel = document.getElementById("adminTiandaoModel").value.trim();
+      const chroniclerModel = document.getElementById("adminChroniclerModel").value.trim();
+      const adminKeyNew = document.getElementById("adminKeyNew").value.trim();
+
+      const btn = document.getElementById("btnSaveConfig");
+      btn.innerText = "⏳ 保存中...";
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/admin/config", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Token": token
+          },
+          body: JSON.stringify({
+            api_key: apiKey,
+            base_url: baseUrl,
+            model_name: modelName,
+            tiandao_model: tiandaoModel,
+            chronicler_model: chroniclerModel,
+            admin_key_new: adminKeyNew
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === "ok") {
+          if (adminKeyNew) {
+            setAdminToken(adminKeyNew); // 更新本地保存的 token
+          }
+          alert("🎉 配置已成功更新并热重载生效！");
+          loadAdminConfig();
+        } else {
+          alert("❌ 保存失败: " + (data.error || "未知错误"));
+        }
+      } catch (e) {
+        alert("网络异常，无法连接后端服务！");
+      } finally {
+        btn.innerText = "💾 保存并热重载配置";
+        btn.disabled = false;
+      }
+    }
+
+    // ==========================================
+    // 接口连通性实测探针 (Ping)
+    // ==========================================
+    async function runPingDiagnostic() {
+      const token = getAdminToken();
+      if (!token) return;
+
+      const p = document.getElementById("diagnosticPanel");
+      p.className = "diagnostic-panel";
+      p.style.display = "block";
+      p.innerHTML = "⏳ 正在向指定大模型 Base URL 发起轻量心跳探针，请稍候...";
+
+      const apiKey = document.getElementById("adminApiKey").value.trim();
+      const baseUrl = document.getElementById("adminBaseUrl").value.trim();
+      const modelName = document.getElementById("adminModelName").value.trim();
+
+      const btn = document.getElementById("btnPingDiagnostic");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/admin/test_connection", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Token": token
+          },
+          body: JSON.stringify({
+            api_key: apiKey,
+            base_url: baseUrl,
+            model_name: modelName
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === "ok") {
+          p.className = "diagnostic-panel success";
+          p.innerHTML = `
+            <b>✔ 接口连通测试成功！</b><br>
+            • 测试模型: <code>${data.model}</code><br>
+            • 往返延迟: <span style="font-weight: 700;">${data.latency_ms} ms</span><br>
+            • 模型回显: <code>${data.reply}</code><br>
+            • 状态结论: API Key 与网关服务正常，可完美支持百章连续推演！
+          `;
+        } else {
+          p.className = "diagnostic-panel error";
+          p.innerHTML = `
+            <b>❌ 接口连通测试失败！</b><br>
+            • 往返延迟: ${data.latency_ms} ms<br>
+            • 错误详情: <code>${data.error}</code><br>
+            • 排查建议: 请检查 API Base URL 是否需要加 /v1、API Key 是否有余额或权限、模型名称是否存在拼写错误。
+          `;
+        }
+      } catch (e) {
+        p.className = "diagnostic-panel error";
+        p.innerHTML = `<b>❌ 请求异常:</b> 无法与后端服务通信 (${e.message})`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // 快捷填入辅助函数
+    function setBaseUrl(url) { document.getElementById("adminBaseUrl").value = url; }
+    function setModelName(name) { document.getElementById("adminModelName").value = name; }
+    function setTiandaoModel(name) { document.getElementById("adminTiandaoModel").value = name; }
+    function setChroniclerModel(name) { document.getElementById("adminChroniclerModel").value = name; }
+
+    // 系统版本与在线更新逻辑
+    async function adminCheckVersion() {
+      try {
+        const res = await fetch("/api/system/version");
+        const data = await res.json();
+        document.getElementById("adminSysVer").innerText = data.version || "v1.3.0";
+        document.getElementById("adminSysCommit").innerText = data.commit || "local";
+        document.getElementById("adminSysBranch").innerText = data.branch || "main";
+      } catch (e) {
+        console.error("获取版本失败:", e);
+      }
+    }
+
+    async function adminRunUpdate() {
+      const btn = document.getElementById("btnAdminUpdate");
+      const logBox = document.getElementById("adminUpdateLog");
+      if (!confirm("🚀 确定要拉取 GitHub 官方仓库最新代码吗？\n\n系统将自动执行 git fetch/pull 并安装最新依赖，您的私有 API Key 与小说产物均在本地受严格保护，不会被覆盖。")) {
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = "<span>⏳ 正在拉取 GitHub 最新代码并升级依赖...</span>";
+      logBox.style.display = "block";
+      logBox.innerText = "正在执行：git fetch --all && git pull origin main && pip install -r requirements.txt ...\n请稍候...";
+
+      try {
+        const res = await fetch("/api/system/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Token": getAdminToken()
+          }
+        });
+        const data = await res.json();
+        logBox.innerText = `${data.message}\n\n[详细输出日志]:\n${data.details || '(无输出)'}`;
+        if (data.status === "ok") {
+          alert("🎉 系统已成功更新至最新版本！请重启控制台服务生效。");
+          adminCheckVersion();
+        } else {
+          alert("⚠️ 更新提示: " + data.message);
+        }
+      } catch (err) {
+        logBox.innerText = `❌ 请求异常: 无法连接升级接口 (${err.message})`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = "<span>⚡ 立即拉取 GitHub 最新代码并升级</span>";
+      }
+    }
+
+    // 初始化运行
+    window.addEventListener("DOMContentLoaded", () => {
+      checkAuthGate();
+      adminCheckVersion();
+    });
+  </script>
+</body>
+</html>
