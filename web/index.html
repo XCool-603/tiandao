@@ -916,12 +916,353 @@
     ::-webkit-scrollbar-track {
       background: transparent;
     }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 4px;
+    /* ========================================================
+       📱 全面移动端与平板自适应架构 (Responsive Studio Styles)
+       ======================================================== */
+    .mobile-only-btn {
+      display: none !important;
     }
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.22);
+    .desktop-only {
+      display: inline-flex !important;
+    }
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(4px);
+      z-index: 85;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .drawer-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .drawer-close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .drawer-close-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+    .bottom-bar-minimize-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: none;
+    }
+    .bottom-bar-minimize-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+    .mobile-evolution-fab {
+      position: fixed;
+      bottom: max(20px, env(safe-area-inset-bottom, 20px));
+      right: 18px;
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      color: #fff;
+      border: none;
+      border-radius: 24px;
+      padding: 10px 18px;
+      font-size: 13.5px;
+      font-weight: 700;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+      cursor: pointer;
+      z-index: 60;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .mobile-evolution-fab:active {
+      transform: scale(0.95);
+    }
+
+    /* 📱 平板与中等屏幕 (<= 1024px) */
+    @media (max-width: 1024px) {
+      .mobile-only-btn {
+        display: inline-flex !important;
+      }
+      .desktop-only {
+        display: none !important;
+      }
+      .bottom-bar-minimize-btn {
+        display: inline-flex;
+      }
+
+      /* 左侧章节侧栏抽屉化 */
+      .sidebar-left {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(320px, 86vw);
+        z-index: 95;
+        background: var(--bg-surface);
+        box-shadow: 6px 0 25px rgba(0, 0, 0, 0.7);
+        transform: translateX(-100%);
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .sidebar-left.drawer-open {
+        transform: translateX(0);
+      }
+
+      /* 右侧因果总账与人物侧栏抽屉化 */
+      .sidebar-right {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        width: min(340px, 88vw);
+        z-index: 95;
+        background: var(--bg-surface);
+        box-shadow: -6px 0 25px rgba(0, 0, 0, 0.7);
+        transform: translateX(100%);
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        border-left: 1px solid var(--border-medium);
+      }
+      .sidebar-right.drawer-open {
+        transform: translateX(0) !important;
+        width: min(340px, 88vw) !important;
+      }
+      .sidebar-right.collapsed {
+        transform: translateX(100%);
+      }
+
+      .main-workspace {
+        width: 100%;
+      }
+    }
+
+    /* 📱 手机端全面适配 (<= 768px) */
+    @media (max-width: 768px) {
+      :root {
+        --header-h: 52px;
+      }
+
+      header {
+        padding: 0 10px;
+        gap: 6px;
+      }
+      .brand-section {
+        gap: 6px;
+      }
+      .brand-title {
+        display: none;
+      }
+      .book-selector-dropdown {
+        max-width: 125px;
+        font-size: 12px;
+        padding: 4px 6px;
+      }
+
+      .view-switcher {
+        padding: 2px;
+        gap: 2px;
+      }
+      .view-tab-btn {
+        padding: 5px 8px;
+        font-size: 12px;
+      }
+      .view-tab-btn span {
+        white-space: nowrap;
+      }
+
+      .header-actions {
+        gap: 4px;
+      }
+      .header-actions .btn {
+        padding: 5px 8px;
+        font-size: 12px;
+      }
+      .header-actions .btn-label-text {
+        display: none;
+      }
+
+      /* 沉浸式阅读器头部 */
+      .studio-header {
+        padding: 10px 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .studio-header-top-row {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .studio-header-btns {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .studio-header-btns .btn {
+        padding: 5px 9px;
+        font-size: 11.5px;
+        flex: 1 1 auto;
+        justify-content: center;
+      }
+
+      /* 正文阅读区 */
+      .reader-scroll-area {
+        padding: 14px 14px 110px 14px;
+      }
+      .reader-content-box {
+        font-size: 16.5px;
+        line-height: 1.8;
+      }
+      .reader-content-box p {
+        margin-bottom: 1.2em;
+        padding: 6px 6px;
+      }
+
+      /* 🎧 有声听书条自适应 */
+      .audio-player-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px 14px;
+      }
+      .audio-top-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .audio-top-row .audio-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .audio-top-row .audio-equalizer {
+        margin-left: auto;
+      }
+      .audio-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+      }
+      .audio-controls-row-1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+      .audio-controls-row-1 #ttsVoiceSelect {
+        flex: 1;
+        max-width: none !important;
+        height: 34px;
+      }
+      .audio-controls-row-2 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        width: 100%;
+      }
+      .audio-controls-row-2 .btn {
+        flex: 1;
+        height: 36px;
+        justify-content: center;
+        font-size: 12px;
+      }
+      .speed-capsules {
+        flex-shrink: 0;
+      }
+      .speed-capsule-btn {
+        padding: 6px 9px;
+        font-size: 12px;
+      }
+
+      /* 底部演化控制悬浮条 */
+      .studio-bottom-bar {
+        width: calc(100% - 16px);
+        left: 8px;
+        right: 8px;
+        transform: none;
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        padding: 10px 12px;
+        border-radius: 12px;
+      }
+      .studio-bottom-bar.minimized {
+        display: none !important;
+      }
+      .studio-input-row {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .decree-simple-input {
+        width: 100%;
+        min-width: 100%;
+        order: 1;
+        font-size: 13px;
+        padding: 10px 12px;
+      }
+      #streamScaleSelect {
+        flex: 1 1 45%;
+        order: 2;
+        padding: 8px 10px;
+        font-size: 12.5px;
+        height: 38px;
+      }
+      #btnStartStream, #btnStopStream {
+        flex: 1 1 45%;
+        order: 3;
+        height: 38px;
+        justify-content: center;
+        font-size: 13px;
+      }
+      .studio-actions-row {
+        margin-top: 4px;
+        font-size: 11px;
+      }
+
+      /* 模态弹窗系统 */
+      .modal-overlay {
+        padding: 10px;
+        align-items: flex-end;
+      }
+      .modal-card {
+        max-width: 100%;
+        width: 100%;
+        max-height: 85vh;
+        border-radius: 16px 16px 8px 8px;
+      }
+      .modal-body {
+        max-height: 60vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 14px;
+      }
+    }
+
+    /* 📱 超窄屏幕 (<= 480px) */
+    @media (max-width: 480px) {
+      .view-tab-btn {
+        padding: 5px 6px;
+        font-size: 11.5px;
+      }
+      .book-selector-dropdown {
+        max-width: 105px;
+      }
+      .studio-chap-title {
+        font-size: 14.5px;
+      }
+      .header-actions .btn {
+        padding: 5px 6px;
+      }
     }
   </style>
 </head>
@@ -930,6 +1271,9 @@
   <!-- 顶部主导航条 -->
   <header>
     <div class="brand-section">
+      <button id="btnToggleLeftSidebar" class="btn btn-secondary mobile-only-btn" onclick="toggleLeftDrawer()" title="打开章节目录">
+        <span>☰ 目录</span>
+      </button>
       <div class="logo-badge">天</div>
       <div class="brand-title">天道 · 创作者工坊</div>
       <select id="bookSelectDropdown" class="book-selector-dropdown" onchange="onSwitchBookSelect(this.value)">
@@ -940,47 +1284,53 @@
     <!-- 核心视图切换 (正文 / 大纲 / 推演) -->
     <div class="view-switcher">
       <button id="navTabReader" class="view-tab-btn active" onclick="switchView('reader')">
-        <span>📖 正文创作与阅读</span>
+        <span>📖 正文</span>
       </button>
       <button id="navTabOutline" class="view-tab-btn" onclick="switchView('outline')">
-        <span>📜 全书大纲与蓝图</span>
+        <span>📜 大纲</span>
       </button>
       <button id="navTabSim" class="view-tab-btn" onclick="switchView('sim')">
-        <span>⚡ 因果推演实验室</span>
+        <span>⚡ 推演</span>
       </button>
     </div>
 
     <!-- 右侧动作按钮 -->
     <div class="header-actions">
-      <button class="btn btn-secondary" onclick="openNewBookModal()">
-        <span>➕ 新建作品</span>
+      <button class="btn btn-secondary" onclick="openNewBookModal()" title="新建作品">
+        <span>➕</span><span class="btn-label-text"> 新建作品</span>
       </button>
       <button class="btn btn-ghost" onclick="triggerSystemUpdate()" title="检查并同步 GitHub 最新版本代码">
-        <span id="updateBtnText">🔄 检查更新</span>
+        <span id="updateBtnText">🔄</span><span class="btn-label-text"> 检查更新</span>
       </button>
       <button class="btn btn-ghost" onclick="openSettingsModal()" title="系统与模型设置">
-        <span>⚙️ 设置</span>
+        <span>⚙️</span><span class="btn-label-text"> 设置</span>
       </button>
-      <button id="btnToggleRightSidebar" class="btn btn-secondary" onclick="toggleRightSidebar()" title="展开/收起因果总账栏">
-        <span>◨ 资产侧栏</span>
+      <button id="btnToggleRightSidebar" class="btn btn-secondary" onclick="toggleRightDrawer()" title="展开/收起因果总账与人物设定">
+        <span>◨</span><span class="btn-label-text"> 设定</span>
       </button>
     </div>
   </header>
+
+  <!-- 移动端侧栏遮罩层 -->
+  <div id="mobileDrawerBackdrop" class="drawer-backdrop" onclick="closeAllDrawers()"></div>
 
   <!-- 三栏主体工作台 -->
   <div class="app-layout">
 
     <!-- 1. 左侧章节列表与书目信息 -->
-    <aside class="sidebar-left">
-      <div class="sidebar-header">
-        <div class="book-meta-title" id="sideBookTitle">加载中...</div>
-        <div class="book-meta-sub">
-          <span id="sideBookGenre">--</span>
-          <span>·</span>
-          <span id="sideBookTotalWords">0 字</span>
-          <span>·</span>
-          <span id="sideBookChaptersCount">0 章</span>
+    <aside class="sidebar-left" id="sidebarLeft">
+      <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="flex: 1; min-width: 0;">
+          <div class="book-meta-title" id="sideBookTitle">加载中...</div>
+          <div class="book-meta-sub">
+            <span id="sideBookGenre">--</span>
+            <span>·</span>
+            <span id="sideBookTotalWords">0 字</span>
+            <span>·</span>
+            <span id="sideBookChaptersCount">0 章</span>
+          </div>
         </div>
+        <button class="drawer-close-btn mobile-only-btn" onclick="closeAllDrawers()" title="关闭目录">✕</button>
       </div>
 
       <div class="chapter-search-box">
@@ -998,12 +1348,17 @@
       <!-- 视图 A: 正文创作与沉浸阅读器 -->
       <section id="viewReader" class="view-panel active">
         <div class="studio-header">
-          <div>
-            <div class="studio-chap-title" id="currentChapHeaderTitle">第 1 章</div>
-            <div class="studio-chap-meta" id="currentChapHeaderMeta">0 字 · 约 0 分钟阅读</div>
+          <div class="studio-header-top-row">
+            <div>
+              <div class="studio-chap-title" id="currentChapHeaderTitle">第 1 章</div>
+              <div class="studio-chap-meta" id="currentChapHeaderMeta">0 字 · 约 0 分钟阅读</div>
+            </div>
+            <button class="btn btn-secondary mobile-only-btn" onclick="toggleAudiobookBar()" id="btnAudiobookToggleMobile" title="真人有声听书">
+              <span>🎧 听书</span>
+            </button>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="btn btn-secondary" onclick="toggleAudiobookBar()" id="btnAudiobookToggle" title="真人有声听书 (支持多音色、倍速与高亮跟读)">
+          <div class="studio-header-btns">
+            <button class="btn btn-secondary desktop-only" onclick="toggleAudiobookBar()" id="btnAudiobookToggle" title="真人有声听书 (支持多音色、倍速与高亮跟读)">
               <span>🎧 有声听书</span>
             </button>
             <button class="btn btn-secondary" onclick="toggleSerifFont()" id="btnFontToggle" title="衬线/无衬线切换">
@@ -1023,52 +1378,60 @@
 
         <!-- 🎧 真人有声听书控制条 (Audiobook Neural Player) -->
         <div id="audioPlayerBar" class="audio-player-bar" style="display: none;">
-          <div class="audio-icon-pulse" id="ttsWaveIcon">🎧</div>
-          <!-- 实时跳动声波频谱条 -->
-          <div class="audio-equalizer" id="audioEqualizer">
-            <span class="eq-bar"></span>
-            <span class="eq-bar"></span>
-            <span class="eq-bar"></span>
-            <span class="eq-bar"></span>
-            <span class="eq-bar"></span>
-            <span class="eq-bar"></span>
-            <span class="eq-bar"></span>
-          </div>
-          <div class="audio-info">
-            <div class="audio-title" id="ttsCurrentTitle">🎙️ 真人有声听书 · 智能神经声学</div>
-            <div class="audio-status-text" id="ttsStatusText">支持真人自然音色 · 点击任意段落即可跳转朗读</div>
-          </div>
-          <div class="audio-controls">
-            <!-- 声音角色选择器 (优先嗅探中文真人自然音色) -->
-            <select id="ttsVoiceSelect" class="form-input" style="font-size: 11.5px; padding: 3px 6px; max-width: 175px;" onchange="changeTtsVoice()" title="选择朗读声音角色">
-              <option value="">🎙️ 智能优选真人自然音</option>
-            </select>
-            <!-- 语速微调药丸 -->
-            <div class="speed-capsules">
-              <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(0.85)">0.85x</button>
-              <button type="button" class="speed-capsule-btn active" onclick="setTtsSpeed(1.0)">1.0x</button>
-              <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(1.25)">1.25x</button>
-              <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(1.5)">1.5x</button>
+          <div class="audio-top-row">
+            <div class="audio-icon-pulse" id="ttsWaveIcon">🎧</div>
+            <div class="audio-info">
+              <div class="audio-title" id="ttsCurrentTitle">🎙️ 真人有声听书</div>
+              <div class="audio-status-text" id="ttsStatusText">支持真人自然音色 · 点击任意段落即可跳转朗读</div>
             </div>
-            <select id="ttsSpeedSelect" style="display: none;">
-              <option value="0.85">0.85</option>
-              <option value="1.0" selected>1.0</option>
-              <option value="1.25">1.25</option>
-              <option value="1.5">1.5</option>
-            </select>
-            <button id="ttsPrevBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;" onclick="prevTtsParagraph()" title="朗读上一段">
-              <span>⏮ 上段</span>
-            </button>
-            <button id="ttsPlayBtn" class="btn btn-primary" style="padding: 4px 12px; font-size: 12px;" onclick="toggleAudiobook()">
-              <span>▶ 开始听书</span>
-            </button>
-            <button id="ttsNextBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;" onclick="nextTtsParagraph()" title="朗读下一段">
-              <span>⏭ 下段</span>
-            </button>
-            <button id="ttsStopBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;" onclick="stopAudiobook()" title="停止听书">
-              <span>⏹ 停止</span>
-            </button>
-            <button class="modal-close-btn" style="font-size: 14px; margin-left: 4px;" onclick="toggleAudiobookBar(false)" title="收起听书面板">✕</button>
+            <!-- 实时跳动声波频谱条 -->
+            <div class="audio-equalizer" id="audioEqualizer">
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+              <span class="eq-bar"></span>
+            </div>
+            <button class="drawer-close-btn" onclick="toggleAudiobookBar(false)" title="收起听书面板" style="margin-left: 4px;">✕</button>
+          </div>
+
+          <div class="audio-controls">
+            <div class="audio-controls-row-1">
+              <!-- 声音角色选择器 (优先嗅探中文真人自然音色) -->
+              <select id="ttsVoiceSelect" class="form-input" style="font-size: 12px; padding: 4px 8px; flex: 1;" onchange="changeTtsVoice()" title="选择朗读声音角色">
+                <option value="">🎙️ 智能优选真人自然音</option>
+              </select>
+              <!-- 语速微调药丸 -->
+              <div class="speed-capsules">
+                <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(0.85)">0.85x</button>
+                <button type="button" class="speed-capsule-btn active" onclick="setTtsSpeed(1.0)">1.0x</button>
+                <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(1.25)">1.25x</button>
+                <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(1.5)">1.5x</button>
+              </div>
+              <select id="ttsSpeedSelect" style="display: none;">
+                <option value="0.85">0.85</option>
+                <option value="1.0" selected>1.0</option>
+                <option value="1.25">1.25</option>
+                <option value="1.5">1.5</option>
+              </select>
+            </div>
+
+            <div class="audio-controls-row-2">
+              <button id="ttsPrevBtn" class="btn btn-secondary" onclick="prevTtsParagraph()" title="朗读上一段">
+                <span>⏮ 上段</span>
+              </button>
+              <button id="ttsPlayBtn" class="btn btn-primary" onclick="toggleAudiobook()">
+                <span>▶ 开始听书</span>
+              </button>
+              <button id="ttsNextBtn" class="btn btn-secondary" onclick="nextTtsParagraph()" title="朗读下一段">
+                <span>⏭ 下段</span>
+              </button>
+              <button id="ttsStopBtn" class="btn btn-secondary" onclick="stopAudiobook()" title="停止听书">
+                <span>⏹ 停止</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1080,7 +1443,7 @@
         </div>
 
         <!-- 底部极简创作控制悬浮条 -->
-        <div class="studio-bottom-bar">
+        <div class="studio-bottom-bar" id="studioBottomBar">
           <!-- 连更进度监控条 (多章连更时实时展示) -->
           <div id="batchProgressBarBox" style="display: none; flex-direction: column; gap: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle);">
             <div style="display: flex; justify-content: space-between; font-size: 11.5px;">
@@ -1116,11 +1479,21 @@
             <div class="progress-status-badge" id="studioProgressStatus">
               <span>🟢 就绪</span>
             </div>
-            <div style="font-size: 11.5px; color: var(--text-muted);">
-              天道 Turbo 双盲矩阵推演 · 主线大纲牵引 · 每写一章实时存盘防丢
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11.5px; color: var(--text-muted);" class="desktop-only">
+                天道 Turbo 双盲矩阵推演 · 主线大纲牵引 · 每写一章实时存盘防丢
+              </span>
+              <button class="bottom-bar-minimize-btn" onclick="toggleBottomBarMinimize(true)" title="折叠底部控制台">
+                <span>▼ 折叠</span>
+              </button>
             </div>
           </div>
         </div>
+
+        <!-- 手机端悬浮演化快捷呼出按钮 (FAB) -->
+        <button id="mobileEvolutionFab" class="mobile-evolution-fab" onclick="toggleBottomBarMinimize(false)" title="展开创作演化控制台">
+          <span>⚡ 演化</span>
+        </button>
       </section>
 
       <!-- 视图 B: 全书大纲策划蓝图 -->
@@ -1212,13 +1585,14 @@
 
     <!-- 3. 右侧可折叠信息栏 (因果伏线总账 & 登场人物) -->
     <aside class="sidebar-right" id="sidebarRight">
-      <div class="sidebar-right-tabs">
+      <div class="sidebar-right-tabs" style="align-items: center;">
         <button id="tabBtnForeshadow" class="sidebar-tab-btn active" onclick="switchRightTab('foreshadow')">
-          <span>🕸️ 伏线总账 (<span id="foreshadowBadgeCount">0</span>)</span>
+          <span>🕸️ 伏线 (<span id="foreshadowBadgeCount">0</span>)</span>
         </button>
         <button id="tabBtnChars" class="sidebar-tab-btn" onclick="switchRightTab('chars')">
-          <span>👥 登场人物 (<span id="charsBadgeCount">0</span>)</span>
+          <span>👥 人物 (<span id="charsBadgeCount">0</span>)</span>
         </button>
+        <button class="drawer-close-btn mobile-only-btn" onclick="closeAllDrawers()" title="关闭侧栏" style="margin-right: 6px;">✕</button>
       </div>
 
       <!-- 选项卡 1: 伏线账本 -->
@@ -1508,6 +1882,9 @@
 
       currentChapterId = target.id;
       renderChapterList(chapters);
+      if (window.innerWidth <= 1024) {
+        closeAllDrawers();
+      }
 
       const titleEl = document.getElementById("currentChapHeaderTitle");
       const metaEl = document.getElementById("currentChapHeaderMeta");
@@ -1550,6 +1927,7 @@
     function toggleAudiobookBar(forceState) {
       const bar = document.getElementById("audioPlayerBar");
       const btn = document.getElementById("btnAudiobookToggle");
+      const btnMobile = document.getElementById("btnAudiobookToggleMobile");
       if (!bar) return;
       if (typeof forceState === "boolean") {
         isAudiobookBarOpen = forceState;
@@ -1560,6 +1938,7 @@
       if (isAudiobookBarOpen) {
         bar.style.display = "flex";
         if (btn) btn.classList.add("active");
+        if (btnMobile) btnMobile.classList.add("active");
         initTtsVoices();
         // 确保段落数据就绪
         if (ttsParagraphs.length === 0) {
@@ -1574,6 +1953,7 @@
       } else {
         bar.style.display = "none";
         if (btn) btn.classList.remove("active");
+        if (btnMobile) btnMobile.classList.remove("active");
         if (isTtsPlaying) {
           pauseAudiobook();
         }
@@ -1951,11 +2331,65 @@
     }
 
     // ==========================================
-    // 右侧可折叠抽屉式栏目切换
+    // 📱 移动端抽屉与边栏触控交互控制
     // ==========================================
+    function toggleLeftDrawer() {
+      const sidebarLeft = document.getElementById("sidebarLeft");
+      const sidebarRight = document.getElementById("sidebarRight");
+      const backdrop = document.getElementById("mobileDrawerBackdrop");
+      if (sidebarRight) sidebarRight.classList.remove("drawer-open");
+      if (sidebarLeft) {
+        const isOpen = sidebarLeft.classList.toggle("drawer-open");
+        if (backdrop) {
+          if (isOpen) backdrop.classList.add("active");
+          else backdrop.classList.remove("active");
+        }
+      }
+    }
+
+    function toggleRightDrawer() {
+      const sidebarLeft = document.getElementById("sidebarLeft");
+      const sidebarRight = document.getElementById("sidebarRight");
+      const backdrop = document.getElementById("mobileDrawerBackdrop");
+      if (sidebarLeft) sidebarLeft.classList.remove("drawer-open");
+      if (sidebarRight) {
+        if (window.innerWidth > 1024) {
+          sidebarRight.classList.toggle("collapsed");
+        } else {
+          const isOpen = sidebarRight.classList.toggle("drawer-open");
+          if (backdrop) {
+            if (isOpen) backdrop.classList.add("active");
+            else backdrop.classList.remove("active");
+          }
+        }
+      }
+    }
+
     function toggleRightSidebar() {
-      const sidebar = document.getElementById("sidebarRight");
-      sidebar.classList.toggle("collapsed");
+      toggleRightDrawer();
+    }
+
+    function closeAllDrawers() {
+      const sidebarLeft = document.getElementById("sidebarLeft");
+      const sidebarRight = document.getElementById("sidebarRight");
+      const backdrop = document.getElementById("mobileDrawerBackdrop");
+      if (sidebarLeft) sidebarLeft.classList.remove("drawer-open");
+      if (sidebarRight) sidebarRight.classList.remove("drawer-open");
+      if (backdrop) backdrop.classList.remove("active");
+    }
+
+    function toggleBottomBarMinimize(forceState) {
+      const bar = document.getElementById("studioBottomBar");
+      const fab = document.getElementById("mobileEvolutionFab");
+      if (!bar) return;
+      const isMinimized = typeof forceState === 'boolean' ? forceState : !bar.classList.contains("minimized");
+      if (isMinimized) {
+        bar.classList.add("minimized");
+        if (fab) fab.style.display = "flex";
+      } else {
+        bar.classList.remove("minimized");
+        if (fab) fab.style.display = "none";
+      }
     }
 
     function switchRightTab(tabName) {
