@@ -635,6 +635,121 @@
       border-color: var(--accent-blue);
     }
 
+    /* 🚀 演化流水线步骤跟踪卡片 (Evolution Stepper) */
+    .evolution-stepper-card {
+      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid var(--border-medium);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+    }
+    .stepper-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .stepper-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent-gold);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .stepper-steps-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 820px) {
+      .stepper-steps-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
+    .stepper-step-item {
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .stepper-step-item.waiting {
+      opacity: 0.55;
+    }
+    .stepper-step-item.active {
+      opacity: 1;
+      border-color: #f59e0b;
+      background: rgba(245, 158, 11, 0.08);
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+    }
+    .stepper-step-item.done {
+      opacity: 1;
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .step-item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .step-item-name {
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--text-primary);
+    }
+    .step-item-status {
+      font-size: 10.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .step-item-status.status-waiting {
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+    }
+    .step-item-status.status-running {
+      background: rgba(245, 158, 11, 0.25);
+      color: #fbbf24;
+      animation: pulseGlow 1.5s infinite;
+    }
+    .step-item-status.status-done {
+      background: rgba(16, 185, 129, 0.25);
+      color: #34d399;
+    }
+    .step-item-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .pulsing-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      animation: pulseGlow 1.2s infinite;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.85); }
+    }
+    @keyframes fadeInSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     /* 视图 3: 推演实验室 (Simulation Lab) */
     .sim-scroll-area {
       flex: 1;
@@ -1457,6 +1572,8 @@
         </div>
 
         <div class="reader-scroll-area" id="readerScrollArea">
+          <!-- 🚀 演化推演阶段状态跟踪面板 (清晰呈现：第一步/第二步/第三步/第四步) -->
+          <div id="readerEvolutionStepper" style="display: none; width: 100%; max-width: 900px; margin: 0 auto 16px auto;"></div>
           <div class="reader-content-box" id="readerContentBox">
             <!-- 沉浸正文阅读展示 -->
           </div>
@@ -1530,7 +1647,7 @@
             <div class="studio-chap-meta">世界观设定 · 晋升阶梯 · 核心矛盾 · 分卷大纲</div>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" onclick="generateOutlineFromUI()">
+            <button class="btn btn-secondary" id="btnGenerateOutline" onclick="generateOutlineFromUI()">
               <span>✨ AI 重新策划全书大纲</span>
             </button>
             <button class="btn btn-primary" onclick="saveOutlineFromUI()">
@@ -1541,6 +1658,40 @@
 
         <div class="outline-scroll-area">
           <div class="outline-container">
+            <!-- 📜 大纲推演进度与步骤跟踪卡片 -->
+            <div id="outlineProgressCard" style="display: none; background: rgba(30, 41, 59, 0.95); border: 1px solid var(--accent-blue); border-radius: 10px; padding: 16px 18px; margin-bottom: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.35);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #60a5fa; font-size: 13.5px;">
+                  <span class="pulsing-dot" style="background: #60a5fa;">●</span>
+                  <span id="outlineProgressTitle">AI 终极大纲策划宗师正在推演全局大纲...</span>
+                </div>
+                <span class="pill pill-blue" id="outlineProgressBadge">构筑世界观中</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                <div class="stepper-step-item" id="outlineStep1">
+                  <div class="step-item-top">
+                    <span class="step-item-name">第一步：世界观与晋升体系</span>
+                    <span class="step-item-status status-waiting" id="outlineStepStatus1">等待</span>
+                  </div>
+                  <div class="step-item-desc" id="outlineStepDesc1">时代背景、势力格局与战力晋升</div>
+                </div>
+                <div class="stepper-step-item" id="outlineStep2">
+                  <div class="step-item-top">
+                    <span class="step-item-name">第二步：全书核心矛盾主线</span>
+                    <span class="step-item-status status-waiting" id="outlineStepStatus2">等待</span>
+                  </div>
+                  <div class="step-item-desc" id="outlineStepDesc2">不可调和宿命冲突、主角破局主线</div>
+                </div>
+                <div class="stepper-step-item" id="outlineStep3">
+                  <div class="step-item-top">
+                    <span class="step-item-name">第三步：三卷史诗与分章细纲</span>
+                    <span class="step-item-status status-waiting" id="outlineStepStatus3">等待</span>
+                  </div>
+                  <div class="step-item-desc" id="outlineStepDesc3">三卷高潮事件与开局前序分章蓝图</div>
+                </div>
+              </div>
+            </div>
+
             <div class="studio-card">
               <div class="studio-card-header">
                 <div class="studio-card-title">🌍 世界观与时代背景格局</div>
@@ -2317,6 +2468,11 @@
       renderChapterList(chapters);
       if (window.innerWidth <= 1024) {
         closeAllDrawers();
+      }
+
+      if (!isStreaming) {
+        const stepper = document.getElementById("readerEvolutionStepper");
+        if (stepper) stepper.style.display = "none";
       }
 
       const titleEl = document.getElementById("currentChapHeaderTitle");
@@ -3213,6 +3369,96 @@
     // ==========================================
     let currentWebSocket = null;
 
+    // ==========================================
+    // 🚀 演化流水线步骤跟踪器 (Evolution Stepper)
+    // 第一步：细纲规划 ➔ 第二步：双盲博弈 ➔ 第三步：史官著书 ➔ 第四步：存盘发布
+    // ==========================================
+    function renderEvolutionStepper(chapIndex, totalChapters, chapTitle = "") {
+      const stepper = document.getElementById("readerEvolutionStepper");
+      if (!stepper) return;
+      stepper.style.display = "block";
+      const displayTitle = chapTitle ? `《${escapeHtml(chapTitle)}》` : `第 ${chapIndex} 章`;
+      stepper.innerHTML = `
+        <div class="evolution-stepper-card">
+          <div class="stepper-header">
+            <div class="stepper-title">
+              <span class="pulsing-dot">●</span>
+              <span id="stepperChapTitle">🌌 正在推演演化：${displayTitle} (进度 ${chapIndex} / ${totalChapters} 章)</span>
+            </div>
+            <div id="stepperChapSubBadge" class="pill pill-gold" style="font-size: 11px;">天道因果流水线运转中</div>
+          </div>
+          <div class="stepper-steps-grid">
+            <!-- 第一步 -->
+            <div class="stepper-step-item active" id="evStep1">
+              <div class="step-item-top">
+                <span class="step-item-name">第一步：规划主线细纲</span>
+                <span class="step-item-status status-running" id="evStepBadge1">正在推演...</span>
+              </div>
+              <div class="step-item-desc" id="evStepDesc1">大纲策划师提取全书主线与伏笔契机</div>
+            </div>
+            <!-- 第二步 -->
+            <div class="stepper-step-item waiting" id="evStep2">
+              <div class="step-item-top">
+                <span class="step-item-name">第二步：双盲博弈裁决</span>
+                <span class="step-item-status status-waiting" id="evStepBadge2">等待</span>
+              </div>
+              <div class="step-item-desc" id="evStepDesc2">多角色隐秘底牌交锋与天道因果判定</div>
+            </div>
+            <!-- 第三步 -->
+            <div class="stepper-step-item waiting" id="evStep3">
+              <div class="step-item-top">
+                <span class="step-item-name">第三步：史官流式著书</span>
+                <span class="step-item-status status-waiting" id="evStepBadge3">等待</span>
+              </div>
+              <div class="step-item-desc" id="evStepDesc3">2000~4000字正文拟真打字机流式吐字</div>
+            </div>
+            <!-- 第四步 -->
+            <div class="stepper-step-item waiting" id="evStep4">
+              <div class="step-item-top">
+                <span class="step-item-name">第四步：全本存盘发布</span>
+                <span class="step-item-status status-waiting" id="evStepBadge4">等待</span>
+              </div>
+              <div class="step-item-desc" id="evStepDesc4">排版清洗、章节持久化与番茄同步</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateEvolutionStep(stepNum, status, detailText = "") {
+      for (let s = 1; s <= 4; s++) {
+        const item = document.getElementById(`evStep${s}`);
+        const badge = document.getElementById(`evStepBadge${s}`);
+        const desc = document.getElementById(`evStepDesc${s}`);
+        if (!item || !badge) continue;
+
+        if (s < stepNum) {
+          item.className = "stepper-step-item done";
+          badge.className = "step-item-status status-done";
+          badge.innerText = "已完成 ✔";
+        } else if (s === stepNum) {
+          if (status === "done") {
+            item.className = "stepper-step-item done";
+            badge.className = "step-item-status status-done";
+            badge.innerText = "已完成 ✔";
+          } else if (status === "running") {
+            item.className = "stepper-step-item active";
+            badge.className = "step-item-status status-running";
+            badge.innerText = "正在推演...";
+          } else {
+            item.className = "stepper-step-item waiting";
+            badge.className = "step-item-status status-waiting";
+            badge.innerText = "等待";
+          }
+          if (detailText && desc) desc.innerText = detailText;
+        } else {
+          item.className = "stepper-step-item waiting";
+          badge.className = "step-item-status status-waiting";
+          badge.innerText = "等待";
+        }
+      }
+    }
+
     function runStreamSimulate(mode, count) {
       if (isStreaming) return;
       const bid = globalState ? globalState.book_id : "";
@@ -3253,21 +3499,22 @@
 
       const statusEl = document.getElementById("studioProgressStatus");
       statusEl.className = "progress-status-badge busy";
-      statusEl.innerHTML = `<span>⏳ 正在接入 WebSocket 专属流式信道...</span>`;
+      statusEl.innerHTML = `<span>⏳ 正在启动推演流水线：第一步 规划细纲 [正在推演] ➔ 第二步 双盲博弈 [等待] ➔ 第三步 史官著书 [等待]</span>`;
 
-      // 立即切换到正文阅读区并呈现清晰的实时推演状态看板，避免用户误以为无响应
+      // 立即切换到正文阅读区并初始化多步骤流水线看板
       switchView("reader");
       document.getElementById("currentChapHeaderTitle").innerText = `🌌 正在演化推演新章节...`;
-      document.getElementById("currentChapHeaderMeta").innerText = `⚡ Socket 全双工通信 · 天道因果律运转中`;
+      document.getElementById("currentChapHeaderMeta").innerText = `⚡ Socket 全双工通信 · 天道因果律流水线运转中`;
+      renderEvolutionStepper(1, count, "");
       const readerBox = document.getElementById("readerContentBox");
       if (readerBox) {
         readerBox.innerHTML = `
-          <div style="padding: 48px 20px; text-align: center; color: var(--text-secondary); max-width: 600px; margin: 0 auto; user-select: none;">
-            <div style="font-size: 36px; margin-bottom: 16px;">🌌</div>
-            <div style="font-size: 17px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">天道大千演化推进中</div>
-            <div id="readerLiveStep" style="font-size: 13.5px; color: var(--accent-blue); margin-bottom: 12px; font-weight: 600;">正在连线大模型网关：筹备本章博弈推演环境...</div>
-            <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-              依据全书大纲与伏线总账，多智能体正进行双盲对决与因果裁决，正文即将以拟真打字机流式输出，请稍候片刻...
+          <div style="padding: 30px 20px; text-align: center; color: var(--text-secondary); max-width: 600px; margin: 0 auto; user-select: none;">
+            <div style="font-size: 32px; margin-bottom: 12px;">🌌</div>
+            <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">天道大千演化推进中</div>
+            <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
+              全流程依次执行：【第一步 细纲规划】➔【第二步 双盲博弈】➔【第三步 史官著书】➔【第四步 存盘同步】。<br>
+              当前步骤完成后，正文将在此以拟真打字机流式呈现，请稍候片刻...
             </div>
           </div>
         `;
@@ -3306,7 +3553,7 @@
       const isAutoFanqie = document.getElementById("chkAutoFanqie")?.checked || false;
       currentWebSocket.onopen = () => {
         wsConnected = true;
-        statusEl.innerHTML = `<span>⚡ Socket 已接通：准备演化推进 ${count} 章...</span>`;
+        statusEl.innerHTML = `<span>⚡ 信道已接通：第 1 章 [第一步 规划细纲 正在推演...]</span>`;
         currentWebSocket.send(JSON.stringify({
           action: "start",
           mode: mode,
@@ -3348,45 +3595,67 @@
       const total = ev.total || count;
 
       if (ev.type === "planning") {
-        statusEl.innerHTML = `<span>📋【${idx}/${total}章】大纲策划师规划细纲与因果伏笔...</span>`;
-        if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】规划细纲与主线矛盾中...`;
-        startStageTicker(`【第 ${idx}/${total} 章】大纲策划师正在规划细纲与因果伏笔`);
+        renderEvolutionStepper(idx, total, "");
+        updateEvolutionStep(1, "running", "大纲策划师正在规划主线冲突与因果伏笔...");
+        statusEl.innerHTML = `<span>📋【第 ${idx}/${total} 章】第一步：规划细纲 [正在推演] ➔ 第二步：双盲博弈 [等待] ➔ 第三步：史官著书 [等待]</span>`;
+        if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第一步：规划主线细纲 [正在推演]`;
+        startStageTicker(`【第 ${idx}/${total} 章】第一步：规划细纲与因果伏笔中`);
       } else if (ev.type === "outline_ready") {
         const outTitle = ev.outline?.title || '';
-        statusEl.innerHTML = `<span>🎯【${idx}/${total}章】细纲就绪：《${escapeHtml(outTitle)}》</span>`;
-        if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】细纲已定：《${escapeHtml(outTitle)}》`;
-        startStageTicker(`【第 ${idx}/${total} 章】细纲已定《${escapeHtml(outTitle)}》，准备因果博弈`);
+        const titleEl = document.getElementById("stepperChapTitle");
+        if (titleEl && outTitle) titleEl.innerText = `🌌 正在推演演化：第 ${idx} 章《${escapeHtml(outTitle)}》 (进度 ${idx} / ${total} 章)`;
+        updateEvolutionStep(1, "done", `《${escapeHtml(outTitle)}》细纲已就绪！`);
+        updateEvolutionStep(2, "running", "多角色隐秘底牌交锋，天道因果裁决中...");
+        statusEl.innerHTML = `<span>🎯【第 ${idx}/${total} 章】第一步 [已完成] ➔ 第二步：双盲博弈裁决 [正在推演] ➔ 第三步：史官著书 [等待]</span>`;
+        if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第二步：多角色双盲因果博弈 [正在推演]`;
+        startStageTicker(`【第 ${idx}/${total} 章】第二步：双盲博弈与天道因果裁决中`);
       } else if (ev.type === "sim_step") {
-        statusEl.innerHTML = `<span>⚡【${idx}/${total}章】多智能体双盲对决与天道裁决...</span>`;
-        if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】多角色双盲因果推演中...`;
-        startStageTicker(`【第 ${idx}/${total} 章】天道双盲推演与多角色博弈判定中`);
+        updateEvolutionStep(1, "done");
+        updateEvolutionStep(2, "running", "多智能体隐秘底牌交锋，因果律客观裁决落定中...");
+        statusEl.innerHTML = `<span>⚡【第 ${idx}/${total} 章】第一步 [已完成] ➔ 第二步：双盲博弈裁决 [正在推演] ➔ 第三步：史官著书 [等待]</span>`;
+        if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第二步：双盲博弈裁决 [正在推演]`;
       } else if (ev.type === "write_start") {
         stopStageTicker();
         const chapTitle = ev.title || `第 ${ev.chapter_id || idx} 章`;
-        statusEl.innerHTML = `<span>✍️【${idx}/${total}章】史官正在流式撰写《${escapeHtml(chapTitle)}》...</span>`;
-        if (progressLabel) progressLabel.innerText = `正在著书：第 ${ev.chapter_id || idx} 章《${escapeHtml(chapTitle)}》`;
         document.getElementById("currentChapHeaderTitle").innerText = chapTitle;
+        const titleEl = document.getElementById("stepperChapTitle");
+        if (titleEl) titleEl.innerText = `🌌 正在推演演化：《${escapeHtml(chapTitle)}》 (进度 ${idx} / ${total} 章)`;
+        updateEvolutionStep(1, "done");
+        updateEvolutionStep(2, "done", "因果博弈判定落定，局势已成");
+        updateEvolutionStep(3, "running", "史官正在流式挥毫撰写正文（打字机实时吐字中...）");
+        statusEl.innerHTML = `<span>✍️【第 ${idx}/${total} 章】第一步 [已完成] ➔ 第二步 [已完成] ➔ 第三步：正文流式著书 [正在推演/实时吐字中]</span>`;
+        if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第三步：史官流式著书《${escapeHtml(chapTitle)}》[正在推演]`;
         resetTypewriter();
         renderTypewriterDOM("", true);
       } else if (ev.type === "chunk") {
         const deltaText = ev.delta ?? ev.chunk ?? "";
         pushTypewriterChunk(deltaText);
       } else if (ev.type === "fanqie_auto_uploaded") {
-        statusEl.innerHTML = `<span>🍅【第 ${ev.chapter_id} 章】已自动同步上传至番茄发布通道！</span>`;
-        if (progressLabel) progressLabel.innerText = `🍅 第 ${ev.chapter_id} 章已自动上传番茄`;
+        updateEvolutionStep(4, "running", `🍅 第 ${ev.chapter_id} 章正在同步至番茄发布通道...`);
         showToast(`🍅 第 ${ev.chapter_id} 章《${escapeHtml(ev.title)}》已自动同步上传番茄！`);
       } else if (ev.type === "chapter_done") {
         stopStageTicker();
         finishTypewriter();
+        updateEvolutionStep(1, "done");
+        updateEvolutionStep(2, "done");
+        updateEvolutionStep(3, "done", `正文挥毫成卷，共 ${ev.word_count || ''} 字`);
+        updateEvolutionStep(4, "done", `本章已成功存盘入库！` + (ev.fanqie_auto_uploaded ? " (🍅 已同步番茄)" : ""));
         const pct = Math.round((idx / total) * 100);
         if (progressFill) progressFill.style.width = `${pct}%`;
         if (progressStat) progressStat.innerText = `${idx} / ${total} 章 (${pct}%)`;
         const fqNotice = ev.fanqie_auto_uploaded ? " (🍅 已自动同步番茄)" : "";
-        statusEl.innerHTML = `<span>✔ 第 ${idx}/${total} 章存盘完毕！${fqNotice}</span>`;
+        statusEl.innerHTML = `<span>✔ 第 ${idx}/${total} 章全套推演步骤 [已完成]！${fqNotice}</span>`;
+        if (progressLabel) progressLabel.innerText = `✔ 第 ${idx}/${total} 章全流程存盘完毕`;
         fetchStatus(false);
       } else if (ev.type === "complete" || ev.type === "stopped" || ev.type === "error") {
         stopStageTicker();
         finishTypewriter();
+        if (ev.type === "complete") {
+          updateEvolutionStep(1, "done");
+          updateEvolutionStep(2, "done");
+          updateEvolutionStep(3, "done");
+          updateEvolutionStep(4, "done");
+        }
         const isErr = ev.type === "error";
         const msg = isErr ? ("❌ " + ev.message) : (ev.type === "stopped" ? "⏹ 已响应安全停止指令并存盘" : `🎉 全部 ${total} 章演化圆满完成！`);
         stopStreamUI(msg);
@@ -3807,22 +4076,187 @@
       }).then(() => alert("✔ 全书大纲设定已保存！"));
     }
 
-    function generateOutlineFromUI() {
-      const bid = globalState ? globalState.book_id : "";
-      if (!confirm("确定要让 AI 终极大纲策划师为本书重新制定全局主线架构吗？")) return;
-      const mock = document.getElementById("settingMockToggle").checked;
-      fetch("/api/outline/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ book_id: bid, mock: mock })
-      })
-      .then(r => r.json())
-      .then(res => {
-        if (res.status === "ok") {
-          loadOutlineData();
-          alert("🎉 全书主线大纲已成功重构！");
+    function updateOutlineStep(stepNum, status, detailText = "") {
+      for (let s = 1; s <= 3; s++) {
+        const item = document.getElementById(`outlineStep${s}`);
+        const badge = document.getElementById(`outlineStepStatus${s}`);
+        const desc = document.getElementById(`outlineStepDesc${s}`);
+        if (!item || !badge) continue;
+
+        if (s < stepNum) {
+          item.className = "stepper-step-item done";
+          badge.className = "step-item-status status-done";
+          badge.innerText = "已完成 ✔";
+        } else if (s === stepNum) {
+          if (status === "done") {
+            item.className = "stepper-step-item done";
+            badge.className = "step-item-status status-done";
+            badge.innerText = "已完成 ✔";
+          } else if (status === "running") {
+            item.className = "stepper-step-item active";
+            badge.className = "step-item-status status-running";
+            badge.innerText = "正在推演...";
+          } else {
+            item.className = "stepper-step-item waiting";
+            badge.className = "step-item-status status-waiting";
+            badge.innerText = "等待";
+          }
+          if (detailText && desc) desc.innerText = detailText;
+        } else {
+          item.className = "stepper-step-item waiting";
+          badge.className = "step-item-status status-waiting";
+          badge.innerText = "等待";
         }
+      }
+    }
+
+    function typewriteToTextarea(elementId, text, speed = 15) {
+      return new Promise((resolve) => {
+        const el = document.getElementById(elementId);
+        if (!el || !text) {
+          if (el) el.value = text || "";
+          resolve();
+          return;
+        }
+        el.value = "";
+        let i = 0;
+        const chunkSize = Math.max(1, Math.floor(text.length / 45));
+        const timer = setInterval(() => {
+          i += chunkSize;
+          if (i >= text.length) {
+            el.value = text;
+            clearInterval(timer);
+            resolve();
+          } else {
+            el.value = text.slice(0, i);
+          }
+        }, speed);
       });
+    }
+
+    function renderOutlineVolumesAnimated(vols) {
+      const volBox = document.getElementById("outlineVolumesContainer");
+      if (!volBox) return;
+      if (!vols || vols.length === 0) {
+        volBox.innerHTML = `<div style="font-size: 12px; color: var(--text-muted);">暂无分卷设定</div>`;
+        return;
+      }
+      volBox.innerHTML = vols.map((v, i) => `
+        <div style="background: var(--bg-input); border-radius: 6px; padding: 12px 14px; border-left: 3px solid var(--accent-gold); animation: fadeInSlide 0.35s ease ${i * 0.12}s both;">
+          <div style="font-weight: 700; color: var(--accent-gold); font-size: 13.5px; margin-bottom: 4px;">
+            ${escapeHtml(v.title || `第${i+1}卷`)} · <span style="color: #34d399; font-size: 12px;">高潮：${escapeHtml(v.climax_event || v.climax || '全卷大决战')}</span>
+          </div>
+          <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(v.theme || '')}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderOutlineChaptersAnimated(chaps) {
+      const chapBox = document.getElementById("outlineChaptersContainer");
+      if (!chapBox) return;
+      if (!chaps || chaps.length === 0) {
+        chapBox.innerHTML = `<div style="font-size: 12px; color: var(--text-muted);">推演著书时将自动根据主线大纲规划每一章细纲蓝图</div>`;
+        return;
+      }
+      chapBox.innerHTML = chaps.map((c, i) => `
+        <div style="background: var(--bg-input); border-left: 3px solid var(--accent-blue); padding: 10px 14px; border-radius: 4px; font-size: 12px; animation: fadeInSlide 0.35s ease ${i * 0.12}s both;">
+          <b style="color: #fff; font-size: 13px;">${escapeHtml(c.title || `第${c.chapter_num || '?'}章`)}:</b>
+          <div style="color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
+            <span style="color: #60a5fa;">[核心目标]</span> ${escapeHtml(c.goal || '')} · 
+            <span style="color: #f59e0b;">[冲突交锋]</span> ${escapeHtml(c.conflict || '')} · 
+            <span style="color: #34d399;">[高潮破局]</span> ${escapeHtml(c.climax || '')}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function generateOutlineFromUI() {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("书库为空或尚未选择书籍，请先点击右上角【➕ 新建作品】开辟一部小说！");
+        return;
+      }
+      const bTitle = globalState.title || "当前作品";
+      if (!confirm(`确定要让 AI 终极大纲策划师为《${bTitle}》重新制定全局主线架构吗？`)) return;
+
+      const btn = document.getElementById("btnGenerateOutline");
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⏳ AI 正在深度构筑大纲...</span>`;
+      }
+
+      const pCard = document.getElementById("outlineProgressCard");
+      if (pCard) pCard.style.display = "block";
+      const pTitle = document.getElementById("outlineProgressTitle");
+      if (pTitle) pTitle.innerText = `AI 终极大纲策划宗师正在推演《${bTitle}》全局架构...`;
+      const pBadge = document.getElementById("outlineProgressBadge");
+      if (pBadge) {
+        pBadge.className = "pill pill-blue";
+        pBadge.innerText = "推演中";
+      }
+
+      updateOutlineStep(1, "running", "大纲宗师正在根据流派因果构思世界观与时代格局...");
+      updateOutlineStep(2, "waiting", "全书不可调和宿命矛盾构思中...");
+      updateOutlineStep(3, "waiting", "三卷史诗与分章蓝图构思中...");
+
+      // 清空现有文本以准备打字机效果呈现
+      document.getElementById("outlineWorldView").value = "";
+      document.getElementById("outlinePowerSystem").value = "";
+      document.getElementById("outlineMainPlot").value = "";
+      document.getElementById("outlineWorldView").placeholder = "【推演中】AI 策划师正在构筑宏大世界观格局与地理势力...";
+      document.getElementById("outlinePowerSystem").placeholder = "【推演中】实力阶梯、修为境界与晋升脉络构建中...";
+      document.getElementById("outlineMainPlot").placeholder = "【推演中】全书终极目标、宿命强敌与核心主线冲突构建中...";
+      document.getElementById("outlineVolumesContainer").innerHTML = `<div style="font-size: 12.5px; color: var(--accent-gold); padding: 12px; text-align: center;">⏳ AI 宗师正在深度构想三卷宏大主线架构...</div>`;
+      document.getElementById("outlineChaptersContainer").innerHTML = `<div style="font-size: 12.5px; color: var(--accent-blue); padding: 12px; text-align: center;">⏳ AI 宗师正在规划前序分章蓝图细纲...</div>`;
+
+      const mock = document.getElementById("settingMockToggle")?.checked || false;
+
+      try {
+        const res = await fetch("/api/outline/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: bid, mock: mock })
+        });
+        const data = await res.json();
+        if (data.status !== "ok" || !data.outline) {
+          alert("大纲策划失败: " + (data.error || "大模型连接超时，请重试"));
+          if (pCard) pCard.style.display = "none";
+          return;
+        }
+
+        currentOutlineData = data.outline;
+        const ol = data.outline;
+
+        // 第一步：打字机流式输出 世界观 与 战力体系
+        updateOutlineStep(1, "running", "正在打字机流式呈现世界观与战力晋升法则...");
+        await typewriteToTextarea("outlineWorldView", ol.world_view || "");
+        await typewriteToTextarea("outlinePowerSystem", ol.power_system || "");
+        updateOutlineStep(1, "done", "世界观格局与战力晋升体系已就绪！");
+
+        // 第二步：打字机流式输出 核心主线矛盾
+        updateOutlineStep(2, "running", "正在打字机流式呈现核心主线宿命矛盾...");
+        await typewriteToTextarea("outlineMainPlot", ol.main_plot || "");
+        updateOutlineStep(2, "done", "全书不可调和宿命主线已就绪！");
+
+        // 第三步：渲染分卷与分章细纲
+        updateOutlineStep(3, "running", "正在生成三卷史诗与分章蓝图卡片...");
+        renderOutlineVolumesAnimated(ol.volumes || []);
+        renderOutlineChaptersAnimated(ol.chapter_outlines || []);
+        updateOutlineStep(3, "done", "三卷史诗架构与分章细纲全盘落定！");
+
+        if (pBadge) {
+          pBadge.className = "pill pill-green";
+          pBadge.innerText = "✔ 大纲推演大功告成";
+        }
+        showToast("🎉 全书总大纲已成功重构并打字完成！");
+      } catch (err) {
+        alert("请求异常: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>✨ AI 重新策划全书大纲</span>`;
+        }
+      }
     }
 
     // ==========================================
