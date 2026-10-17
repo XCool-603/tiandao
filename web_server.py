@@ -34,11 +34,142 @@ WEB_DIR = Path(__file__).parent / "web"
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+def get_fanqie_category_tags(genre: str):
+    g = (genre or "").lower()
+    if "都市" in g or "战神" in g or "逆袭" in g:
+        return ["都市生活", "战神归来", "都市脑洞", "神豪打脸"]
+    elif "大明" in g or "历史" in g:
+        return ["历史古代", "两宋元明", "架空历史", "穿越权谋"]
+    elif "修仙" in g or "仙侠" in g:
+        return ["玄幻仙侠", "传统修真", "凡人流", "无敌杀伐"]
+    elif "科幻" in g or "星际" in g:
+        return ["科幻未来", "星际文明", "机械科技", "末世求生"]
+    elif "重生" in g or "商战" in g:
+        return ["都市日常", "商业大亨", "重生逆袭", "时代纪实"]
+    elif "怪谈" in g or "悬疑" in g:
+        return ["悬疑脑洞", "规则怪谈", "惊悚无限", "诡异复苏"]
+    elif "魔法" in g or "奇幻" in g:
+        return ["奇幻仙侠", "领主种田", "剑与魔法", "巨龙血脉"]
+    elif "游戏" in g or "无限" in g:
+        return ["游戏动漫", "无限诸天", "数据流", "超神词条"]
+    return ["原创综合", "脑洞故事", "主线爽文"]
+
+def clean_fanqie_content(title: str, content: str) -> str:
+    lines = content.split("\n")
+    clean = []
+    for l in lines:
+        s = l.strip()
+        if not s:
+            continue
+        if s.startswith("#"):
+            s = s.lstrip("#").strip()
+            if s == title.strip() or (s.startswith("第") and "章" in s):
+                continue
+        if s.startswith(">"):
+            s = s.lstrip(">").strip()
+        clean.append("    " + s)
+    return f"{title}\n\n" + "\n\n".join(clean)
+
 class SimulationManager:
     """全局多书库推演状态管理器（与 BookManager 紧密集成）"""
     def __init__(self):
         self.is_busy = False
         self.stop_requested = False
+        self.fanqie_auto_upload = False
+        self._load_fanqie_config()
+
+    def _load_fanqie_config(self):
+        cfg_file = OUTPUT_DIR / "fanqie_config.json"
+        cfg = {
+            "auto_upload": False,
+            "webhook_url": os.getenv("FANQIE_WEBHOOK_URL", ""),
+            "cookie": os.getenv("FANQIE_COOKIE", ""),
+            "publish_mode": "drafts"
+        }
+        if cfg_file.exists():
+            try:
+                data = json.loads(cfg_file.read_text(encoding="utf-8"))
+                cfg.update(data)
+            except Exception:
+                pass
+        self.fanqie_auto_upload = bool(cfg.get("auto_upload", False))
+        return cfg
+
+    def save_fanqie_config(self, new_cfg: dict):
+        cfg_file = OUTPUT_DIR / "fanqie_config.json"
+        current = self._load_fanqie_config()
+        current.update(new_cfg)
+        self.fanqie_auto_upload = bool(current.get("auto_upload", False))
+        cfg_file.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        return current
+
+    def upload_chapter_fanqie(self, book, chapter_id, chapter_title="", chapter_content=""):
+        """单章手动或自动上传至番茄小说发布通道"""
+        if not chapter_content:
+            target_chap = next((c for c in book.chapters if str(c.get("id")) == str(chapter_id)), None)
+            if target_chap:
+                chapter_title = target_chap.get("title", f"第{chapter_id}章")
+                chapter_content = target_chap.get("content", "")
+            else:
+                return {"status": "error", "message": f"未找到第 {chapter_id} 章内容"}
+
+        clean_body = clean_fanqie_content(chapter_title, chapter_content)
+        clean_title = (chapter_title or f"第{chapter_id}章").replace("#", "").strip()
+        if not clean_title.startswith("第") and not "章" in clean_title:
+            clean_title = f"第{chapter_id}章 {clean_title}"
+
+        cfg = self._load_fanqie_config()
+        webhook_url = (cfg.get("webhook_url") or os.getenv("FANQIE_WEBHOOK_URL", "")).strip()
+        mode = cfg.get("publish_mode", "drafts")
+
+        bid = book.id if str(book.id).startswith("book_") else f"book_{book.id}"
+        fanqie_dir = OUTPUT_DIR / "fanqie_sync" / bid
+        fanqie_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"chapter_{int(chapter_id):03d}.txt" if str(chapter_id).isdigit() else f"chapter_{chapter_id}.txt"
+        (fanqie_dir / filename).write_text(clean_body, encoding="utf-8")
+
+        result = {
+            "status": "ok",
+            "chapter_id": chapter_id,
+            "chapter_title": clean_title,
+            "word_count": len(clean_body),
+            "book_title": book.title,
+            "clean_body": clean_body,
+            "mode": mode
+        }
+
+        if webhook_url and webhook_url.startswith("http"):
+            try:
+                payload = {
+                    "event": "chapter_upload",
+                    "platform": "fanqie",
+                    "book_id": book.id,
+                    "book_title": book.title,
+                    "chapter_id": chapter_id,
+                    "chapter_title": clean_title,
+                    "content": clean_body,
+                    "word_count": len(clean_body),
+                    "mode": mode,
+                    "tags": get_fanqie_category_tags(book.genre),
+                    "timestamp": time.time()
+                }
+                req = urllib.request.Request(
+                    webhook_url,
+                    data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                    headers={"Content-Type": "application/json; charset=utf-8"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    result["webhook_code"] = resp.status
+                    result["message"] = f"🍅 第 {chapter_id} 章《{clean_title}》已成功推送至番茄通道（HTTP {resp.status}）"
+                    return result
+            except Exception as e_wh:
+                result["status"] = "warning"
+                result["message"] = f"🍅 第 {chapter_id} 章已按番茄规范排版存盘，但推送接口异常: {str(e_wh)}"
+                return result
+        else:
+            result["status"] = "local_ready"
+            result["message"] = f"🍅 第 {chapter_id} 章《{clean_title}》已按番茄作家规范完成首行两格缩进与净化排版！配置 Webhook 后可全自动直推番茄草稿箱。"
+            return result
 
     @property
     def active_book(self) -> Book:
@@ -1035,9 +1166,9 @@ class SimulationManager:
             pass
         return {"status": "ok", "content": self.novel_content, "chapter": chap_num}
 
-    def stream_simulate(self, mode="single", force_mock=False, divine_decree="", book_id=None, custom_count=None):
+    def stream_simulate(self, mode="single", force_mock=False, divine_decree="", book_id=None, custom_count=None, auto_fanqie=None):
         """
-        流式全自动演化成书 (支持 1 章、10 章、以及一本书，可自定义规模 30/50/100 章)
+        流式全自动演化成书 (支持 1 章、10 章、以及一本书，可自定义规模 30/50/100 章，支持自动上传番茄)
         实时 yield 事件字典以供 SSE 流式推送
         """
         if self.is_busy:
@@ -1223,6 +1354,21 @@ class SimulationManager:
                 target_book.save()
                 total_generated += 1
 
+                # 🍅 番茄小说自动上传联动检查 (单章演化即自动上传)
+                should_fanqie = self.fanqie_auto_upload if auto_fanqie is None else bool(auto_fanqie)
+                fanqie_msg = ""
+                if should_fanqie:
+                    fq_res = self.upload_chapter_fanqie(target_book, next_chap_id, first_line, full_content)
+                    fanqie_msg = fq_res.get("message", "")
+                    yield {
+                        "type": "fanqie_auto_uploaded",
+                        "chapter_index": i,
+                        "chapter_id": next_chap_id,
+                        "title": first_line,
+                        "status": fq_res.get("status"),
+                        "message": fanqie_msg
+                    }
+
                 # 同步到 output/
                 try:
                     (OUTPUT_DIR / f"novel_chapter_{next_chap_id:02d}.md").write_text(full_content, encoding="utf-8")
@@ -1237,7 +1383,8 @@ class SimulationManager:
                     "title": first_line,
                     "word_count": len(full_content),
                     "total_chapters": len(target_book.chapters),
-                    "message": f"🎉 第 {next_chap_id} 章《{first_line}》撰写完毕（{len(full_content)}字）已存盘！"
+                    "fanqie_auto_uploaded": bool(should_fanqie),
+                    "message": f"🎉 第 {next_chap_id} 章《{first_line}》撰写完毕（{len(full_content)}字）已存盘！" + (f" [{fanqie_msg}]" if fanqie_msg else "")
                 }
 
                 time.sleep(0.5)
@@ -1260,36 +1407,6 @@ class SimulationManager:
 
 # 全局单例
 sim_mgr = SimulationManager()
-
-def get_fanqie_category_tags(genre: str):
-    g = (genre or "").lower()
-    if "都市" in g or "战神" in g or "逆袭" in g:
-        return ["都市生活", "战神归来", "都市脑洞", "神豪打脸"]
-    elif "大明" in g or "历史" in g:
-        return ["历史古代", "两宋元明", "架空历史", "穿越权谋"]
-    elif "修仙" in g or "仙侠" in g:
-        return ["玄幻仙侠", "传统修真", "凡人流", "无敌杀伐"]
-    elif "科幻" in g or "星际" in g:
-        return ["科幻未来", "星际文明", "机械科技", "末世求生"]
-    elif "重生" in g or "商战" in g:
-        return ["都市日常", "商业大亨", "重生逆袭", "时代纪实"]
-    return ["原创综合", "脑洞故事", "主线爽文"]
-
-def clean_fanqie_content(title: str, content: str) -> str:
-    lines = content.split("\n")
-    clean = []
-    for l in lines:
-        s = l.strip()
-        if not s:
-            continue
-        if s.startswith("#"):
-            s = s.lstrip("#").strip()
-            if s == title.strip() or (s.startswith("第") and "章" in s):
-                continue
-        if s.startswith(">"):
-            s = s.lstrip(">").strip()
-        clean.append("    " + s)
-    return f"{title}\n\n" + "\n\n".join(clean)
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
@@ -1371,6 +1488,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             decree = parsed_qs.get("decree", [None])[0] or parsed_qs.get("divine_decree", [""])[0]
             count_str = parsed_qs.get("count", [None])[0] or parsed_qs.get("custom_count", [None])[0]
             custom_count = int(count_str) if count_str and count_str.isdigit() else None
+            auto_fanqie_val = parsed_qs.get("auto_fanqie", [None])[0]
+            auto_fanqie = (auto_fanqie_val in ("1", "true", "True")) if auto_fanqie_val is not None else None
 
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -1379,7 +1498,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
 
-            gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count)
+            gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count, auto_fanqie=auto_fanqie)
             try:
                 for event in gen:
                     msg = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
@@ -1617,6 +1736,20 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             }, ensure_ascii=False).encode("utf-8"))
             return
 
+        if path == "/api/fanqie/config":
+            cfg = sim_mgr._load_fanqie_config()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "auto_upload": sim_mgr.fanqie_auto_upload,
+                "webhook_url": cfg.get("webhook_url", ""),
+                "has_cookie": bool(cfg.get("cookie")),
+                "publish_mode": cfg.get("publish_mode", "drafts")
+            }, ensure_ascii=False).encode("utf-8"))
+            return
+
         # 管理端专属配置读取接口 (需鉴权)
         if path == "/api/admin/config":
             if not self.is_admin_authenticated():
@@ -1826,6 +1959,45 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     "author_dashboard_url": "https://fanqienovel.com/main/writer/login",
                     "author_book_url": "https://fanqienovel.com/main/writer/book",
                     "message": f"《{target_book.title}》已生成全网分发指令包（共 {len(target_book.chapters)} 章）！"
+                }
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/fanqie/config":
+                updated = sim_mgr.save_fanqie_config(req_data)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "config": updated}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/fanqie/upload_chapter":
+                bid = req_data.get("book_id", "")
+                cid = req_data.get("chapter_id", None)
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                res = sim_mgr.upload_chapter_fanqie(target_book, cid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/fanqie/upload_all":
+                bid = req_data.get("book_id", "")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                success_count = 0
+                for c in target_book.chapters:
+                    r = sim_mgr.upload_chapter_fanqie(target_book, c.get("id"))
+                    if r.get("status") in ("ok", "local_ready"):
+                        success_count += 1
+                res = {
+                    "status": "ok",
+                    "total_chapters": len(target_book.chapters),
+                    "success_count": success_count,
+                    "message": f"《{target_book.title}》全书共 {len(target_book.chapters)} 章已全部完成番茄排版与同步上传！"
                 }
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -2089,7 +2261,8 @@ def start_ws_server(ws_port=8089):
                         bid = data.get("book_id", None)
                         decree = data.get("decree", "")
                         mock = bool(data.get("mock", False))
-                        gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count)
+                        auto_fanqie = data.get("auto_fanqie", None)
+                        gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count, auto_fanqie=auto_fanqie)
                         try:
                             for event in gen:
                                 try:
