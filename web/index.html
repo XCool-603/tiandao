@@ -366,6 +366,126 @@
     .reader-content-box p {
       margin-bottom: 1.4em;
       text-indent: 2em;
+      border-radius: 6px;
+      padding: 4px 8px;
+      transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+      cursor: pointer;
+    }
+    .reader-content-box p:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .reader-content-box p.reading-highlight {
+      background: rgba(59, 130, 246, 0.14) !important;
+      box-shadow: inset 3.5px 0 0 var(--accent-blue) !important;
+      color: #ffffff !important;
+      font-weight: 500;
+    }
+
+    /* 🎧 真人有声听书悬浮/嵌入条 */
+    .audio-player-bar {
+      background: linear-gradient(135deg, rgba(20, 26, 40, 0.98), rgba(15, 20, 32, 0.98));
+      border-bottom: 1px solid var(--border-medium);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+      z-index: 35;
+      flex-shrink: 0;
+      transition: all 0.25s ease;
+    }
+    .audio-icon-pulse {
+      font-size: 20px;
+      animation: pulseAudio 1.8s infinite alternate;
+      filter: drop-shadow(0 0 6px var(--accent-blue));
+    }
+    @keyframes pulseAudio {
+      0% { transform: scale(0.94); opacity: 0.8; }
+      100% { transform: scale(1.08); opacity: 1; }
+    }
+    .audio-info {
+      flex: 1;
+      min-width: 140px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .audio-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-gold);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .audio-status-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    /* 律动声波跳动频谱条 */
+    .audio-equalizer {
+      display: flex;
+      align-items: flex-end;
+      gap: 2.5px;
+      height: 18px;
+      padding: 0 4px;
+    }
+    .eq-bar {
+      width: 3px;
+      background: var(--accent-blue);
+      border-radius: 1.5px;
+      height: 3px;
+      transition: height 0.2s ease;
+      opacity: 0.4;
+    }
+    .audio-equalizer.playing .eq-bar {
+      opacity: 1;
+    }
+    .audio-equalizer.playing .eq-bar:nth-child(1) { animation: eqBounce 0.7s infinite ease-in-out alternate; }
+    .audio-equalizer.playing .eq-bar:nth-child(2) { animation: eqBounce 1.1s infinite ease-in-out alternate 0.1s; }
+    .audio-equalizer.playing .eq-bar:nth-child(3) { animation: eqBounce 0.8s infinite ease-in-out alternate 0.2s; }
+    .audio-equalizer.playing .eq-bar:nth-child(4) { animation: eqBounce 1.3s infinite ease-in-out alternate 0.15s; }
+    .audio-equalizer.playing .eq-bar:nth-child(5) { animation: eqBounce 0.9s infinite ease-in-out alternate 0.25s; }
+    .audio-equalizer.playing .eq-bar:nth-child(6) { animation: eqBounce 1.0s infinite ease-in-out alternate 0.05s; }
+    .audio-equalizer.playing .eq-bar:nth-child(7) { animation: eqBounce 0.75s infinite ease-in-out alternate 0.18s; }
+    @keyframes eqBounce {
+      0% { height: 3px; background: #3b82f6; }
+      50% { height: 16px; background: #10b981; }
+      100% { height: 8px; background: #f59e0b; }
+    }
+    /* 快捷听书倍速药丸 */
+    .speed-capsules {
+      display: flex;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .speed-capsule-btn {
+      padding: 3px 7px;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .speed-capsule-btn:hover {
+      color: var(--text-primary);
+    }
+    .speed-capsule-btn.active {
+      background: var(--accent-blue);
+      color: #fff;
+      font-weight: 600;
     }
 
     /* 真实打字机流式光标 */
@@ -883,6 +1003,9 @@
             <div class="studio-chap-meta" id="currentChapHeaderMeta">0 字 · 约 0 分钟阅读</div>
           </div>
           <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-secondary" onclick="toggleAudiobookBar()" id="btnAudiobookToggle" title="真人有声听书 (支持多音色、倍速与高亮跟读)">
+              <span>🎧 有声听书</span>
+            </button>
             <button class="btn btn-secondary" onclick="toggleSerifFont()" id="btnFontToggle" title="衬线/无衬线切换">
               <span>🔤 衬线体</span>
             </button>
@@ -895,6 +1018,57 @@
             <button class="btn btn-primary" onclick="saveEditedChapter()" id="btnSaveChapter" style="display: none;">
               <span>💾 保存修改</span>
             </button>
+          </div>
+        </div>
+
+        <!-- 🎧 真人有声听书控制条 (Audiobook Neural Player) -->
+        <div id="audioPlayerBar" class="audio-player-bar" style="display: none;">
+          <div class="audio-icon-pulse" id="ttsWaveIcon">🎧</div>
+          <!-- 实时跳动声波频谱条 -->
+          <div class="audio-equalizer" id="audioEqualizer">
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+            <span class="eq-bar"></span>
+          </div>
+          <div class="audio-info">
+            <div class="audio-title" id="ttsCurrentTitle">🎙️ 真人有声听书 · 智能神经声学</div>
+            <div class="audio-status-text" id="ttsStatusText">支持真人自然音色 · 点击任意段落即可跳转朗读</div>
+          </div>
+          <div class="audio-controls">
+            <!-- 声音角色选择器 (优先嗅探中文真人自然音色) -->
+            <select id="ttsVoiceSelect" class="form-input" style="font-size: 11.5px; padding: 3px 6px; max-width: 175px;" onchange="changeTtsVoice()" title="选择朗读声音角色">
+              <option value="">🎙️ 智能优选真人自然音</option>
+            </select>
+            <!-- 语速微调药丸 -->
+            <div class="speed-capsules">
+              <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(0.85)">0.85x</button>
+              <button type="button" class="speed-capsule-btn active" onclick="setTtsSpeed(1.0)">1.0x</button>
+              <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(1.25)">1.25x</button>
+              <button type="button" class="speed-capsule-btn" onclick="setTtsSpeed(1.5)">1.5x</button>
+            </div>
+            <select id="ttsSpeedSelect" style="display: none;">
+              <option value="0.85">0.85</option>
+              <option value="1.0" selected>1.0</option>
+              <option value="1.25">1.25</option>
+              <option value="1.5">1.5</option>
+            </select>
+            <button id="ttsPrevBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;" onclick="prevTtsParagraph()" title="朗读上一段">
+              <span>⏮ 上段</span>
+            </button>
+            <button id="ttsPlayBtn" class="btn btn-primary" style="padding: 4px 12px; font-size: 12px;" onclick="toggleAudiobook()">
+              <span>▶ 开始听书</span>
+            </button>
+            <button id="ttsNextBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;" onclick="nextTtsParagraph()" title="朗读下一段">
+              <span>⏭ 下段</span>
+            </button>
+            <button id="ttsStopBtn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;" onclick="stopAudiobook()" title="停止听书">
+              <span>⏹ 停止</span>
+            </button>
+            <button class="modal-close-btn" style="font-size: 14px; margin-left: 4px;" onclick="toggleAudiobookBar(false)" title="收起听书面板">✕</button>
           </div>
         </div>
 
@@ -1216,6 +1390,7 @@
     // 初始化加载
     window.addEventListener("DOMContentLoaded", () => {
       fetchStatus();
+      initTtsVoices();
       // 开启定期轻量拉取 (每 6 秒)
       setInterval(() => {
         if (!isStreaming) fetchStatus(false);
@@ -1361,18 +1536,316 @@
       }
     }
 
+    // ==========================================
+    // 🎙️ 顶级真人有声听书系统 (Audiobook Studio Engine)
+    // ==========================================
+    let isTtsPlaying = false;
+    let ttsCurrentPIndex = 0;
+    let ttsParagraphs = [];
+    let ttsUtterance = null;
+    let ttsVoices = [];
+    let selectedTtsVoice = null;
+    let isAudiobookBarOpen = false;
+
+    function toggleAudiobookBar(forceState) {
+      const bar = document.getElementById("audioPlayerBar");
+      const btn = document.getElementById("btnAudiobookToggle");
+      if (!bar) return;
+      if (typeof forceState === "boolean") {
+        isAudiobookBarOpen = forceState;
+      } else {
+        isAudiobookBarOpen = !isAudiobookBarOpen;
+      }
+
+      if (isAudiobookBarOpen) {
+        bar.style.display = "flex";
+        if (btn) btn.classList.add("active");
+        initTtsVoices();
+        // 确保段落数据就绪
+        if (ttsParagraphs.length === 0) {
+          const box = document.getElementById("readerContentBox");
+          if (box) {
+            const pEls = box.querySelectorAll("p");
+            if (pEls.length > 0) {
+              ttsParagraphs = Array.from(pEls).map(el => el.innerText.trim()).filter(t => t.length > 0);
+            }
+          }
+        }
+      } else {
+        bar.style.display = "none";
+        if (btn) btn.classList.remove("active");
+        if (isTtsPlaying) {
+          pauseAudiobook();
+        }
+      }
+    }
+
+    function initTtsVoices() {
+      if (!('speechSynthesis' in window)) return;
+      function populateVoiceList() {
+        ttsVoices = window.speechSynthesis.getVoices();
+        const sel = document.getElementById("ttsVoiceSelect");
+        if (!sel) return;
+
+        // 筛选中文音色
+        const zhVoices = ttsVoices.filter(v => 
+          (v.lang && (v.lang.startsWith("zh") || v.lang.includes("CN") || v.lang.includes("cmn"))) ||
+          v.name.includes("Chinese") || v.name.includes("中文") || v.name.includes("Mandarin")
+        );
+
+        // 优先将真人自然在线音排在最前 (Edge / Chrome Natural / Neural)
+        zhVoices.sort((a, b) => {
+          const aNat = a.name.includes("Natural") || a.name.includes("Online") || a.name.includes("Neural");
+          const bNat = b.name.includes("Natural") || b.name.includes("Online") || b.name.includes("Neural");
+          if (aNat && !bNat) return -1;
+          if (!aNat && bNat) return 1;
+          return 0;
+        });
+
+        sel.innerHTML = "";
+        if (zhVoices.length > 0) {
+          zhVoices.forEach(v => {
+            let label = v.name;
+            if (v.name.includes("Yunxi") || v.name.includes("云希")) label = "🌟 云希 · 青年男声 (热血/小说推荐)";
+            else if (v.name.includes("Xiaoxiao") || v.name.includes("晓晓")) label = "🌟 晓晓 · 沉浸女声 (自然生动/旁白)";
+            else if (v.name.includes("Yunyang") || v.name.includes("云扬")) label = "🌟 云扬 · 沉稳正气 (历史/评书风)";
+            else if (v.name.includes("Xiaoyi") || v.name.includes("晓伊")) label = "🌟 晓伊 · 温婉清丽 (都市/言情)";
+            else if (v.name.includes("Yunjian") || v.name.includes("云健")) label = "🌟 云健 · 解说男音 (纪实沉着)";
+            else if (v.name.includes("Huihui") || v.name.includes("慧慧")) label = "🎙️ 慧慧 · 标准女声";
+            else if (v.name.includes("Kangkang") || v.name.includes("康康")) label = "🎙️ 康康 · 阳光男声";
+            else if (v.name.includes("Yaoyao") || v.name.includes("瑶瑶")) label = "🎙️ 瑶瑶 · 柔美女声";
+            else if (v.name.includes("Natural") || v.name.includes("Online")) label = "🌟 " + v.name.replace(/Microsoft |Online \(Natural\) - Chinese \(Mainland\)/g, "").trim() + " (真人自然音)";
+
+            const opt = document.createElement("option");
+            opt.value = v.name;
+            opt.innerText = label;
+            sel.appendChild(opt);
+          });
+
+          // 默认选中最推荐的真人音色 (如云希、晓晓或第一个Natural音)
+          const bestVoice = zhVoices.find(v => v.name.includes("Yunxi") || v.name.includes("Xiaoxiao") || v.name.includes("Natural")) || zhVoices[0];
+          if (bestVoice) {
+            sel.value = bestVoice.name;
+            selectedTtsVoice = bestVoice;
+          }
+        } else {
+          sel.innerHTML = `<option value="">🎙️ 系统默认朗读引擎</option>`;
+        }
+      }
+
+      populateVoiceList();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = populateVoiceList;
+      }
+    }
+
+    function changeTtsVoice() {
+      const sel = document.getElementById("ttsVoiceSelect");
+      if (!sel) return;
+      const val = sel.value;
+      selectedTtsVoice = ttsVoices.find(v => v.name === val) || null;
+      if (isTtsPlaying) {
+        speakCurrentParagraph();
+      }
+    }
+
+    function setTtsSpeed(rate) {
+      const sel = document.getElementById("ttsSpeedSelect");
+      if (sel) sel.value = rate.toString();
+      document.querySelectorAll(".speed-capsule-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.innerText.includes(rate.toString()));
+      });
+      if (isTtsPlaying) {
+        speakCurrentParagraph();
+      }
+    }
+
+    function toggleAudiobook() {
+      if (isTtsPlaying) {
+        pauseAudiobook();
+      } else {
+        startAudiobook();
+      }
+    }
+
+    function startAudiobook() {
+      if (!('speechSynthesis' in window)) {
+        alert("您的浏览器暂不支持 Web 语音合成，推荐使用 Chrome / Microsoft Edge 浏览器获得原汁原味的真人朗读效果！");
+        return;
+      }
+
+      // 如果当前没有段落数据，从页面重新捕获
+      if (ttsParagraphs.length === 0) {
+        const box = document.getElementById("readerContentBox");
+        if (box) {
+          const pEls = box.querySelectorAll("p");
+          ttsParagraphs = Array.from(pEls).map(el => el.innerText.trim()).filter(t => t.length > 0);
+        }
+      }
+
+      if (ttsParagraphs.length === 0) {
+        alert("当前章节暂无有效文字段落可供朗读！");
+        return;
+      }
+
+      toggleAudiobookBar(true);
+      isTtsPlaying = true;
+      const eq = document.getElementById("audioEqualizer");
+      if (eq) eq.classList.add("playing");
+      const btn = document.getElementById("ttsPlayBtn");
+      if (btn) btn.innerHTML = `<span>⏸ 暂停听书</span>`;
+      speakCurrentParagraph();
+    }
+
+    function speakCurrentParagraph() {
+      if (!isTtsPlaying) return;
+      if (ttsCurrentPIndex >= ttsParagraphs.length) {
+        stopAudiobook();
+        const statusEl = document.getElementById("ttsStatusText");
+        if (statusEl) statusEl.innerText = "🎉 本章听书朗读完毕！";
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      clearHighlightParagraphs();
+
+      const pEl = document.getElementById(`p-text-${ttsCurrentPIndex}`);
+      if (pEl) {
+        pEl.classList.add("reading-highlight");
+        pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      const statusEl = document.getElementById("ttsStatusText");
+      if (statusEl) {
+        statusEl.innerText = `正在朗读第 ${ttsCurrentPIndex + 1} / ${ttsParagraphs.length} 段...`;
+      }
+
+      const text = ttsParagraphs[ttsCurrentPIndex];
+      ttsUtterance = new SpeechSynthesisUtterance(text);
+      ttsUtterance.lang = "zh-CN";
+
+      if (selectedTtsVoice) {
+        ttsUtterance.voice = selectedTtsVoice;
+      } else {
+        const sel = document.getElementById("ttsVoiceSelect");
+        if (sel && sel.value) {
+          const v = ttsVoices.find(item => item.name === sel.value);
+          if (v) ttsUtterance.voice = v;
+        }
+      }
+
+      const speedSel = document.getElementById("ttsSpeedSelect");
+      ttsUtterance.rate = speedSel ? (parseFloat(speedSel.value) || 1.0) : 1.0;
+
+      ttsUtterance.onend = () => {
+        if (isTtsPlaying) {
+          ttsCurrentPIndex++;
+          speakCurrentParagraph();
+        }
+      };
+
+      ttsUtterance.onerror = (e) => {
+        if (e.error !== "canceled" && e.error !== "interrupted") {
+          console.warn("[TTS 朗读提示]:", e);
+        }
+      };
+
+      window.speechSynthesis.speak(ttsUtterance);
+    }
+
+    function pauseAudiobook() {
+      isTtsPlaying = false;
+      const eq = document.getElementById("audioEqualizer");
+      if (eq) eq.classList.remove("playing");
+      window.speechSynthesis.pause();
+      const btn = document.getElementById("ttsPlayBtn");
+      if (btn) btn.innerHTML = `<span>▶ 继续听书</span>`;
+      const statusEl = document.getElementById("ttsStatusText");
+      if (statusEl) statusEl.innerText = `已暂停在第 ${ttsCurrentPIndex + 1} 段`;
+    }
+
+    function stopAudiobook() {
+      isTtsPlaying = false;
+      const eq = document.getElementById("audioEqualizer");
+      if (eq) eq.classList.remove("playing");
+      window.speechSynthesis.cancel();
+      ttsCurrentPIndex = 0;
+      clearHighlightParagraphs();
+      const btn = document.getElementById("ttsPlayBtn");
+      if (btn) btn.innerHTML = `<span>▶ 开始听书</span>`;
+      const statusEl = document.getElementById("ttsStatusText");
+      if (statusEl) statusEl.innerText = "已停止听书 · 点击任意段落随时继续畅听";
+    }
+
+    function prevTtsParagraph() {
+      if (ttsCurrentPIndex > 0) {
+        ttsCurrentPIndex--;
+        if (isTtsPlaying) {
+          speakCurrentParagraph();
+        } else {
+          startAudiobook();
+        }
+      }
+    }
+
+    function nextTtsParagraph() {
+      if (ttsCurrentPIndex < ttsParagraphs.length - 1) {
+        ttsCurrentPIndex++;
+        if (isTtsPlaying) {
+          speakCurrentParagraph();
+        } else {
+          startAudiobook();
+        }
+      }
+    }
+
+    function playAudiobookFromParagraph(idx) {
+      ttsCurrentPIndex = idx;
+      toggleAudiobookBar(true);
+      if (!isTtsPlaying) {
+        isTtsPlaying = true;
+        const eq = document.getElementById("audioEqualizer");
+        if (eq) eq.classList.add("playing");
+        const btn = document.getElementById("ttsPlayBtn");
+        if (btn) btn.innerHTML = `<span>⏸ 暂停听书</span>`;
+      }
+      speakCurrentParagraph();
+    }
+
+    function clearHighlightParagraphs() {
+      document.querySelectorAll(".reading-highlight").forEach(el => el.classList.remove("reading-highlight"));
+    }
+
     function formatAndRenderText(rawText) {
       const box = document.getElementById("readerContentBox");
       const textarea = document.getElementById("editorTextarea");
       textarea.value = rawText || "";
 
+      if (isTtsPlaying) {
+        stopAudiobook();
+      }
+
       if (!rawText) {
         box.innerHTML = `<div style="color: var(--text-muted); padding: 40px; text-align: center;">本章暂无正文</div>`;
+        ttsParagraphs = [];
         return;
       }
-      // 优雅分段排版
+      // 优雅分段排版，注入段落ID并支持点击从本段开播听书
       const paragraphs = rawText.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0);
-      box.innerHTML = paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join("");
+      ttsParagraphs = paragraphs;
+      ttsCurrentPIndex = 0;
+      box.innerHTML = paragraphs.map((p, idx) => `
+        <p id="p-text-${idx}" onclick="playAudiobookFromParagraph(${idx})" title="点击从本段开始听书 🎧">${escapeHtml(p)}</p>
+      `).join("");
+
+      const titleEl = document.getElementById("ttsCurrentTitle");
+      if (titleEl) {
+        titleEl.innerText = `🎙️ 真人有声听书 · ${document.getElementById("currentChapHeaderTitle").innerText}`;
+      }
+      const statusEl = document.getElementById("ttsStatusText");
+      if (statusEl) {
+        statusEl.innerText = `本章共 ${paragraphs.length} 段 · 点击段落即可跳转朗读`;
+      }
     }
 
     // 正文衬线体切换
@@ -1791,6 +2264,21 @@
       const metaEl = document.getElementById("currentChapHeaderMeta");
       if (metaEl) {
         metaEl.innerText = `${typewriterCurrentText.length.toLocaleString()} 字 (本章已存盘)`;
+      }
+
+      // 更新听书段落池，使新写好的章节可以立即听书与点击跳转
+      const pEls = document.querySelectorAll("#readerContentBox p");
+      ttsParagraphs = [];
+      pEls.forEach((el, idx) => {
+        el.id = `p-text-${idx}`;
+        el.onclick = () => playAudiobookFromParagraph(idx);
+        el.title = "点击从本段开始听书 🎧";
+        const clean = el.innerText.trim();
+        if (clean) ttsParagraphs.push(clean);
+      });
+      const statusEl = document.getElementById("ttsStatusText");
+      if (statusEl) {
+        statusEl.innerText = `本章已存盘 (共 ${ttsParagraphs.length} 段) · 点击段落即可跳转朗读`;
       }
     }
 
