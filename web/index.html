@@ -1279,6 +1279,9 @@
       <select id="bookSelectDropdown" class="book-selector-dropdown" onchange="onSwitchBookSelect(this.value)">
         <option value="">加载书目中...</option>
       </select>
+      <button class="btn btn-ghost" onclick="deleteCurrentBook()" title="永久删除当前作品" style="color: var(--accent-red); font-size: 13px; padding: 4px 6px; margin-left: 2px;">
+        <span>🗑️</span>
+      </button>
     </div>
 
     <!-- 核心视图切换 (正文 / 大纲 / 推演) -->
@@ -1338,6 +1341,13 @@
 
       <div class="chapter-search-box">
         <input type="text" id="chapterSearchInput" class="chapter-search-input" placeholder="搜索章节标题..." oninput="onFilterChapters(this.value)">
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; font-size: 11px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-card);">
+        <span style="color: var(--text-muted); font-weight: 600;">章节列表</span>
+        <button class="btn btn-ghost" onclick="clearAllBookChapters()" style="color: var(--accent-red); font-size: 11px; padding: 1px 6px;" title="清空本书所有正文章节，从零开篇推演">
+          <span>🧹 清空章节</span>
+        </button>
       </div>
 
       <div class="chapter-list-scroll" id="chapterListContainer">
@@ -2026,6 +2036,71 @@
       });
     }
 
+    async function deleteCurrentBook() {
+      if (!globalState || !globalState.book_id) return;
+      const bTitle = globalState.title || "当前作品";
+      if (!confirm(`⚠️ 危险操作：确认彻底删除作品《${bTitle}》吗？删除后该书的所有大纲、伏线与正文章节都将被永久清除！`)) return;
+
+      try {
+        const res = await fetch("/api/book/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: globalState.book_id })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast(`已成功删除作品《${bTitle}》`, "success");
+          fetchStatus(true);
+        } else {
+          showToast("删除作品失败", "error");
+        }
+      } catch (e) {
+        showToast("删除异常: " + e.message, "error");
+      }
+    }
+
+    async function deleteSingleChapter(chapId) {
+      if (!confirm(`确认删除第 ${chapId} 章吗？删除后后续章节序号将自动前移重排。`)) return;
+      const bid = globalState ? globalState.book_id : "";
+      try {
+        const res = await fetch("/api/chapter/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: bid, chapter_id: chapId })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast(`第 ${chapId} 章已删除`, "info");
+          fetchStatus(true);
+        } else {
+          showToast("删除章节失败", "error");
+        }
+      } catch (e) {
+        showToast("删除异常: " + e.message, "error");
+      }
+    }
+
+    async function clearAllBookChapters() {
+      if (!confirm("⚠️ 危险操作：确认清空本书的所有章节吗？清空后章节数归零，你可以从零开始全新推演！")) return;
+      const bid = globalState ? globalState.book_id : "";
+      try {
+        const res = await fetch("/api/chapter/clear_all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: bid })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast("本书章节已全部清空，已恢复为纯净起步状态！", "success");
+          fetchStatus(true);
+        } else {
+          showToast("清空失败", "error");
+        }
+      } catch (e) {
+        showToast("清空异常: " + e.message, "error");
+      }
+    }
+
     // 渲染左侧书籍元数据
     function renderSideBookInfo(data) {
       document.getElementById("sideBookTitle").innerText = data.title || "未命名小说";
@@ -2062,9 +2137,12 @@
         const titleStr = c.title || `第${c.id}章`;
         const wc = c.word_count || (c.content ? c.content.length : 0);
         return `
-          <div class="chapter-item ${String(c.id) === String(currentChapterId) ? 'active' : ''}" onclick="selectChapter('${c.id}')">
-            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(titleStr)}</span>
-            <span class="chapter-item-meta">${wc.toLocaleString()}字</span>
+          <div class="chapter-item ${String(c.id) === String(currentChapterId) ? 'active' : ''}" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+            <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" onclick="selectChapter('${c.id}')">
+              ${escapeHtml(titleStr)}
+            </div>
+            <span class="chapter-item-meta" style="cursor: pointer;" onclick="selectChapter('${c.id}')">${wc.toLocaleString()}字</span>
+            <button class="btn btn-ghost" title="删除本章" style="padding: 1px 5px; font-size: 11px; color: var(--text-muted); opacity: 0.6;" onmouseover="this.style.opacity='1'; this.style.color='#ef4444';" onmouseout="this.style.opacity='0.6'; this.style.color='var(--text-muted)';" onclick="event.stopPropagation(); deleteSingleChapter('${c.id}')">✕</button>
           </div>
         `;
       }).join("");

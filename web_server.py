@@ -2013,9 +2013,28 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "ok", "book_id": new_book.id, "id": new_book.id, "title": new_book.title}, ensure_ascii=False).encode("utf-8"))
                 return
 
-            if path == "/api/admin/delete_book":
+            if path in ("/api/book/delete", "/api/admin/delete_book"):
                 bid = req_data.get("book_id", "")
                 success = book_mgr.delete_book(bid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok" if success else "error", "active_book_id": book_mgr.active_book_id}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/chapter/delete":
+                bid = req_data.get("book_id", "") or sim_mgr.active_book.id
+                cid = req_data.get("chapter_id", None)
+                success = book_mgr.delete_chapter(bid, cid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok" if success else "error"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/chapter/clear_all":
+                bid = req_data.get("book_id", "") or sim_mgr.active_book.id
+                success = book_mgr.clear_chapters(bid)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()

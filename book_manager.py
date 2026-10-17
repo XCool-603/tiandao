@@ -167,9 +167,18 @@ class BookManager:
                 except Exception as e:
                     print(f"[读取书籍失败] {bf}: {e}")
 
-        # 若无书籍或缺少修仙标杆书，进行内置初始化
+        # 若无书籍，创建一本真正空白纯净的起步作品
         if not self.books:
-            self._init_default_showcase_books()
+            default_book = Book(
+                book_id=f"book_{int(time.time())}",
+                title="《全新起步作品》",
+                genre="玄幻修仙",
+                synopsis="天地初开，等待创作者开启大千演化推演！",
+                chapters=[],
+                current_round=0
+            )
+            default_book.save()
+            self.books[default_book.id] = default_book
 
         if self.active_book_id not in self.books:
             self.active_book_id = list(self.books.keys())[0]
@@ -990,33 +999,12 @@ class BookManager:
                 }
             }
 
-        first_chapter_text = f"## 第一章 大道初显，风云汇聚\n\n天地苍茫，{book.synopsis}。\n\n大幕拉开，各方博弈在这一刻悄然拉开序幕！"
-        book.chapters = [
-            {
-                "id": 1,
-                "title": "第一章 大道初显，风云汇聚",
-                "word_count": len(first_chapter_text),
-                "content": first_chapter_text
-            }
-        ]
-        book.dramas = [
-            {
-                "id": 1,
-                "title": "第1集 · 风云变幻，天地破晓",
-                "duration": "01:15",
-                "scenes": [
-                    { "speaker": "旁白", "text": f"大世初开！{book.title}的传奇序章，正式掀开！", "visual": "风云卷涌 · 异象横空", "effect": "thunder" },
-                    { "speaker": list(book.world.characters.values())[0]["name"], "text": "棋局已定，诸位，谁敢与我一争天下？！", "visual": "主角登场 · 锋芒毕露", "effect": "glow" }
-                ]
-            }
-        ]
+        book.chapters = []
+        book.dramas = []
 
     def delete_book(self, book_id: str) -> bool:
-        """管理员删除一本书（仅管理员可操作）"""
+        """彻底删除一本书并清理关联文件"""
         if book_id not in self.books:
-            return False
-        # 不允许删除最后一本书
-        if len(self.books) <= 1:
             return False
 
         del self.books[book_id]
@@ -1027,8 +1015,58 @@ class BookManager:
             except Exception as e:
                 print(f"[删除文件失败] {file_path}: {e}")
 
-        if self.active_book_id == book_id:
-            self.active_book_id = list(self.books.keys())[0]
+        # 清理对应的番茄同步暂存目录
+        bid_str = book_id if str(book_id).startswith("book_") else f"book_{book_id}"
+        fanqie_dir = NOVEL_OUTPUT_DIR / "fanqie_sync" / bid_str
+        if fanqie_dir.exists():
+            try:
+                import shutil
+                shutil.rmtree(fanqie_dir)
+            except Exception:
+                pass
+
+        # 若已无书籍，自动补上一本真正空白的作品
+        if not self.books:
+            empty_book = Book(
+                book_id=f"book_{int(time.time())}",
+                title="《全新起步作品》",
+                genre="玄幻修仙",
+                synopsis="天地初开，等待创作者开启大千演化推演！",
+                chapters=[],
+                current_round=0
+            )
+            empty_book.save()
+            self.books[empty_book.id] = empty_book
+            self.active_book_id = empty_book.id
+        else:
+            if self.active_book_id == book_id or self.active_book_id not in self.books:
+                self.active_book_id = list(self.books.keys())[0]
+        return True
+
+    def delete_chapter(self, book_id: str, chapter_id) -> bool:
+        """删除指定章节并重新排序重排索引"""
+        book = self.books.get(book_id)
+        if not book:
+            return False
+        orig_count = len(book.chapters)
+        book.chapters = [c for c in book.chapters if str(c.get("id")) != str(chapter_id)]
+        if len(book.chapters) != orig_count:
+            for idx, c in enumerate(book.chapters):
+                c["id"] = idx + 1
+            book.current_round = len(book.chapters)
+            book.save()
+            return True
+        return False
+
+    def clear_chapters(self, book_id: str) -> bool:
+        """清空本书所有正文章节，从零开篇"""
+        book = self.books.get(book_id)
+        if not book:
+            return False
+        book.chapters = []
+        book.current_round = 0
+        book.world.history = []
+        book.save()
         return True
 
     def reset_book(self, book_id: str) -> bool:
