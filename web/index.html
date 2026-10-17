@@ -2150,16 +2150,18 @@
       fetchStatus();
       initTtsVoices();
       loadFanqieConfig();
-      // 开启定期轻量拉取 (每 6 秒)
+      // 开启定期轻量拉取 (每 5 秒自动同步各书推演状态与徽章)
       setInterval(() => {
-        if (!isStreaming) fetchStatus(false);
-      }, 6000);
+        fetchStatus(false);
+      }, 5000);
     });
 
     // 拉取后端最新状态
     async function fetchStatus(refreshFullView = true) {
       try {
-        const res = await fetch("/api/status");
+        const curBid = (globalState && globalState.book_id) ? globalState.book_id : "";
+        const url = curBid ? `/api/status?book_id=${encodeURIComponent(curBid)}` : "/api/status";
+        const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
         globalState = data;
@@ -2216,9 +2218,10 @@
         const count = b.chapter_count ?? b.chapters_count ?? 0;
         const bTitle = b.title || "未命名小说";
         const bGenre = b.genre || "小说";
+        const simBadge = b.is_simulating ? " ⚡[推演中]" : "";
         return `
           <option value="${b.id}" ${b.id === activeId ? 'selected' : ''}>
-            ${escapeHtml(bTitle)} (${escapeHtml(bGenre)}) · ${count}章
+            ${escapeHtml(bTitle)} (${escapeHtml(bGenre)}) · ${count}章${simBadge}
           </option>
         `;
       }).join("");
@@ -3591,6 +3594,15 @@
 
     // 统一演化事件处理中心 (WebSocket 与 SSE 共享)
     function handleSimulationEvent(ev, count, statusEl, progressLabel, progressFill, progressStat) {
+      // 多书并发隔离：如果当前事件指定了所属书籍且与当前用户屏幕正在查看的书籍不一致，则仅静默刷新概览，不打扰当前阅读
+      const isCurrentViewingBook = !ev.book_id || !globalState || !globalState.book_id || (ev.book_id === globalState.book_id);
+      if (!isCurrentViewingBook) {
+        if (ev.type === "chapter_done" || ev.type === "complete" || ev.type === "stopped") {
+          fetchStatus(false);
+        }
+        return;
+      }
+
       const idx = ev.chapter_index || 1;
       const total = ev.total || count;
 
@@ -3684,10 +3696,15 @@
     }
 
     function stopStream() {
+      const bid = (globalState && globalState.book_id) || "";
       if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
-        currentWebSocket.send(JSON.stringify({ action: "stop" }));
+        currentWebSocket.send(JSON.stringify({ action: "stop", book_id: bid }));
       }
-      fetch("/api/simulate_stop", { method: "POST" });
+      fetch("/api/simulate_stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ book_id: bid })
+      });
       stopStreamUI("⏹ 已响应安全停止指令并存盘");
     }
 

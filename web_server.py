@@ -70,13 +70,84 @@ def clean_fanqie_content(title: str, content: str) -> str:
         clean.append("    " + s)
     return f"{title}\n\n" + "\n\n".join(clean)
 
-class SimulationManager:
-    """全局多书库推演状态管理器（与 BookManager 紧密集成）"""
-    def __init__(self):
+class BookRunner:
+    """单一书籍的天道推演独立运行器（支持各书并发多线程推演与独立控制）"""
+    def __init__(self, book_id: str):
+        self.book_id = book_id
         self.is_busy = False
         self.stop_requested = False
+        self.last_busy_time = 0.0
+        self.lock = threading.Lock()
+
+class SimulationManager:
+    """全局多书库推演状态管理器（与 BookManager 紧密集成，支持多书并发独立天道推演）"""
+    def __init__(self):
+        self.runners: dict[str, BookRunner] = {}
+        self._runners_lock = threading.Lock()
         self.fanqie_auto_upload = False
         self._load_fanqie_config()
+
+    def get_runner(self, book_id: str) -> BookRunner:
+        if not book_id:
+            book_id = self.active_book.id or "default"
+        with self._runners_lock:
+            if book_id not in self.runners:
+                self.runners[book_id] = BookRunner(book_id)
+            return self.runners[book_id]
+
+    def is_book_busy(self, book_id: str) -> bool:
+        if not book_id:
+            return False
+        with self._runners_lock:
+            runner = self.runners.get(book_id)
+            if not runner:
+                return False
+            # 自动自愈：若已忙碌超过 180 秒（3分钟）未更新心跳，判定为异常挂起，自动强制释放
+            if runner.is_busy and time.time() - runner.last_busy_time > 180:
+                runner.is_busy = False
+            return runner.is_busy
+
+    def request_stop(self, book_id: str = None):
+        """停止指定书籍的推演（若未指定则停止当前活跃书籍或所有推演）"""
+        with self._runners_lock:
+            if book_id and book_id in self.runners:
+                self.runners[book_id].stop_requested = True
+            elif book_id:
+                runner = self.get_runner(book_id)
+                runner.stop_requested = True
+            else:
+                act_id = self.active_book.id
+                if act_id and act_id in self.runners:
+                    self.runners[act_id].stop_requested = True
+                for r in self.runners.values():
+                    if r.is_busy:
+                        r.stop_requested = True
+
+    @property
+    def is_busy(self) -> bool:
+        """向后兼容属性：反映当前活跃书籍的忙碌状态"""
+        return self.is_book_busy(self.active_book.id)
+
+    @is_busy.setter
+    def is_busy(self, val: bool):
+        act_id = self.active_book.id
+        if act_id:
+            runner = self.get_runner(act_id)
+            runner.is_busy = val
+
+    @property
+    def stop_requested(self) -> bool:
+        act_id = self.active_book.id
+        if act_id and act_id in self.runners:
+            return self.runners[act_id].stop_requested
+        return False
+
+    @stop_requested.setter
+    def stop_requested(self, val: bool):
+        act_id = self.active_book.id
+        if act_id:
+            runner = self.get_runner(act_id)
+            runner.stop_requested = val
 
     def _load_fanqie_config(self):
         cfg_file = OUTPUT_DIR / "fanqie_config.json"
@@ -285,8 +356,9 @@ class SimulationManager:
         """重置当前书籍的世界历史与轮次"""
         book_mgr.reset_book(self.active_book.id)
 
-    def _genesis_procedural(self, world_theme=""):
+    def _genesis_procedural(self, world_theme="", target_book=None):
         """纯动态程序化创世生成器（每次重开都是全新的人名、宗门与机缘）"""
+        target_book = target_book or self.active_book
         import random
         # 场景库
         scenes = [
@@ -304,8 +376,8 @@ class SimulationManager:
             }
         ]
         chosen_scene = random.choice(scenes)
-        self.world.title = chosen_scene["title"]
-        self.world.scene_description = chosen_scene["desc"]
+        target_book.world.title = chosen_scene["title"]
+        target_book.world.scene_description = chosen_scene["desc"]
 
         # 随机名字与门派生成池
         first_names = ["楚", "陆", "封", "墨", "莫", "姜", "裴", "顾", "闻", "姬", "萧", "齐"]
@@ -353,7 +425,7 @@ class SimulationManager:
             c_name = f"{first_names[i]}{last_names[i]}"
             arch = archetypes[i]
             cid = f"char_dyn_{i+1}"
-            self.world.characters[cid] = {
+            target_book.world.characters[cid] = {
                 "name": c_name,
                 "title": arch["role_type"],
                 "camp": arch["camp"],
@@ -364,10 +436,10 @@ class SimulationManager:
                 "status": "alive"
             }
 
-    def _genesis_real(self, world_theme=""):
+    def _genesis_real(self, world_theme="", target_book=None):
         """大模型真实自主创世（由 AI 完全自主构建全新的天地与全新的人物）"""
         llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
-        target_book = self.active_book
+        target_book = target_book or self.active_book
         book_genre = target_book.genre or "全题材原创"
         book_title = target_book.title or "当前世界"
         theme_hint = f"世界主题定制：{world_theme}\n" if world_theme else ""
@@ -409,25 +481,26 @@ class SimulationManager:
         if not parsed or not parsed.get("characters"):
             raise ValueError("LLM 未能正确生成天地结构")
 
-        self.world.title = parsed.get("scene_title", f"【{book_title} · 序幕现世】")
-        self.world.scene_description = parsed.get("scene_description", "大幕拉开，各方博弈在这一刻悄然开启。")
-        self.world.characters = {}
+        target_book.world.title = parsed.get("scene_title", f"【{book_title} · 序幕现世】")
+        target_book.world.scene_description = parsed.get("scene_description", "大幕拉开，各方博弈在这一刻悄然开启。")
+        target_book.world.characters = {}
 
         for idx, c in enumerate(parsed["characters"][:4]):
             cid = f"char_dyn_{idx+1}"
             c["status"] = "alive"
-            self.world.characters[cid] = c
+            target_book.world.characters[cid] = c
 
-    def spawn_character(self, preset_id=None, custom_prompt="", force_mock=False):
+    def spawn_character(self, preset_id=None, custom_prompt="", force_mock=False, target_book=None):
         """天道点化 / 引入新角色入局（全题材自适应）"""
+        target_book = target_book or self.active_book
         load_dotenv()
         current_api_key = os.getenv("OPENAI_API_KEY", "")
         use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
 
-        target_genre = self.active_book.genre or "通用幻想"
-        target_title = self.active_book.title or "当前世界"
+        target_genre = target_book.genre or "通用幻想"
+        target_title = target_book.title or "当前世界"
 
-        char_id = f"char_{int(time.time())}"
+        char_id = f"char_{int(time.time()*1000)%10000000}"
         new_char = None
 
         if use_mock or not custom_prompt:
@@ -622,7 +695,7 @@ class SimulationManager:
                 ]
 
             # 选一个没出场过的
-            available = [c for c in mock_pool if not any(existing["name"] == c["name"] for existing in self.world.characters.values())]
+            available = [c for c in mock_pool if not any(existing["name"] == c["name"] for existing in target_book.world.characters.values())]
             chosen = available[0] if available else mock_pool[0]
             new_char = dict(chosen)
         else:
@@ -665,9 +738,6 @@ class SimulationManager:
                     except Exception as e2:
                         print(f"[天道点化 兜底] balanced-model 回退亦失败: {e2}，使用预设角色")
                         parsed = None
-                    except Exception as e2:
-                        print(f"[天道点化 兜底] balanced-model 回退亦失败: {e2}，使用预设修士")
-                        parsed = None
                 else:
                     parsed = None
 
@@ -685,29 +755,33 @@ class SimulationManager:
                 }
 
         new_char["status"] = "alive"
-        self.world.characters[char_id] = new_char
+        target_book.world.characters[char_id] = new_char
 
         # 广而告之：在天道事件中留下记录
         announcement = f"【天道生变·新修士踏入战局】：修士【{new_char['name']}】（{new_char.get('title', '')} / {new_char.get('cultivation_level', '')}）感应到此地灵力激荡，御器破空而来！"
-        if self.world.history:
-            self.world.history[-1].tiandao_intervention = (
-                (self.world.history[-1].tiandao_intervention or "") + f"\n{announcement}"
+        if target_book.world.history:
+            target_book.world.history[-1].tiandao_intervention = (
+                (target_book.world.history[-1].tiandao_intervention or "") + f"\n{announcement}"
             )
 
         return {"status": "ok", "character": new_char}
 
-    def get_state(self):
+    def get_state(self, target_book_id=None):
         # 组装返回给前端的状态
+        target_book = book_mgr.books.get(target_book_id, self.active_book) if target_book_id else self.active_book
+        if not target_book:
+            target_book = self.active_book
+
         load_dotenv()
         current_api_key = os.getenv("OPENAI_API_KEY", "")
         has_real_key = bool(current_api_key and current_api_key != "your_api_key_here")
 
         char_list = []
-        for k, c in self.world.characters.items():
+        for k, c in target_book.world.characters.items():
             # 找到该角色在最后一轮的私有内心独白（全知天道可见）
             last_inner = ""
-            if self.world.history:
-                for act in self.world.history[-1].actions:
+            if target_book.world.history:
+                for act in target_book.world.history[-1].actions:
                     if act.char_name == c["name"]:
                         last_inner = act.inner_thought
                         break
@@ -727,7 +801,7 @@ class SimulationManager:
             })
 
         history_list = []
-        for r in self.world.history:
+        for r in target_book.world.history:
             history_list.append({
                 "round": r.round_number,
                 "environment": r.environment_state,
@@ -747,8 +821,8 @@ class SimulationManager:
 
         # 章节精简处理：仅首章与尾章保留正文默认展示，其余章节按需由 /api/chapter 懒加载，防止超大体积卡死前端
         lean_chapters = []
-        for idx, c in enumerate(self.active_book.chapters):
-            include_content = (idx == 0 or idx == len(self.active_book.chapters) - 1)
+        for idx, c in enumerate(target_book.chapters):
+            include_content = (idx == 0 or idx == len(target_book.chapters) - 1)
             lean_chapters.append({
                 "id": c.get("id"),
                 "title": c.get("title", f"第{c.get('id')}章"),
@@ -759,26 +833,33 @@ class SimulationManager:
         raw_key = os.getenv("OPENAI_API_KEY", "")
         masked_key = f"{raw_key[:3]}****{raw_key[-4:]}" if (has_real_key and len(raw_key) > 7) else ("••••••••" if has_real_key else "")
 
+        # 为所有书籍概览附加各自的实时推演状态
+        books_summary = book_mgr.list_books_summary()
+        for s in books_summary:
+            s["is_simulating"] = self.is_book_busy(s["id"])
+
+        first_chap_content = target_book.chapters[0].get("content", "") if target_book.chapters else ""
+
         return {
-            "book_id": self.active_book.id,
-            "title": self.active_book.title,
-            "genre": self.active_book.genre,
-            "synopsis": self.active_book.synopsis,
-            "theme_prompt": self.active_book.theme_prompt,
-            "scene_description": self.world.scene_description,
-            "current_round": self.current_round,
-            "max_rounds": self.world.max_rounds,
+            "book_id": target_book.id,
+            "title": target_book.title,
+            "genre": target_book.genre,
+            "synopsis": target_book.synopsis,
+            "theme_prompt": target_book.theme_prompt,
+            "scene_description": target_book.world.scene_description,
+            "current_round": target_book.current_round,
+            "max_rounds": target_book.world.max_rounds,
             "characters": char_list,
             "history": history_list,
             "chapters": lean_chapters,
-            "outline": getattr(self.active_book, "outline", {}),
-            "has_outline": bool(getattr(self.active_book, "outline", {}).get("main_plot")),
-            "foreshadowings": getattr(self.active_book, "foreshadowings", []),
-            "dramas": self.active_book.dramas,
-            "books_summary": book_mgr.list_books_summary(),
-            "is_busy": self.is_busy,
-            "has_novel": bool(self.novel_content),
-            "novel_content": self.novel_content,
+            "outline": getattr(target_book, "outline", {}),
+            "has_outline": bool(getattr(target_book, "outline", {}).get("main_plot")),
+            "foreshadowings": getattr(target_book, "foreshadowings", []),
+            "dramas": target_book.dramas,
+            "books_summary": books_summary,
+            "is_busy": self.is_book_busy(target_book.id),
+            "has_novel": bool(first_chap_content),
+            "novel_content": first_chap_content,
             "config": {
                 "has_api_key": has_real_key,
                 "api_key_masked": masked_key,
@@ -789,55 +870,57 @@ class SimulationManager:
             }
         }
 
-    def step(self, divine_decree="", force_mock=False, auto_spawn=False):
+    def step(self, divine_decree="", force_mock=False, auto_spawn=False, target_book=None):
         """执行单步演化"""
-        if not self.active_book.id:
+        target_book = target_book or self.active_book
+        if not target_book.id:
             return {"error": "当前书库为空，请先点击【➕ 新建作品】创建一部小说！"}
-        if self.is_busy:
-            return {"error": "推演引擎正忙，请稍候..."}
+        runner = self.get_runner(target_book.id)
+        if runner.is_busy:
+            return {"error": f"作品《{target_book.title}》推演引擎正忙，请稍候..."}
 
-        self.is_busy = True
+        runner.is_busy = True
         try:
-            self.current_round += 1
+            target_book.current_round += 1
             load_dotenv()
             current_api_key = os.getenv("OPENAI_API_KEY", "")
             use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
 
             # 若勾选自动引人且轮次到达第2轮或场上少于4人，概率由天道引来新路过散修
-            if auto_spawn and (self.current_round >= 2) and (len(self.world.characters) < 5):
-                self.spawn_character(custom_prompt="被滔天法宝威压与剧烈斗法声响吸引而来的路过散修或宗门追兵", force_mock=use_mock)
+            if auto_spawn and (target_book.current_round >= 2) and (len(target_book.world.characters) < 5):
+                self.spawn_character(custom_prompt="被滔天法宝威压与剧烈斗法声响吸引而来的路过散修或宗门追兵", force_mock=use_mock, target_book=target_book)
 
             if use_mock:
                 # 模拟推演模式
-                result = self._step_mock(self.current_round, divine_decree)
+                result = self._step_mock(target_book.current_round, divine_decree, target_book=target_book)
             else:
                 # 真实大模型推演
                 try:
-                    result = self._step_real(self.current_round, divine_decree)
+                    result = self._step_real(target_book.current_round, divine_decree, target_book=target_book)
                 except Exception as e:
                     print(f"[推演中心 异常拦截] 真实推演遇到异常: {e}，平滑切换至沙盒模拟！")
-                    result = self._step_mock(self.current_round, divine_decree)
+                    result = self._step_mock(target_book.current_round, divine_decree, target_book=target_book)
 
-            self.active_book.save()
+            target_book.save()
             return result
         finally:
-            self.is_busy = False
+            runner.is_busy = False
 
-    def _step_mock(self, round_num, divine_decree):
+    def _step_mock(self, round_num, divine_decree, target_book=None):
         """高质量模拟步（对当前任意自创角色的自适应群像博弈推演，全自动生死流转）"""
+        target_book = target_book or self.active_book
+        target_genre = target_book.genre or "通用幻想"
+
         time.sleep(1.2)  # 模拟推演时间
         decree_text = f"【天道法旨干涉】：{divine_decree}\n" if divine_decree else ""
 
-        target_book = self.active_book
-        target_genre = target_book.genre or "通用幻想"
-
         # 获取当前存活的角色
-        active_chars = [c for c in self.world.characters.values() if c.get("status", "alive") == "alive"]
+        active_chars = [c for c in target_book.world.characters.values() if c.get("status", "alive") == "alive"]
 
         # 【核心】：若当前场上没有任何角色（第一回合从零开辟），天地初开，根据题材自动初始化首批核心角色
         if not active_chars:
             book_mgr._populate_new_book_archetypes(target_book, target_genre, target_book.theme_prompt or "")
-            active_chars = [c for c in self.world.characters.values() if c.get("status", "alive") == "alive"]
+            active_chars = [c for c in target_book.world.characters.values() if c.get("status", "alive") == "alive"]
 
             actions = []
             for c in active_chars:
@@ -849,7 +932,7 @@ class SimulationManager:
                     action=f"暗中握紧携带之物品道具，眼神警惕锁定全场动静。"
                 ))
 
-            env_change = f"风云变幻，{self.world.title}核心异动爆发，多方核心势力初次交锋！"
+            env_change = f"风云变幻，{target_book.world.title}核心异动爆发，多方核心势力初次交锋！"
             fate_twist = f"{decree_text}【天地因果初显】：各方互不相识的焦点人物第一时间被异变卷入局中！"
             arbitration = "各方阵营心怀鬼胎，于局中形成制衡对峙，底牌与杀招蓄势待发，冲突一触即发！"
 
@@ -860,7 +943,8 @@ class SimulationManager:
                 actions=actions,
                 arbitration_result=arbitration
             )
-            self.world.history.append(log)
+            target_book.world.history.append(log)
+            target_book.save()
             return {"status": "ok", "round": round_num}
 
         actions = []
@@ -904,9 +988,9 @@ class SimulationManager:
         # 根据轮次演变局势与自动引渡新人/结算生死
         if round_num == 1:
             # 自动吸引一位新人破空入局
-            new_char = self.spawn_character(force_mock=True)
+            new_char = self.spawn_character(force_mock=True, target_book=target_book)
             new_name = new_char.get("name", "神秘新来者") if isinstance(new_char, dict) else "神秘强援"
-            env_change = f"气浪席卷，异象彻底沸腾，{self.world.title}核心博弈进入白热化！"
+            env_change = f"气浪席卷，异象彻底沸腾，{target_book.world.title}核心博弈进入白热化！"
             fate_twist = f"{decree_text}【天地因果涌现】：剧烈冲突余波引动【{new_name}】强行杀入战局！"
             arbitration = f"新入局者【{new_name}】掀起惊天变局，在场各方立刻调整防线，杀机直冲云霄！"
 
@@ -921,7 +1005,7 @@ class SimulationManager:
                 esc_name = active_chars[0]["name"]
 
             # 再引渡一位趁乱入局者
-            new_char = self.spawn_character(force_mock=True)
+            new_char = self.spawn_character(force_mock=True, target_book=target_book)
             new_name = new_char.get("name", "黄雀在后者") if isinstance(new_char, dict) else "黄雀"
             env_change = "狂暴气流撕裂全场，战线崩解，残垣断壁在冲击波中化作齑粉！"
             fate_twist = f"{decree_text}【因果生死结算】：【{dead_name}】底牌尽出终遭重创击溃！【{esc_name}】夺得关键战利品脱离战场！"
@@ -939,20 +1023,21 @@ class SimulationManager:
             actions=actions,
             arbitration_result=arbitration
         )
-        self.world.history.append(log)
+        target_book.world.history.append(log)
+        target_book.save()
         return {"status": "ok", "round": round_num}
 
-    def _step_real(self, round_num, divine_decree="", chapter_outline=None):
+    def _step_real(self, round_num, divine_decree="", chapter_outline=None, target_book=None):
         """
         【Turbo 极速双盲因果博弈引擎】
         单次深度推理矩阵：一键完成全员双盲心机决策 + 天道客观裁决 + 确定性状态道具与伤势结算
         耗时从 90s+ 缩短至 10s 级，Token 成本大幅降低，且具备确定性状态追踪。
         """
         llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
-        target_book = self.active_book
+        target_book = target_book or self.active_book
 
         # 1. 获取当前在场的存活角色
-        active_agents = {k: v for k, v in self.world.characters.items() if v.get("status", "alive") == "alive"}
+        active_agents = {k: v for k, v in target_book.world.characters.items() if v.get("status", "alive") == "alive"}
 
         # 若当前场上没有任何角色（第一回合从零开辟演化）：天道自主开辟世界与引渡首批争渡者
         if not active_agents:
@@ -1000,18 +1085,18 @@ class SimulationManager:
                 parsed = llm.extract_json(raw_res)
             except Exception as e:
                 print(f"[天道创世 提示] 真实模型异常: {e}，切入沙盒模拟生成")
-                return self._step_mock(round_num, divine_decree)
+                return self._step_mock(round_num, divine_decree, target_book=target_book)
 
             if not parsed or not parsed.get("characters"):
-                return self._step_mock(round_num, divine_decree)
+                return self._step_mock(round_num, divine_decree, target_book=target_book)
 
-            self.world.title = parsed.get("scene_title", "【大千世界 · 风云初起】")
-            self.world.scene_description = parsed.get("environment_change", "虚空动荡，大幕拉开。")
+            target_book.world.title = parsed.get("scene_title", "【大千世界 · 风云初起】")
+            target_book.world.scene_description = parsed.get("environment_change", "虚空动荡，大幕拉开。")
 
             actions = []
             for idx, c in enumerate(parsed["characters"][:4]):
                 cid = f"char_{idx+1}"
-                self.world.characters[cid] = {
+                target_book.world.characters[cid] = {
                     "name": c["name"],
                     "title": c.get("title", "争渡者"),
                     "camp": c.get("camp", "中立"),
@@ -1037,7 +1122,7 @@ class SimulationManager:
                 actions=actions,
                 arbitration_result=parsed.get("arbitration_summary", "各方对峙，杀机四伏。")
             )
-            self.world.history.append(log)
+            target_book.world.history.append(log)
             target_book.save()
             return {"status": "ok", "round": round_num}
 
@@ -1070,7 +1155,7 @@ class SimulationManager:
         turbo_prompt = f"""
 你是不容忤逆的【{target_book.genre}因果律天道主宰】。
 当前现场环境：
-{self.world.scene_description}
+{target_book.world.scene_description}
 {outline_goal}
 {decree_text}
 
@@ -1136,10 +1221,10 @@ class SimulationManager:
             parsed = llm.extract_json(raw_res)
         except Exception as e:
             print(f"[Turbo 推演引擎 提示] 真实模型推演波动: {e}，自动降级至高质量沙盒模拟")
-            return self._step_mock(round_num, divine_decree)
+            return self._step_mock(round_num, divine_decree, target_book=target_book)
 
         if not parsed or not parsed.get("actions"):
-            return self._step_mock(round_num, divine_decree)
+            return self._step_mock(round_num, divine_decree, target_book=target_book)
 
         # 3. 提取博弈动作
         actions = []
@@ -1164,7 +1249,7 @@ class SimulationManager:
         new_arrival = parsed.get("new_arrival")
         if new_arrival and isinstance(new_arrival, dict) and new_arrival.get("should_spawn") and new_arrival.get("name"):
             new_id = f"char_{int(time.time()*1000)%1000000}"
-            self.world.characters[new_id] = {
+            target_book.world.characters[new_id] = {
                 "name": new_arrival["name"],
                 "title": new_arrival.get("title", "路过修士"),
                 "camp": new_arrival.get("camp", "散修"),
@@ -1186,32 +1271,36 @@ class SimulationManager:
             actions=actions,
             arbitration_result=parsed.get("arbitration_summary", "各方暗算交错，战果抵定。")
         )
-        self.world.history.append(log)
+        target_book.world.history.append(log)
         target_book.save()
         return {"status": "ok", "round": round_num}
 
-    def generate_novel(self, force_mock=False):
+    def generate_novel(self, force_mock=False, target_book=None):
         """调用史官撰写小说章节"""
-        if self.is_busy:
-            return {"error": "引擎正忙，请稍候..."}
+        target_book = target_book or self.active_book
+        runner = self.get_runner(target_book.id)
+        if runner.is_busy:
+            return {"error": f"作品《{target_book.title}》引擎正忙，请稍候..."}
 
-        if not self.world.history:
+        if not target_book.world.history:
             # 自动开天辟地推演首轮因果，确保随时可以直接出书
             print("[史官著书 智能补全] 检测到尚无历史，天道自动开辟天地推演首卷博弈...")
-            self.step(force_mock=force_mock, auto_spawn=True)
+            self.step(force_mock=force_mock, auto_spawn=True, target_book=target_book)
 
-        self.is_busy = True
+        runner.is_busy = True
         try:
-            return self._write_novel_internal(force_mock=force_mock)
+            return self._write_novel_internal(force_mock=force_mock, target_book=target_book)
         finally:
-            self.is_busy = False
+            runner.is_busy = False
 
-    def auto_simulate_and_publish(self, rounds=3, force_mock=False):
+    def auto_simulate_and_publish(self, rounds=3, force_mock=False, target_book=None):
         """一键全自动推演并著书成卷 (自动连续推进轮次并生成长篇小说正文)"""
-        if self.is_busy:
-            return {"error": "天道演化正忙，请稍候..."}
+        target_book = target_book or self.active_book
+        runner = self.get_runner(target_book.id)
+        if runner.is_busy:
+            return {"error": f"作品《{target_book.title}》天道演化正忙，请稍候..."}
 
-        self.is_busy = True
+        runner.is_busy = True
         try:
             load_dotenv()
             current_api_key = os.getenv("OPENAI_API_KEY", "")
@@ -1219,26 +1308,27 @@ class SimulationManager:
 
             # 自动推进多轮
             for _ in range(rounds):
-                self.current_round += 1
-                if self.current_round >= 2 and len(self.world.characters) < 5:
-                    self.spawn_character(custom_prompt="被滔天法宝威压吸引而来的散修或宗门追兵", force_mock=use_mock)
+                target_book.current_round += 1
+                if target_book.current_round >= 2 and len(target_book.world.characters) < 5:
+                    self.spawn_character(custom_prompt="被滔天法宝威压吸引而来的散修或宗门追兵", force_mock=use_mock, target_book=target_book)
 
                 if use_mock:
-                    self._step_mock(self.current_round, "")
+                    self._step_mock(target_book.current_round, "", target_book=target_book)
                 else:
                     try:
-                        self._step_real(self.current_round, "")
+                        self._step_real(target_book.current_round, "", target_book=target_book)
                     except Exception as e:
-                        print(f"[一键成书 熔断保护] 第 {self.current_round} 轮异常: {e}，平滑切换沙盒演练")
-                        self._step_mock(self.current_round, "")
+                        print(f"[一键成书 熔断保护] 第 {target_book.current_round} 轮异常: {e}，平滑切换沙盒演练")
+                        self._step_mock(target_book.current_round, "", target_book=target_book)
                 time.sleep(1.0)
 
             # 终局由史官撰写小说正文
-            return self._write_novel_internal(force_mock=use_mock)
+            return self._write_novel_internal(force_mock=use_mock, target_book=target_book)
         finally:
-            self.is_busy = False
+            runner.is_busy = False
 
-    def _write_novel_internal(self, force_mock=False):
+    def _write_novel_internal(self, force_mock=False, target_book=None):
+        target_book = target_book or self.active_book
         load_dotenv()
         current_api_key = os.getenv("OPENAI_API_KEY", "")
         use_mock = force_mock or (not current_api_key) or (current_api_key == "your_api_key_here")
@@ -1246,32 +1336,32 @@ class SimulationManager:
         if use_mock:
             novel_path = OUTPUT_DIR / "novel_chapter_01.md"
             if novel_path.exists():
-                self.novel_content = novel_path.read_text(encoding="utf-8")
+                novel_text = novel_path.read_text(encoding="utf-8")
             else:
-                self.novel_content = "# 第一章 寒潭夺芝，各怀鬼胎\n\n九幽寒潭，冷雾森然……"
+                novel_text = f"# 第一章 争渡伊始\n\n大幕拉开，{target_book.title}的世界中各方博弈悄然开启……"
         else:
             llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
             chr_model = os.getenv("CHRONICLER_MODEL") or "fast-model"
             try:
                 chronicler = ChroniclerAgent(llm, chr_model)
-                self.novel_content = chronicler.write_chapter(self.world, self.world.history)
+                novel_text = chronicler.write_chapter(target_book.world, target_book.world.history)
             except Exception as e_chr:
                 print(f"[史官著书 告警] 史官模型 {chr_model} 调用失败: {e_chr}，尝试 fast-model 回退...")
                 try:
                     chronicler_fb = ChroniclerAgent(llm, "fast-model")
-                    self.novel_content = chronicler_fb.write_chapter(self.world, self.world.history)
+                    novel_text = chronicler_fb.write_chapter(target_book.world, target_book.world.history)
                 except Exception as e_chr2:
                     print(f"[史官著书 兜底] fast-model 回退亦失败: {e_chr2}")
-                    self.novel_content = ""
+                    novel_text = ""
 
-        if not self.novel_content or len(self.novel_content.strip()) < 100:
+        if not novel_text or len(novel_text.strip()) < 100:
             novel_lines = [
-                f"# 【{self.world.title}】群雄争渡录 · 第一回",
+                f"# 【{target_book.world.title}】群雄争渡录 · 第一回",
                 "",
-                f"大道无情，万仙争渡。{self.world.scene_description}",
+                f"大道无情，万仙争渡。{target_book.world.scene_description}",
                 ""
             ]
-            for r in self.world.history:
+            for r in target_book.world.history:
                 novel_lines.append(f"## 第 {r.round_number} 回 · 天地因果博弈")
                 novel_lines.append(f"> **天地异象**：{r.environment_state}\n")
                 if r.tiandao_intervention:
@@ -1282,53 +1372,54 @@ class SimulationManager:
                     novel_lines.append(f"- 具体行动：{a.action}")
                     novel_lines.append(f"- 私密暗算：*{a.inner_thought}*\n")
                 novel_lines.append(f"### 天道因果裁决\n{r.arbitration_result}\n---")
-            self.novel_content = "\n\n".join(novel_lines)
+            novel_text = "\n\n".join(novel_lines)
 
-        chap_num = max(1, (self.active_book.current_round + 1) // 2)
-        first_line = self.novel_content.strip().split("\n")[0].replace("#", "").strip() or f"第{chap_num}章"
-        existing = next((c for c in self.active_book.chapters if c["id"] == chap_num), None)
+        chap_num = max(1, (target_book.current_round + 1) // 2)
+        first_line = novel_text.strip().split("\n")[0].replace("#", "").strip() or f"第{chap_num}章"
+        existing = next((c for c in target_book.chapters if c["id"] == chap_num), None)
         if existing:
             existing["title"] = first_line
-            existing["content"] = self.novel_content
-            existing["word_count"] = len(self.novel_content)
+            existing["content"] = novel_text
+            existing["word_count"] = len(novel_text)
         else:
-            self.active_book.chapters.append({
+            target_book.chapters.append({
                 "id": chap_num,
                 "title": first_line,
-                "word_count": len(self.novel_content),
-                "content": self.novel_content
+                "word_count": len(novel_text),
+                "content": novel_text
             })
-        self.active_book.save()
+        target_book.save()
         novel_path = OUTPUT_DIR / f"novel_chapter_{chap_num:02d}.md"
         try:
-            novel_path.write_text(self.novel_content, encoding="utf-8")
+            novel_path.write_text(novel_text, encoding="utf-8")
         except Exception:
             pass
-        return {"status": "ok", "content": self.novel_content, "chapter": chap_num}
+        return {"status": "ok", "content": novel_text, "chapter": chap_num}
 
     def stream_simulate(self, mode="single", force_mock=False, divine_decree="", book_id=None, custom_count=None, auto_fanqie=None):
         """
         流式全自动演化成书 (支持 1 章、10 章、以及一本书，可自定义规模 30/50/100 章，支持自动上传番茄)
         实时 yield 事件字典以供 SSE 流式推送
         """
-        if self.is_busy:
+        target_book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
+        if not target_book or not target_book.id:
+            yield {"type": "error", "message": "当前书库为空，请先点击顶部【➕ 新建作品】开辟一部小说！"}
+            return
+
+        runner = self.get_runner(target_book.id)
+        if runner.is_busy:
             # 自动自愈：若已忙碌超过 180 秒（3分钟）未更新心跳，判定为上次异常挂起，自动强制释放
-            if time.time() - getattr(self, "last_busy_time", 0) > 180:
-                self.is_busy = False
+            if time.time() - getattr(runner, "last_busy_time", 0) > 180:
+                runner.is_busy = False
             else:
-                yield {"type": "error", "message": "天道演化引擎正忙，请稍候..."}
+                yield {"type": "error", "book_id": target_book.id, "message": f"作品《{target_book.title}》天道演化正在进行中，请稍候..."}
                 return
 
-        self.is_busy = True
-        self.last_busy_time = time.time()
-        self.stop_requested = False
+        runner.is_busy = True
+        runner.last_busy_time = time.time()
+        runner.stop_requested = False
 
         try:
-            target_book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
-            if not target_book or not target_book.id:
-                yield {"type": "error", "message": "当前书库为空，请先点击顶部【➕ 新建作品】开辟一部小说！"}
-                return
-
             # 计算目标章节数 (支持自定义章数或全书深度标准)
             if custom_count and int(custom_count) > 0:
                 target_count = int(custom_count)
@@ -1357,12 +1448,13 @@ class SimulationManager:
             total_generated = 0
 
             for i in range(1, target_count + 1):
-                self.last_busy_time = time.time()
-                if self.stop_requested:
+                runner.last_busy_time = time.time()
+                if runner.stop_requested:
                     yield {
                         "type": "stopped",
+                        "book_id": target_book.id,
                         "total_generated": total_generated,
-                        "message": f"推演已响应指令安全停止，已完成 {total_generated} 章并妥善存盘！"
+                        "message": f"作品《{target_book.title}》推演已响应指令安全停止，已完成 {total_generated} 章并妥善存盘！"
                     }
                     return
 
@@ -1375,9 +1467,10 @@ class SimulationManager:
                 llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
 
                 # 0. 大纲策划：动态规划或获取本章核心细纲（章节名、主线目标、矛盾冲突、高潮、钩子）
-                self.last_busy_time = time.time()
+                runner.last_busy_time = time.time()
                 yield {
                     "type": "planning",
+                    "book_id": target_book.id,
                     "chapter_index": i,
                     "total": target_count,
                     "chapter_id": next_chap_id,
@@ -1385,10 +1478,11 @@ class SimulationManager:
                 }
 
                 chap_outline = book_mgr.get_or_plan_chapter_outline(target_book, next_chap_id, llm_client=llm, force_mock=use_mock)
-                self.last_busy_time = time.time()
+                runner.last_busy_time = time.time()
 
                 yield {
                     "type": "outline_ready",
+                    "book_id": target_book.id,
                     "chapter_index": i,
                     "total": target_count,
                     "chapter_id": next_chap_id,
@@ -1397,9 +1491,10 @@ class SimulationManager:
                 }
 
                 # 1. 天道因果运转推演
-                self.last_busy_time = time.time()
+                runner.last_busy_time = time.time()
                 yield {
                     "type": "sim_step",
+                    "book_id": target_book.id,
                     "chapter_index": i,
                     "total": target_count,
                     "chapter_id": next_chap_id,
@@ -1409,23 +1504,24 @@ class SimulationManager:
                 # 推进轮次并生成博弈记录
                 target_book.current_round += 1
                 if target_book.current_round >= 2 and len(target_book.world.characters) < 5:
-                    self.spawn_character(custom_prompt="被滔天声势吸引而来的各方修士与探子", force_mock=use_mock)
+                    self.spawn_character(custom_prompt="被滔天声势吸引而来的各方修士与探子", force_mock=use_mock, target_book=target_book)
 
                 if use_mock:
-                    self._step_mock(target_book.current_round, divine_decree if i == 1 else "")
+                    self._step_mock(target_book.current_round, divine_decree if i == 1 else "", target_book=target_book)
                 else:
                     try:
-                        self._step_real(target_book.current_round, divine_decree if i == 1 else "", chapter_outline=chap_outline)
+                        self._step_real(target_book.current_round, divine_decree if i == 1 else "", chapter_outline=chap_outline, target_book=target_book)
                     except Exception as e:
                         print(f"[流式演化 降级] 第 {target_book.current_round} 轮真实推演异常: {e}，切入沙盒模拟")
-                        self._step_mock(target_book.current_round, divine_decree if i == 1 else "")
+                        self._step_mock(target_book.current_round, divine_decree if i == 1 else "", target_book=target_book)
 
-                self.last_busy_time = time.time()
-                if self.stop_requested:
+                runner.last_busy_time = time.time()
+                if runner.stop_requested:
                     yield {
                         "type": "stopped",
+                        "book_id": target_book.id,
                         "total_generated": total_generated,
-                        "message": f"推演已安全停止，已完成 {total_generated} 章！"
+                        "message": f"作品《{target_book.title}》推演已安全停止，已完成 {total_generated} 章！"
                     }
                     return
 
@@ -1433,6 +1529,7 @@ class SimulationManager:
                 chap_title = chap_outline.get("title") or f"第{next_chap_id}章"
                 yield {
                     "type": "write_start",
+                    "book_id": target_book.id,
                     "chapter_index": i,
                     "total": target_count,
                     "chapter_id": next_chap_id,
@@ -1463,12 +1560,13 @@ class SimulationManager:
                     chapter_outline=chap_outline,
                     force_mock=use_mock
                 ):
-                    if self.stop_requested:
+                    if runner.stop_requested:
                         break
-                    self.last_busy_time = time.time()
+                    runner.last_busy_time = time.time()
                     chapter_chunks.append(chunk)
                     yield {
                         "type": "chunk",
+                        "book_id": target_book.id,
                         "chapter_index": i,
                         "chapter_id": next_chap_id,
                         "delta": chunk
@@ -1505,6 +1603,7 @@ class SimulationManager:
                     fanqie_msg = fq_res.get("message", "")
                     yield {
                         "type": "fanqie_auto_uploaded",
+                        "book_id": target_book.id,
                         "chapter_index": i,
                         "chapter_id": next_chap_id,
                         "title": first_line,
@@ -1520,6 +1619,7 @@ class SimulationManager:
 
                 yield {
                     "type": "chapter_done",
+                    "book_id": target_book.id,
                     "chapter_index": i,
                     "total": target_count,
                     "id": next_chap_id,
@@ -1534,19 +1634,20 @@ class SimulationManager:
 
             yield {
                 "type": "complete",
+                "book_id": target_book.id,
                 "total_generated": total_generated,
                 "total_chapters": len(target_book.chapters),
                 "book_title": target_book.title,
-                "message": f"🎉 演化已大功告成！累计共生成 {total_generated} 个新章节！"
+                "message": f"🎉 《{target_book.title}》演化已大功告成！累计共生成 {total_generated} 个新章节！"
             }
 
         except GeneratorExit:
-            self.stop_requested = True
+            runner.stop_requested = True
         except Exception as e:
-            yield {"type": "error", "message": f"流式演化异常: {str(e)}"}
+            yield {"type": "error", "book_id": target_book.id, "message": f"流式演化异常: {str(e)}"}
         finally:
-            self.is_busy = False
-            self.stop_requested = False
+            runner.is_busy = False
+            runner.stop_requested = False
 
 # 全局单例
 sim_mgr = SimulationManager()
@@ -1598,11 +1699,23 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/status":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
-            data = sim_mgr.get_state()
+            data = sim_mgr.get_state(target_book_id=bid)
             self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path in ("/api/stream/stop", "/api/simulate_stop"):
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            sim_mgr.request_stop(bid)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "message": f"已成功发送停止指令 ({bid or '全部'})"}, ensure_ascii=False).encode("utf-8"))
             return
 
         if path == "/api/system/version":
@@ -1649,6 +1762,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
 
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            runner = sim_mgr.get_runner(target_book.id)
             gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count, auto_fanqie=auto_fanqie)
             try:
                 for event in gen:
@@ -1656,10 +1771,10 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     self.wfile.write(msg.encode("utf-8"))
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
-                sim_mgr.stop_requested = True
+                runner.stop_requested = True
             except Exception as e:
                 try:
-                    err_msg = f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+                    err_msg = f"data: {json.dumps({'type': 'error', 'book_id': target_book.id, 'message': str(e)}, ensure_ascii=False)}\n\n"
                     self.wfile.write(err_msg.encode("utf-8"))
                     self.wfile.flush()
                 except Exception:
@@ -1669,7 +1784,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     gen.close()
                 except Exception:
                     pass
-                sim_mgr.is_busy = False
+                runner.is_busy = False
             return
 
         if path == "/api/drama":
@@ -2157,11 +2272,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             if path in ("/api/stream/stop", "/api/simulate_stop"):
-                sim_mgr.stop_requested = True
+                bid = req_data.get("book_id", "")
+                sim_mgr.request_stop(bid)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "message": "已成功发送暂停/终止演化指令"}, ensure_ascii=False).encode("utf-8"))
+                self.wfile.write(json.dumps({"status": "ok", "message": f"已成功发送停止指令 ({bid or '当前作品'})"}, ensure_ascii=False).encode("utf-8"))
                 return
 
             if path == "/api/publish/sync":
@@ -2336,7 +2452,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 preset_id = req_data.get("preset_id")
                 custom_prompt = req_data.get("custom_prompt", "")
                 mock = req_data.get("mock", False)
-                res = sim_mgr.spawn_character(preset_id=preset_id, custom_prompt=custom_prompt, force_mock=mock)
+                bid = req_data.get("book_id", "")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                res = sim_mgr.spawn_character(preset_id=preset_id, custom_prompt=custom_prompt, force_mock=mock, target_book=target_book)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
@@ -2345,7 +2463,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
             if path == "/api/chronicler":
                 mock = req_data.get("mock", False)
-                res = sim_mgr.generate_novel(force_mock=mock)
+                bid = req_data.get("book_id", "")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                res = sim_mgr.generate_novel(force_mock=mock, target_book=target_book)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
@@ -2537,6 +2657,8 @@ def start_ws_server(ws_port=8089):
                         decree = data.get("decree", "")
                         mock = bool(data.get("mock", False))
                         auto_fanqie = data.get("auto_fanqie", None)
+                        target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                        runner = sim_mgr.get_runner(target_book.id)
                         gen = sim_mgr.stream_simulate(mode=mode, force_mock=mock, divine_decree=decree, book_id=bid, custom_count=custom_count, auto_fanqie=auto_fanqie)
                         try:
                             for event in gen:
@@ -2552,11 +2674,12 @@ def start_ws_server(ws_port=8089):
                                 gen.close()
                             except Exception:
                                 pass
-                            sim_mgr.is_busy = False
+                            runner.is_busy = False
                     elif action == "stop":
-                        sim_mgr.stop_requested = True
+                        bid = data.get("book_id", None)
+                        sim_mgr.request_stop(bid)
                         try:
-                            websocket.send(json.dumps({"type": "stopped", "message": "已收到安全停止指令并存盘"}, ensure_ascii=False))
+                            websocket.send(json.dumps({"type": "stopped", "book_id": bid, "message": "已收到安全停止指令并存盘"}, ensure_ascii=False))
                         except Exception:
                             pass
             except Exception:

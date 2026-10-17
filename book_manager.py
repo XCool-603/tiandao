@@ -237,8 +237,10 @@ class BookManager:
         return summaries
 
     def create_book(self, title: str, genre: str, theme_prompt: str, synopsis: str = "") -> Book:
-        """管理员开辟一本全新小说（支持任意自定义题材与故事设定）"""
-        book_id = f"book_{int(time.time())}"
+        book_id = f"book_{int(time.time()*1000)}"
+        while book_id in self.books:
+            time.sleep(0.002)
+            book_id = f"book_{int(time.time()*1000)}"
         clean_title = title.strip()
         if not clean_title.startswith("《"):
             clean_title = f"《{clean_title}》"
