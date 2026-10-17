@@ -10,10 +10,14 @@ services:
       - "${TIANDAO_PORT:-8088}:8088"        # Web 控制台与 RESTful API (可自定义宿主机端口)
       - "${TIANDAO_WS_PORT:-8089}:8089"     # WebSocket 流式推演信道 (可自定义宿主机端口)
     env_file:
+      - path: output/.env
+        required: false
       - path: .env
         required: false
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_api_key_here}
+      - TIANDAO_PORT=${TIANDAO_PORT:-8088}
+      - TIANDAO_WS_PORT=${TIANDAO_WS_PORT:-8089}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.deepseek.com/v1}
       - MODEL_NAME=${MODEL_NAME:-deepseek-chat}
       - TIANDAO_MODEL=${TIANDAO_MODEL:-}
@@ -21,7 +25,7 @@ services:
       - ADMIN_KEY=${ADMIN_KEY:-admin888}
       - TZ=Asia/Shanghai
     volumes:
-      # 持久化挂载小说章节、大纲伏线总账与推演数据
+      # 持久化挂载小说章节、大纲伏线总账、系统配置、番茄免密凭证（容器更新/重建永不丢失配置）
       - ./output:/app/output
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/api/status', timeout=3)"]

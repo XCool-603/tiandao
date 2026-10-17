@@ -2024,40 +2024,71 @@
             </div>
           </div>
 
+          <!-- 🌟 本项目原生内置直推引擎 (无需油猴脚本 / 无需外部插件) -->
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 12px 14px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+              <div style="font-size: 13px; font-weight: 700; color: #10b981; display: flex; align-items: center; gap: 6px;">
+                <span>🌟 本项目原生直推引擎</span>
+                <span class="pill pill-green" style="font-size: 10px;">零插件 · 原生免密</span>
+                <span id="nativeFanqieStatus" style="font-size: 11.5px; color: var(--text-primary); font-weight: 500;">检测中...</span>
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button class="btn btn-primary" style="font-size: 11px; padding: 4px 10px;" onclick="triggerNativeFanqieLogin()">
+                  <span>📲 扫码绑定番茄账号</span>
+                </button>
+                <button class="btn btn-gold" style="font-size: 11px; padding: 4px 10px;" onclick="uploadCurrentChapterNative()">
+                  <span>🍅 一键直推当前章节</span>
+                </button>
+                <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="uploadAllChaptersNative()">
+                  <span>📚 一键全书直推草稿箱</span>
+                </button>
+              </div>
+            </div>
+            <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
+              天道服务端原生运行，无需油猴脚本或安装外部软件。扫码一次凭据永久持久化（Docker 更新永不丢失），推演章节直接写入番茄作家草稿箱。
+            </div>
+            <!-- 扫码二维码展示区 (原生) -->
+            <div id="nativeFanqieQrContainer" style="display: none; margin-top: 10px; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 6px; text-align: center;">
+              <div style="font-size: 12px; color: var(--accent-gold); margin-bottom: 6px;">请使用手机扫码登录（番茄作家/抖音/微信均可）</div>
+              <img id="nativeFanqieQrImg" src="" style="width: 160px; height: 160px; background: #fff; padding: 6px; border-radius: 4px; display: inline-block;">
+              <div id="nativeFanqieQrText" style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">等待扫码中...</div>
+            </div>
+          </div>
+
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px;">
-            <!-- 方案 1: 油猴脚本挂机 (推荐，最轻量零风控) -->
+            <!-- 方案 1: 油猴脚本挂机 (备选) -->
             <div style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
               <div>
                 <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                  <span>🐒 方式一：油猴插件挂机助手</span>
-                  <span class="pill pill-blue" style="font-size: 9.5px;">推荐 · 零风险</span>
+                  <span>🐒 备选：油猴插件挂机助手</span>
+                  <span class="pill pill-blue" style="font-size: 9.5px;">备选方式</span>
                 </div>
                 <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
                   安装天道专属油猴脚本后，在平时使用的浏览器中打开番茄作家助手，天道推演完章节将自动在该标签页保存草稿。
                 </div>
               </div>
               <div style="display: flex; gap: 6px;">
-                <a href="/api/fanqie/script.user.js" target="_blank" class="btn btn-primary" style="font-size: 11px; padding: 4px 10px; text-decoration: none; flex: 1; text-align: center;">
-                  <span>📥 1秒安装油猴脚本</span>
+                <a href="/api/fanqie/script.user.js" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; text-decoration: none; flex: 1; text-align: center;">
+                  <span>📥 安装油猴脚本</span>
                 </a>
                 <button class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px;" onclick="copyTampermonkeyUrl()">复制直链</button>
               </div>
             </div>
 
-            <!-- 方案 2: 独立 Edge 机器人 (无需插件，一键唤起) -->
+            <!-- 方案 2: 独立 Edge 机器人 (备选) -->
             <div style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
               <div>
                 <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                  <span>🌐 方式二：独立 Edge 守护机器人</span>
-                  <span class="pill pill-gold" style="font-size: 9.5px;">无需装插件</span>
+                  <span>🌐 备选：独立 Edge 守护机器人</span>
+                  <span class="pill pill-gold" style="font-size: 9.5px;">备选方式</span>
                 </div>
                 <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
                   一键唤起 Windows 自带 Edge 浏览器独立进程，登录一次番茄账号永久有效，后台全自动静默推演上传。
                 </div>
               </div>
               <div>
-                <button class="btn btn-gold" style="font-size: 11px; padding: 4px 10px; width: 100%;" onclick="launchEdgeBot()">
-                  <span>🚀 一键唤起 Edge 挂机机器人</span>
+                <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; width: 100%;" onclick="launchEdgeBot()">
+                  <span>🚀 唤起 Edge 挂机机器人</span>
                 </button>
               </div>
             </div>
@@ -3867,12 +3898,84 @@
       }
     }
 
+    let nativeFanqieTimer = null;
+
+    async function refreshNativeFanqieStatus() {
+      try {
+        const res = await fetch("/api/fanqie/auth_status");
+        const data = await res.json();
+        const statusEl = document.getElementById("nativeFanqieStatus");
+        if (!statusEl) return;
+        if (data.logged_in) {
+          statusEl.innerHTML = `<span style="color: #10b981; font-weight: 700;">🟢 已绑定番茄签约账号: ${data.author_name}</span>`;
+          if (nativeFanqieTimer) {
+            clearInterval(nativeFanqieTimer);
+            nativeFanqieTimer = null;
+            const c = document.getElementById("nativeFanqieQrContainer");
+            if (c) c.style.display = "none";
+          }
+        } else {
+          statusEl.innerHTML = `<span style="color: var(--text-muted);">⚪ 暂未绑定番茄账号 (点击扫码绑定)</span>`;
+        }
+      } catch (e) {
+        console.warn("获取原生番茄状态失败:", e);
+      }
+    }
+
+    async function triggerNativeFanqieLogin() {
+      const box = document.getElementById("nativeFanqieQrContainer");
+      const img = document.getElementById("nativeFanqieQrImg");
+      const txt = document.getElementById("nativeFanqieQrText");
+      if (box) box.style.display = "block";
+      if (txt) txt.innerText = "⏳ 正在拉起登录服务并抓取二维码，请稍候片刻...";
+
+      try {
+        await fetch("/api/fanqie/start_login", { method: "POST" });
+        if (nativeFanqieTimer) clearInterval(nativeFanqieTimer);
+        let checks = 0;
+        nativeFanqieTimer = setInterval(async () => {
+          checks++;
+          try {
+            const stRes = await fetch("/api/fanqie/auth_status");
+            const st = await stRes.json();
+            if (st.logged_in) {
+              clearInterval(nativeFanqieTimer);
+              nativeFanqieTimer = null;
+              if (box) box.style.display = "none";
+              showToast("🎉 恭喜！番茄账号已成功绑定并落盘，推演章节可直接直推！", "success");
+              refreshNativeFanqieStatus();
+              return;
+            }
+            if (st.qr_ready && img) {
+              img.src = "/api/fanqie/qr_code?t=" + Date.now();
+              if (txt) txt.innerText = "📲 请使用微信 / 抖音 / 番茄作家 App 扫描上方二维码确认登录";
+            }
+          } catch(e) {}
+          if (checks > 90) {
+            clearInterval(nativeFanqieTimer);
+            if (txt) txt.innerText = "⏰ 扫码超时，请重新点击扫码绑定。";
+          }
+        }, 2000);
+      } catch (e) {
+        if (txt) txt.innerText = "❌ 拉起服务失败: " + e;
+      }
+    }
+
+    function uploadCurrentChapterNative() {
+      uploadCurrentChapterFanqie();
+    }
+
+    function uploadAllChaptersNative() {
+      uploadAllChaptersFanqie();
+    }
+
     // 打开番茄小说总控台弹窗
     async function openPublishModal(bookId) {
       const bid = bookId || (globalState ? globalState.book_id : "");
       const modal = document.getElementById("publishModal");
       if (!modal) return;
       modal.classList.add("active");
+      refreshNativeFanqieStatus();
 
       const zipBtn = document.getElementById("btnDownloadFanqieZip");
       if (zipBtn) zipBtn.href = `/api/export/fanqie_zip?book_id=${encodeURIComponent(bid)}`;

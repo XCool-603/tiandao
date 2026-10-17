@@ -470,10 +470,80 @@
           <input type="text" id="adminKeyNew" class="form-input" placeholder="留空则保持当前管理员口令不变">
           <div class="form-hint">留空则不更改。设置后请牢记新口令。</div>
         </div>
+
+        <!-- HTTP 端口配置 -->
+        <div class="form-group">
+          <label class="form-label">Web 与 RESTful 端口 (TIANDAO_PORT)</label>
+          <input type="number" id="adminHttpPort" class="form-input" placeholder="8088">
+          <div class="form-hint">持久化保存至挂载卷，Docker 重建与更新自动继承生效。</div>
+        </div>
+
+        <!-- WebSocket 端口配置 -->
+        <div class="form-group">
+          <label class="form-label">WebSocket 流式推演端口 (TIANDAO_WS_PORT)</label>
+          <input type="number" id="adminWsPort" class="form-input" placeholder="8089">
+          <div class="form-hint">若端口被占用将自动降级为 HTTP SSE 流，无需担心冲突。</div>
+        </div>
       </div>
 
       <!-- 诊断测试结果面板 -->
       <div id="diagnosticPanel" class="diagnostic-panel"></div>
+    </div>
+
+    <!-- 卡片: 🍅 番茄小说原生直推专区 (持久化免密直推) -->
+    <div class="admin-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🍅 番茄小说作家专区 · 原生直推与免密会话</div>
+          <div class="card-desc">纯原生服务端直推，无需油猴脚本或外部浏览器插件。扫码一次凭据永久持久化。</div>
+        </div>
+        <div id="fanqieAuthStatusBadge" class="pill pill-gold">检查状态中...</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">番茄签约账号</div>
+          <div id="fanqieAuthorName" style="font-size: 15px; font-weight: 700; color: var(--text-primary);">未登录</div>
+          <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <button class="btn btn-primary" style="font-size: 12px;" onclick="startFanqieQrLogin()">
+              <span>📲 扫码绑定番茄账号</span>
+            </button>
+            <button class="btn btn-secondary" style="font-size: 12px;" onclick="checkFanqieAuthStatus()">
+              <span>🔄 刷新状态</span>
+            </button>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-input); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px;">自动直推策略</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+              <input type="checkbox" id="adminFanqieAuto" style="accent-color: #ef4444;">
+              <span>每推演完成一章，全自动直推番茄草稿箱</span>
+            </label>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);">
+              <span>发布模式:</span>
+              <select id="adminFanqieMode" class="form-input" style="padding: 4px 8px; font-size: 12px;">
+                <option value="drafts">保存为草稿箱 (推荐，免直接公开审核)</option>
+                <option value="publish">立即公开发布</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary" style="font-size: 11.5px; align-self: flex-start; padding: 4px 10px;" onclick="saveAdminFanqieConfig()">
+              <span>💾 保存番茄直推策略</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 扫码弹窗区域 (默认隐藏) -->
+      <div id="fanqieQrBox" style="display: none; background: rgba(0,0,0,0.4); border: 1px dashed var(--accent-gold); border-radius: 8px; padding: 16px; text-align: center; margin-top: 10px;">
+        <div style="font-size: 13.5px; font-weight: 700; color: var(--accent-gold); margin-bottom: 8px;">请使用微信 / 抖音 / 番茄作家 App 扫描下方二维码</div>
+        <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 12px;">扫码成功后，天道将自动把登录会话落盘保存至 output/fanqie_sync/auth_state.json，Docker更新永不丢失。</div>
+        <div style="display: inline-block; padding: 10px; background: #fff; border-radius: 8px;">
+          <img id="fanqieQrImg" src="" style="width: 200px; height: 200px; display: block;" alt="番茄登录二维码">
+        </div>
+        <div id="fanqieQrNotice" style="font-size: 12px; color: var(--accent-blue); margin-top: 10px;">等待扫码中...</div>
+      </div>
     </div>
 
     <!-- 卡片 3: 服务端运行健康度 -->
@@ -637,12 +707,19 @@
           document.getElementById("adminTiandaoModel").value = cfg.tiandao_model || "";
           document.getElementById("adminChroniclerModel").value = cfg.chronicler_model || "";
           document.getElementById("adminKeyNew").value = "";
+          if (document.getElementById("adminHttpPort")) {
+            document.getElementById("adminHttpPort").value = cfg.http_port || 8088;
+          }
+          if (document.getElementById("adminWsPort")) {
+            document.getElementById("adminWsPort").value = cfg.ws_port || 8089;
+          }
 
           document.getElementById("metricEngineMode").innerText = cfg.has_api_key ? "大模型真实推演" : "本地沙盒模拟";
         }
       } catch (e) {
         console.error("加载配置失败:", e);
       }
+      checkFanqieAuthStatus();
     }
 
     async function saveAdminConfig() {
@@ -658,6 +735,8 @@
       const tiandaoModel = document.getElementById("adminTiandaoModel").value.trim();
       const chroniclerModel = document.getElementById("adminChroniclerModel").value.trim();
       const adminKeyNew = document.getElementById("adminKeyNew").value.trim();
+      const httpPort = document.getElementById("adminHttpPort") ? document.getElementById("adminHttpPort").value.trim() : "8088";
+      const wsPort = document.getElementById("adminWsPort") ? document.getElementById("adminWsPort").value.trim() : "8089";
 
       const btn = document.getElementById("btnSaveConfig");
       btn.innerText = "⏳ 保存中...";
@@ -676,7 +755,9 @@
             model_name: modelName,
             tiandao_model: tiandaoModel,
             chronicler_model: chroniclerModel,
-            admin_key_new: adminKeyNew
+            admin_key_new: adminKeyNew,
+            http_port: httpPort,
+            ws_port: wsPort
           })
         });
 
@@ -685,7 +766,7 @@
           if (adminKeyNew) {
             setAdminToken(adminKeyNew); // 更新本地保存的 token
           }
-          alert("🎉 配置已成功更新并热重载生效！");
+          alert("🎉 配置已成功永久落盘保存至挂载卷，Docker 重启与更新自动继承！");
           loadAdminConfig();
         } else {
           alert("❌ 保存失败: " + (data.error || "未知错误"));
@@ -695,6 +776,106 @@
       } finally {
         btn.innerText = "💾 保存并热重载配置";
         btn.disabled = false;
+      }
+    }
+
+    // ==========================================
+    // 番茄原生作家专区直推管理
+    // ==========================================
+    let fanqiePollTimer = null;
+
+    async function checkFanqieAuthStatus() {
+      try {
+        const res = await fetch("/api/fanqie/auth_status");
+        const data = await res.json();
+        const badge = document.getElementById("fanqieAuthStatusBadge");
+        const nameEl = document.getElementById("fanqieAuthorName");
+        const chkAuto = document.getElementById("adminFanqieAuto");
+        const selMode = document.getElementById("adminFanqieMode");
+
+        if (data.logged_in) {
+          badge.className = "pill pill-green";
+          badge.innerText = "🟢 已绑定番茄签约账号";
+          nameEl.innerHTML = `<span style="color: #10b981;">👤 ${data.author_name}</span> <span style="font-size: 11px; color: var(--text-muted);">(会话已持久化至挂载卷)</span>`;
+          if (fanqiePollTimer) {
+            clearInterval(fanqiePollTimer);
+            fanqiePollTimer = null;
+            document.getElementById("fanqieQrBox").style.display = "none";
+          }
+        } else {
+          badge.className = "pill pill-gold";
+          badge.innerText = "⚪ 未绑定番茄账号";
+          nameEl.innerHTML = `<span style="color: var(--text-muted);">暂未绑定 (点击下方扫码绑定)</span>`;
+        }
+
+        if (chkAuto) chkAuto.checked = !!data.auto_upload;
+        if (selMode && data.publish_mode) selMode.value = data.publish_mode;
+      } catch (e) {
+        console.warn("检查番茄状态失败:", e);
+      }
+    }
+
+    async function startFanqieQrLogin() {
+      const qrBox = document.getElementById("fanqieQrBox");
+      const qrImg = document.getElementById("fanqieQrImg");
+      const notice = document.getElementById("fanqieQrNotice");
+      qrBox.style.display = "block";
+      notice.innerText = "⏳ 正在拉起登录服务并获取登录二维码，请稍候...";
+
+      try {
+        const res = await fetch("/api/fanqie/start_login", { method: "POST" });
+        const data = await res.json();
+
+        // 轮询检查二维码与登录状态
+        let attempts = 0;
+        if (fanqiePollTimer) clearInterval(fanqiePollTimer);
+        fanqiePollTimer = setInterval(async () => {
+          attempts++;
+          try {
+            const stRes = await fetch("/api/fanqie/auth_status");
+            const stData = await stRes.json();
+            if (stData.logged_in) {
+              clearInterval(fanqiePollTimer);
+              fanqiePollTimer = null;
+              qrBox.style.display = "none";
+              alert("🎉 恭喜！番茄作家账号已成功绑定并落盘，推演章节可直接直推！");
+              checkFanqieAuthStatus();
+              return;
+            }
+            if (stData.qr_ready) {
+              qrImg.src = "/api/fanqie/qr_code?t=" + Date.now();
+              notice.innerText = "📲 请使用手机端微信 / 抖音 / 番茄作家 App 扫码确认登录...";
+            }
+          } catch(e) {}
+          if (attempts > 90) {
+            clearInterval(fanqiePollTimer);
+            notice.innerText = "⏰ 扫码超时，请重新点击扫码登录。";
+          }
+        }, 2000);
+      } catch (e) {
+        notice.innerText = "❌ 拉起扫码失败: " + e;
+      }
+    }
+
+    async function saveAdminFanqieConfig() {
+      const chkAuto = document.getElementById("adminFanqieAuto")?.checked || false;
+      const selMode = document.getElementById("adminFanqieMode")?.value || "drafts";
+      try {
+        const res = await fetch("/api/fanqie/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            auto_upload: chkAuto,
+            publish_mode: selMode
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          alert("🎉 番茄直推策略已成功保存！");
+          checkFanqieAuthStatus();
+        }
+      } catch (e) {
+        alert("保存番茄配置失败: " + e);
       }
     }
 

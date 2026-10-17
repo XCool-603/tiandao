@@ -1,40 +1,169 @@
 import os
+import json
 from pathlib import Path
 
-def load_dotenv(override=True):
-    """轻量级读取 .env 文件，无需依赖额外三方库"""
-    env_path = Path(__file__).parent / ".env"
-    if not env_path.exists():
-        env_example = Path(__file__).parent / ".env.example"
-        if env_example.exists():
-            print("[系统提示] 未找到 .env 文件，已从 .env.example 读取默认示例配置。")
-            env_path = env_example
-        else:
-            return
+def get_config_paths():
+    root = Path(__file__).parent
+    output_dir = root / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        "root": root,
+        "output_dir": output_dir,
+        "system_config_json": output_dir / "system_config.json",
+        "persistent_env": output_dir / ".env",
+        "local_env": root / ".env",
+        "example_env": root / ".env.example"
+    }
 
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                k, v = line.split("=", 1)
-                k = k.strip()
-                v = v.strip().strip('"').strip("'")
-                if override or k not in os.environ:
-                    os.environ[k] = v
+def load_dotenv(override=True):
+    """
+    生产级多层持久化配置加载器：
+    保证在 Docker 容器重建、镜像更新、git pull 后，用户在控制台保存的端口、AI Key、模型名称、管理密码永不丢失！
+    优先级：
+    1. 挂载持久化卷中的 output/system_config.json (最高优先级，用户 Web 界面配置)
+    2. 挂载持久化卷中的 output/.env
+    3. 项目根目录 .env
+    4. 环境变量与 .env.example 默认回退
+    """
+    paths = get_config_paths()
+
+    # 1. 先读项目根目录 .env 或 .env.example
+    env_target = paths["local_env"] if paths["local_env"].exists() else paths["example_env"]
+    if env_target.exists():
+        try:
+            with open(env_target, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        if override or k not in os.environ:
+                            os.environ[k] = v
+        except Exception as e:
+            print(f"[配置加载告警] 读取 {env_target.name} 失败: {e}")
+
+    # 2. 读取持久化 output/.env (挂载卷，Docker更新绝不丢失)
+    if paths["persistent_env"].exists():
+        try:
+            with open(paths["persistent_env"], "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        if v and (override or k not in os.environ or os.environ.get(k) in ("your_api_key_here", "")):
+                            os.environ[k] = v
+        except Exception as e:
+            print(f"[配置加载告警] 读取持久化 output/.env 失败: {e}")
+
+    # 3. 读取持久化 output/system_config.json (挂载卷中的 JSON 结构体)
+    if paths["system_config_json"].exists():
+        try:
+            with open(paths["system_config_json"], "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                mapping = {
+                    "api_key": "OPENAI_API_KEY",
+                    "base_url": "OPENAI_BASE_URL",
+                    "model_name": "MODEL_NAME",
+                    "tiandao_model": "TIANDAO_MODEL",
+                    "chronicler_model": "CHRONICLER_MODEL",
+                    "admin_key": "ADMIN_KEY",
+                    "admin_password": "ADMIN_KEY",
+                    "max_rounds": "MAX_ROUNDS",
+                    "http_port": "TIANDAO_PORT",
+                    "ws_port": "TIANDAO_WS_PORT",
+                }
+                for json_key, env_var in mapping.items():
+                    val = cfg.get(json_key)
+                    if val is not None and str(val).strip():
+                        val_str = str(val).strip()
+                        # 严防 Docker 传入的默认占位符 "your_api_key_here" 覆盖掉用户的真实配置
+                        if env_var == "OPENAI_API_KEY" and val_str == "your_api_key_here":
+                            continue
+                        os.environ[env_var] = val_str
+        except Exception as e:
+            print(f"[配置加载告警] 读取持久化 system_config.json 失败: {e}")
+
+    # 4. 如果 os.environ 中的 OPENAI_API_KEY 仍然是默认占位符，且没配任何 key，置空
+    if os.environ.get("OPENAI_API_KEY") == "your_api_key_here":
+        os.environ["OPENAI_API_KEY"] = ""
+
+def save_persistent_config(data: dict) -> dict:
+    """
+    将用户在 Web 控制台设置的配置原子化双写持久化到 output/system_config.json、output/.env 以及 .env 中，
+    彻底解决容器重建/更新后端口、API与密码被重置的问题。
+    """
+    paths = get_config_paths()
+
+    # 读现有配置做增量合并
+    current = {}
+    if paths["system_config_json"].exists():
+        try:
+            with open(paths["system_config_json"], "r", encoding="utf-8") as f:
+                current = json.load(f)
+        except Exception:
+            current = {}
+
+    # 合并新数据
+    for k, v in data.items():
+        if v is not None:
+            current[k] = v
+
+    # 1. 写入 output/system_config.json (挂载卷持久化)
+    try:
+        with open(paths["system_config_json"], "w", encoding="utf-8") as f:
+            json.dump(current, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[持久化写入告警] 写入 output/system_config.json 失败: {e}")
+
+    # 2. 同步写入 output/.env (供 docker compose env_file 直接读取)
+    env_content = [
+        f"# 天道持久化系统配置 (Docker 容器重建与更新自动继承，切勿随意删除)",
+        f"TIANDAO_PORT={current.get('http_port', os.getenv('TIANDAO_PORT', '8088'))}",
+        f"TIANDAO_WS_PORT={current.get('ws_port', os.getenv('TIANDAO_WS_PORT', '8089'))}",
+        f"OPENAI_API_KEY={current.get('api_key', os.getenv('OPENAI_API_KEY', ''))}",
+        f"OPENAI_BASE_URL={current.get('base_url', os.getenv('OPENAI_BASE_URL', 'https://api.deepseek.com/v1'))}",
+        f"MODEL_NAME={current.get('model_name', os.getenv('MODEL_NAME', 'deepseek-chat'))}",
+        f"TIANDAO_MODEL={current.get('tiandao_model', os.getenv('TIANDAO_MODEL', ''))}",
+        f"CHRONICLER_MODEL={current.get('chronicler_model', os.getenv('CHRONICLER_MODEL', ''))}",
+        f"ADMIN_KEY={current.get('admin_key', current.get('admin_password', os.getenv('ADMIN_KEY', 'admin888')))}",
+        f"MAX_ROUNDS={current.get('max_rounds', os.getenv('MAX_ROUNDS', '6'))}",
+        f"TZ=Asia/Shanghai",
+    ]
+    try:
+        paths["persistent_env"].write_text("\n".join(env_content) + "\n", encoding="utf-8")
+    except Exception as e:
+        print(f"[持久化写入告警] 写入 output/.env 失败: {e}")
+
+    # 3. 如果项目根目录可写，同步回写根目录 .env
+    try:
+        paths["local_env"].write_text("\n".join(env_content) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+    # 4. 重新加载至进程内存并刷新全局变量
+    load_dotenv(override=True)
+    refresh_globals()
+    return current
+
+def refresh_globals():
+    global API_KEY, BASE_URL, DEFAULT_MODEL, TIANDAO_MODEL, CHRONICLER_MODEL, MAX_ROUNDS, AUTO_GENERATE_NOVEL
+    API_KEY = os.getenv("OPENAI_API_KEY", "")
+    BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
+    DEFAULT_MODEL = os.getenv("MODEL_NAME", "deepseek-chat")
+    TIANDAO_MODEL = os.getenv("TIANDAO_MODEL", DEFAULT_MODEL)
+    CHRONICLER_MODEL = os.getenv("CHRONICLER_MODEL", DEFAULT_MODEL)
+    MAX_ROUNDS = int(os.getenv("MAX_ROUNDS", "6"))
+    AUTO_GENERATE_NOVEL = os.getenv("AUTO_GENERATE_NOVEL", "true").lower() in ("true", "1", "yes")
 
 load_dotenv()
-
-# 配置项
-API_KEY = os.getenv("OPENAI_API_KEY", "")
-BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-DEFAULT_MODEL = os.getenv("MODEL_NAME", "deepseek-chat")
-TIANDAO_MODEL = os.getenv("TIANDAO_MODEL", DEFAULT_MODEL)
-CHRONICLER_MODEL = os.getenv("CHRONICLER_MODEL", DEFAULT_MODEL)
-
-MAX_ROUNDS = int(os.getenv("MAX_ROUNDS", "6"))
-AUTO_GENERATE_NOVEL = os.getenv("AUTO_GENERATE_NOVEL", "true").lower() in ("true", "1", "yes")
+refresh_globals()
 
 def classify_genre(genre: str, title: str = "", theme: str = "") -> str:
     """

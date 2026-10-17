@@ -21,8 +21,9 @@ if sys.platform.startswith("win"):
 from config import (
     API_KEY, BASE_URL, DEFAULT_MODEL, TIANDAO_MODEL,
     CHRONICLER_MODEL, MAX_ROUNDS, AUTO_GENERATE_NOVEL, load_dotenv,
-    classify_genre
+    classify_genre, save_persistent_config
 )
+import fanqie_uploader
 from llm_client import LLMClient
 from world_state import WorldState, RoundLog, CharacterAction
 from agents.tiandao import TiandaoAgent
@@ -175,7 +176,7 @@ class SimulationManager:
         return current
 
     def upload_chapter_fanqie(self, book, chapter_id, chapter_title="", chapter_content=""):
-        """单章手动或自动上传至番茄小说发布通道"""
+        """单章手动或自动上传至番茄小说发布通道（原生内置引擎，无需油猴插件）"""
         if not chapter_content:
             target_chap = next((c for c in book.chapters if str(c.get("id")) == str(chapter_id)), None)
             if target_chap:
@@ -184,64 +185,24 @@ class SimulationManager:
             else:
                 return {"status": "error", "message": f"未找到第 {chapter_id} 章内容"}
 
-        clean_body = clean_fanqie_content(chapter_title, chapter_content)
         clean_title = (chapter_title or f"第{chapter_id}章").replace("#", "").strip()
         if not clean_title.startswith("第") and not "章" in clean_title:
             clean_title = f"第{chapter_id}章 {clean_title}"
 
         cfg = self._load_fanqie_config()
-        webhook_url = (cfg.get("webhook_url") or os.getenv("FANQIE_WEBHOOK_URL", "")).strip()
         mode = cfg.get("publish_mode", "drafts")
 
-        bid = book.id if str(book.id).startswith("book_") else f"book_{book.id}"
-        fanqie_dir = OUTPUT_DIR / "fanqie_sync" / bid
-        fanqie_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"chapter_{int(chapter_id):03d}.txt" if str(chapter_id).isdigit() else f"chapter_{chapter_id}.txt"
-        (fanqie_dir / filename).write_text(clean_body, encoding="utf-8")
-
-        result = {
-            "status": "ok",
-            "chapter_id": chapter_id,
-            "chapter_title": clean_title,
-            "word_count": len(clean_body),
-            "book_title": book.title,
-            "clean_body": clean_body,
-            "mode": mode
-        }
-
-        if webhook_url and webhook_url.startswith("http"):
-            try:
-                payload = {
-                    "event": "chapter_upload",
-                    "platform": "fanqie",
-                    "book_id": book.id,
-                    "book_title": book.title,
-                    "chapter_id": chapter_id,
-                    "chapter_title": clean_title,
-                    "content": clean_body,
-                    "word_count": len(clean_body),
-                    "mode": mode,
-                    "tags": get_fanqie_category_tags(book.genre),
-                    "timestamp": time.time()
-                }
-                req = urllib.request.Request(
-                    webhook_url,
-                    data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                    headers={"Content-Type": "application/json; charset=utf-8"}
-                )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    result["webhook_code"] = resp.status
-                    result["message"] = f"🍅 第 {chapter_id} 章《{clean_title}》已成功推送至番茄通道（HTTP {resp.status}）"
-                    self.mark_fanqie_synced(book.id, chapter_id, mode=mode)
-                    return result
-            except Exception as e_wh:
-                result["status"] = "warning"
-                result["message"] = f"🍅 第 {chapter_id} 章已按番茄规范排版存盘，但推送接口异常: {str(e_wh)}"
-                return result
-        else:
-            result["status"] = "local_ready"
-            result["message"] = f"🍅 第 {chapter_id} 章《{clean_title}》已按番茄作家规范完成首行两格缩进与净化排版！配置 Webhook 后可全自动直推番茄草稿箱。"
-            return result
+        # 优先调用本项目原生内置番茄上传引擎（落盘格式化文本 + 原生会话自动直推草稿箱）
+        fq_res = fanqie_uploader.native_upload_chapter(
+            book_title=book.title,
+            chapter_title=clean_title,
+            chapter_content=chapter_content,
+            book_id=book.id,
+            mode=mode
+        )
+        if fq_res.get("status") in ("ok", "local_ready"):
+            self.mark_fanqie_synced(book.id, chapter_id, mode=mode)
+        return fq_res
 
     def get_fanqie_sync_state(self, book_id=None):
         if not book_id:
@@ -2062,6 +2023,30 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.wfile.write(content.encode("utf-8"))
             return
 
+        # 原生番茄作家账号登录态查询
+        if path == "/api/fanqie/auth_status":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(fanqie_uploader.get_auth_status(), ensure_ascii=False).encode("utf-8"))
+            return
+
+        # 原生番茄扫码登录二维码图片获取
+        if path == "/api/fanqie/qr_code":
+            if fanqie_uploader.QR_CODE_PATH.exists():
+                data = fanqie_uploader.QR_CODE_PATH.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self.send_response(404)
+                self.end_headers()
+            return
+
         # 管理端专属配置读取接口 (需鉴权)
         if path == "/api/admin/config":
             if not self.is_admin_authenticated():
@@ -2075,10 +2060,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             cfg = {
                 "has_api_key": bool(real_key and real_key != "your_api_key_here"),
                 "api_key_masked": masked,
-                "base_url": os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1"),
-                "model_name": os.getenv("MODEL_NAME", "balanced-model"),
-                "tiandao_model": os.getenv("TIANDAO_MODEL", os.getenv("MODEL_NAME", "balanced-model")),
-                "chronicler_model": os.getenv("CHRONICLER_MODEL", os.getenv("MODEL_NAME", "fast-model"))
+                "base_url": os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1"),
+                "model_name": os.getenv("MODEL_NAME", "deepseek-chat"),
+                "tiandao_model": os.getenv("TIANDAO_MODEL", os.getenv("MODEL_NAME", "deepseek-chat")),
+                "chronicler_model": os.getenv("CHRONICLER_MODEL", os.getenv("MODEL_NAME", "deepseek-chat")),
+                "http_port": int(os.getenv("TIANDAO_PORT", "8088")),
+                "ws_port": int(os.getenv("TIANDAO_WS_PORT", "8089"))
             }
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -2331,6 +2318,26 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "ok", "config": updated}, ensure_ascii=False).encode("utf-8"))
                 return
 
+            if path == "/api/fanqie/start_login":
+                res = fanqie_uploader.start_browser_login_async()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/fanqie/config":
+                cfg = fanqie_uploader.load_fanqie_config()
+                for k in ("auto_upload", "publish_mode", "ai_disclosure", "author_name"):
+                    if k in req_data:
+                        cfg[k] = req_data[k]
+                fanqie_uploader.save_fanqie_config(cfg)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "config": cfg}, ensure_ascii=False).encode("utf-8"))
+                return
+
             if path == "/api/fanqie/upload_chapter":
                 bid = req_data.get("book_id", "")
                 cid = req_data.get("chapter_id", None)
@@ -2557,73 +2564,36 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     }, ensure_ascii=False).encode("utf-8"))
                     return
 
-                # 更新 .env
-                env_path = Path(__file__).parent / ".env"
                 input_key = req_data.get("api_key", "").strip()
                 if input_key and not input_key.startswith("•") and not "****" in input_key:
                     new_key = input_key
                 else:
                     new_key = os.getenv("OPENAI_API_KEY", "")
-                new_base = req_data.get("base_url", "").strip() or os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1")
-                new_model = req_data.get("model_name", "").strip() or os.getenv("MODEL_NAME", "balanced-model")
+                new_base = req_data.get("base_url", "").strip() or os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
+                new_model = req_data.get("model_name", "").strip() or os.getenv("MODEL_NAME", "deepseek-chat")
                 new_td = req_data.get("tiandao_model", "").strip() or os.getenv("TIANDAO_MODEL", new_model)
                 new_chr = req_data.get("chronicler_model", "").strip() or os.getenv("CHRONICLER_MODEL", new_model)
                 new_admin_pwd = req_data.get("admin_key_new", "").strip() or os.getenv("ADMIN_KEY", "admin888")
+                new_port = req_data.get("http_port", os.getenv("TIANDAO_PORT", "8088"))
+                new_ws = req_data.get("ws_port", os.getenv("TIANDAO_WS_PORT", "8089"))
 
-                env_lines = []
-                if env_path.exists():
-                    lines = env_path.read_text(encoding="utf-8").splitlines()
-                    has_td = False
-                    has_chr = False
-                    has_admin = False
-                    for line in lines:
-                        if line.startswith("OPENAI_API_KEY="):
-                            env_lines.append(f"OPENAI_API_KEY={new_key}")
-                        elif line.startswith("OPENAI_BASE_URL="):
-                            env_lines.append(f"OPENAI_BASE_URL={new_base}")
-                        elif line.startswith("MODEL_NAME="):
-                            env_lines.append(f"MODEL_NAME={new_model}")
-                        elif line.startswith("TIANDAO_MODEL="):
-                            env_lines.append(f"TIANDAO_MODEL={new_td}")
-                            has_td = True
-                        elif line.startswith("CHRONICLER_MODEL="):
-                            env_lines.append(f"CHRONICLER_MODEL={new_chr}")
-                            has_chr = True
-                        elif line.startswith("ADMIN_KEY="):
-                            env_lines.append(f"ADMIN_KEY={new_admin_pwd}")
-                            has_admin = True
-                        else:
-                            env_lines.append(line)
-                    if not has_td:
-                        env_lines.append(f"TIANDAO_MODEL={new_td}")
-                    if not has_chr:
-                        env_lines.append(f"CHRONICLER_MODEL={new_chr}")
-                    if not has_admin:
-                        env_lines.append(f"ADMIN_KEY={new_admin_pwd}")
-                else:
-                    env_lines = [
-                        f"OPENAI_API_KEY={new_key}",
-                        f"OPENAI_BASE_URL={new_base}",
-                        f"MODEL_NAME={new_model}",
-                        f"TIANDAO_MODEL={new_td}",
-                        f"CHRONICLER_MODEL={new_chr}",
-                        "MAX_ROUNDS=5",
-                        f"ADMIN_KEY={new_admin_pwd}"
-                    ]
-
-                env_path.write_text("\n".join(env_lines), encoding="utf-8")
-                load_dotenv(override=True)
-                os.environ["OPENAI_API_KEY"] = new_key
-                os.environ["OPENAI_BASE_URL"] = new_base
-                os.environ["MODEL_NAME"] = new_model
-                os.environ["TIANDAO_MODEL"] = new_td
-                os.environ["CHRONICLER_MODEL"] = new_chr
-                os.environ["ADMIN_KEY"] = new_admin_pwd
+                # 核心升级：原子化双写持久化至挂载卷 output/system_config.json 与 output/.env
+                # 无论 Docker 如何升级、更新镜像或重建容器，配置永不丢失！
+                save_persistent_config({
+                    "api_key": new_key,
+                    "base_url": new_base,
+                    "model_name": new_model,
+                    "tiandao_model": new_td,
+                    "chronicler_model": new_chr,
+                    "admin_key": new_admin_pwd,
+                    "http_port": str(new_port),
+                    "ws_port": str(new_ws)
+                })
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "message": "管理员配置已更新并热重载生效"}, ensure_ascii=False).encode("utf-8"))
+                self.wfile.write(json.dumps({"status": "ok", "message": "管理员配置已永久落盘保存至持久化卷，并热重载生效！"}, ensure_ascii=False).encode("utf-8"))
                 return
 
             self.send_response(404)
@@ -2690,10 +2660,11 @@ def start_ws_server(ws_port=8089):
         with serve(handle_ws, "0.0.0.0", ws_port, ping_interval=None, ping_timeout=None) as ws_server:
             ws_server.serve_forever()
     except Exception as e_ws:
-        print(f"[WebSocket 服务告警] 启动失败: {e_ws} (仍可通过 HTTP SSE 备用链路推演)")
+        print(f"[WebSocket 服务提示] 端口 {ws_port} 未能独占 ({e_ws})，推演系统已无缝切入 HTTP SSE 流式通道，控制台功能 100% 正常运行！")
 
 def start_server(port=8088):
-    ws_port = port + 1
+    env_ws_port = os.getenv("TIANDAO_WS_PORT")
+    ws_port = int(env_ws_port) if env_ws_port and env_ws_port.isdigit() else (port + 1)
     ws_thread = threading.Thread(target=start_ws_server, args=(ws_port,), daemon=True)
     ws_thread.start()
 
@@ -2709,10 +2680,17 @@ def start_server(port=8088):
         print("\n服务已关闭。")
 
 if __name__ == "__main__":
-    port = 8088
+    load_dotenv(override=True)
+    env_port = os.getenv("TIANDAO_PORT")
+    port = int(env_port) if env_port and env_port.isdigit() else 8088
     if len(sys.argv) > 1:
         try:
-            port = int(sys.argv[1])
+            arg_port = int(sys.argv[1])
+            # 若命令行参数是 8088 且 env 明确配置了其他端口，尊重持久化配置
+            if env_port and arg_port == 8088 and int(env_port) != 8088:
+                port = int(env_port)
+            else:
+                port = arg_port
         except ValueError:
             pass
     start_server(port)
