@@ -47,32 +47,72 @@ class LLMClient:
             "Authorization": f"Bearer {self.api_key}"
         }
 
-        req = urllib.request.Request(self.endpoint, data=data, headers=headers, method="POST")
+        # 智能模型别名感知：针对聚合网关前缀 (如 trae.si2api.top 下的 trae: 与 solo:) 自动构建降级候选链
+        models_to_try = [model]
+        base_lower = self.base_url.lower()
+        if "trae" in base_lower or "si2api" in base_lower:
+            if model.startswith("solo:"):
+                models_to_try.append(model.replace("solo:", "trae:"))
+            elif model.startswith("global:"):
+                models_to_try.append(model.replace("global:", "trae:"))
+            elif not ":" in model:
+                models_to_try.append(f"trae:{model}")
 
-        for attempt in range(retries):
-            try:
-                with urllib.request.urlopen(req, timeout=90) as response:
-                    body = response.read().decode("utf-8")
-                    res_json = json.loads(body)
-                    result = res_json["choices"][0]["message"]["content"]
-                    # 保护后端私有服务器：每次成功调用后微休眠 1 秒，防突发流量冲垮 KV 缓存
-                    time.sleep(1.0)
-                    return result
-            except urllib.error.HTTPError as e:
-                err_content = e.read().decode("utf-8", errors="ignore")
-                if attempt == retries - 1:
-                    raise RuntimeError(f"API 请求失败 HTTP {e.code}: {err_content}")
-                # 针对 429 限流或 502/504 超时进行指数退避
-                backoff = (attempt + 1) * 4.0 if e.code in (429, 502, 503, 504) else (attempt + 1) * 2.0
-                print(f"[LLMClient 护栏] 遭遇 HTTP {e.code}，正在执行退避保护等待 {backoff:.1f} 秒重试...")
-                time.sleep(backoff)
-            except Exception as e:
-                if attempt == retries - 1:
-                    raise RuntimeError(f"请求异常: {str(e)}")
-                backoff = (attempt + 1) * 2.5
-                print(f"[LLMClient 护栏] 网络异常: {e}，等待 {backoff:.1f} 秒重试...")
-                time.sleep(backoff)
+        last_error = None
+        for m_curr in models_to_try:
+            payload["model"] = m_curr
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(self.endpoint, data=data, headers=headers, method="POST")
 
+            for attempt in range(retries):
+                try:
+                    with urllib.request.urlopen(req, timeout=90) as response:
+                        body = response.read().decode("utf-8")
+                        # 兼容强开 SSE 流式响应的聚合网关（即使 stream=False 仍返回 text/event-stream 数据行）
+                        if body.strip().startswith("data:") or "data: {" in body:
+                            full_chunks = []
+                            for line in body.splitlines():
+                                line = line.strip()
+                                if not line or line.startswith(":") or line == "data: [DONE]":
+                                    continue
+                                if line.startswith("data:"):
+                                    line = line[5:].strip()
+                                try:
+                                    chunk = json.loads(line)
+                                    choices = chunk.get("choices", [])
+                                    if choices:
+                                        delta = choices[0].get("delta", {})
+                                        content = delta.get("content") or choices[0].get("message", {}).get("content", "")
+                                        if content:
+                                            full_chunks.append(content)
+                                except Exception:
+                                    continue
+                            result = "".join(full_chunks)
+                        else:
+                            res_json = json.loads(body)
+                            result = res_json["choices"][0]["message"]["content"]
+
+                        time.sleep(0.5)
+                        return result
+                except urllib.error.HTTPError as e:
+                    err_content = e.read().decode("utf-8", errors="ignore")
+                    last_error = RuntimeError(f"API 请求失败 HTTP {e.code}: {err_content}")
+                    # 若遇到 503 no_account 且有下一个模型别名，立即切换测试下一候选
+                    if ("no_account" in err_content or e.code == 503) and m_curr != models_to_try[-1]:
+                        print(f"[LLMClient 智能路由] 模型 {m_curr} 渠道繁忙无账号，自动切换候选模型 {models_to_try[-1]}...")
+                        break
+                    if attempt == retries - 1 and m_curr == models_to_try[-1]:
+                        raise last_error
+                    backoff = (attempt + 1) * 3.0 if e.code in (429, 502, 503, 504) else (attempt + 1) * 2.0
+                    time.sleep(backoff)
+                except Exception as e:
+                    last_error = RuntimeError(f"请求异常: {str(e)}")
+                    if attempt == retries - 1 and m_curr == models_to_try[-1]:
+                        raise last_error
+                    time.sleep((attempt + 1) * 2.0)
+
+        if last_error:
+            raise last_error
         return ""
 
     def call_chat(
