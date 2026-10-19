@@ -3054,7 +3054,6 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
                 t_start = time.time()
                 try:
-                    from llm_client import LLMClient
                     client = LLMClient(api_key=test_key, base_url=test_base)
                     reply = client.chat(
                         model=test_model,
