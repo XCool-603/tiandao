@@ -1416,6 +1416,18 @@
     .status-dot.amber { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5); }
     .status-dot.red { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.5); }
 
+
+    /* 阅读与排版引擎高性能渲染规范 (GPU 合成层加速) */
+    .reader-content-box p {
+      content-visibility: auto;
+      contain-intrinsic-size: 0 44px;
+    }
+    .view-panel {
+      contain: paint;
+    }
+    .app-layout {
+      transform: translateZ(0);
+    }
   </style>
 </head>
 <body>
@@ -2279,9 +2291,28 @@
       }, 5000);
     });
 
+    let lastStateVersion = "";
+
     // 应用状态至前端界面
     function applyState(data, refreshFullView = true) {
       if (!data) return;
+      if (data.v) {
+        lastStateVersion = data.v;
+      }
+
+      // 章节正文内存持久化继承：防止服务端精简数据覆写已加载的章节正文
+      if (globalState && globalState.book_id === data.book_id && globalState.chapters) {
+        const cachedMap = new Map();
+        globalState.chapters.forEach(c => {
+          if (c.content) cachedMap.set(String(c.id), c.content);
+        });
+        (data.chapters || []).forEach(c => {
+          if (!c.content && cachedMap.has(String(c.id))) {
+            c.content = cachedMap.get(String(c.id));
+          }
+        });
+      }
+
       globalState = data;
 
       renderTopBookSelector(data.books_summary || [], data.book_id);
@@ -2321,14 +2352,18 @@
       }
     }
 
-    // 拉取后端最新状态
+    // 拉取后端最新状态 (带 0.1ms 增量对比，无变更时零 DOM 操作)
     async function fetchStatus(refreshFullView = true) {
       try {
         const curBid = (globalState && globalState.book_id) ? globalState.book_id : "";
-        const url = curBid ? `/api/status?book_id=${encodeURIComponent(curBid)}` : "/api/status";
+        const vParam = (!refreshFullView && lastStateVersion) ? `&v=${encodeURIComponent(lastStateVersion)}` : "";
+        const url = curBid ? `/api/status?book_id=${encodeURIComponent(curBid)}${vParam}` : (vParam ? `/api/status?${vParam.slice(1)}` : "/api/status");
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
+        if (data && data.unchanged) {
+          return;
+        }
         applyState(data, refreshFullView);
       } catch (e) {
         console.error("拉取状态异常:", e);
@@ -2569,11 +2604,16 @@
       }
     }
 
-    // 渲染左侧书籍元数据
+    // 渲染左侧书籍元数据 (增量指纹对比，避免无谓 DOM 重绘)
+    let lastSideBookKey = "";
     function renderSideBookInfo(data) {
+      const chaps = data.chapters || [];
+      const key = `${data.book_id}:${data.title}:${data.genre}:${chaps.length}`;
+      if (key === lastSideBookKey) return;
+      lastSideBookKey = key;
+
       document.getElementById("sideBookTitle").innerText = data.book_id ? (data.title || "未命名小说") : "暂无作品";
       document.getElementById("sideBookGenre").innerText = data.book_id ? (data.genre || "未设定") : "--";
-      const chaps = data.chapters || [];
       const totalWords = chaps.reduce((acc, c) => acc + (c.word_count || (c.content ? c.content.length : 0)), 0);
       document.getElementById("sideBookTotalWords").innerText = `${totalWords.toLocaleString()} 字`;
       document.getElementById("sideBookChaptersCount").innerText = `${chaps.length} 章`;
@@ -3112,7 +3152,11 @@
       if (viewName === "outline") {
         document.getElementById("viewOutline").classList.add("active");
         document.getElementById("navTabOutline").classList.add("active");
-        loadOutlineData();
+        if (globalState && globalState.outline && globalState.outline.main_plot) {
+          renderOutlineData(globalState.outline);
+        } else {
+          loadOutlineData();
+        }
       } else if (viewName === "sim") {
         document.getElementById("viewSim").classList.add("active");
         document.getElementById("navTabSim").classList.add("active");
@@ -3203,13 +3247,18 @@
       }
     }
 
-    // 渲染伏线账本
+    // 渲染伏线账本 (带指纹比对)
+    let lastForeshadowKey = "";
     function renderForeshadowings(list) {
       const container = document.getElementById("foreshadowListContainer");
       const badge = document.getElementById("foreshadowBadgeCount");
       if (!container) return;
       const count = list ? list.length : 0;
       if (badge) badge.innerText = count;
+
+      const key = (list || []).map(f => `${f.id}:${f.status}`).join("|");
+      if (key === lastForeshadowKey && container.children.length > 0) return;
+      lastForeshadowKey = key;
 
       if (!list || list.length === 0) {
         container.innerHTML = `<div style="font-size: 11.5px; color: var(--text-muted); text-align: center; padding: 20px;">暂无伏线线索，推演时系统将自动生成暗线。</div>`;
@@ -3299,13 +3348,18 @@
       }).then(() => fetchStatus());
     }
 
-    // 渲染登场人物
+    // 渲染登场人物 (带指纹比对)
+    let lastCharactersKey = "";
     function renderCharacters(chars) {
       const container = document.getElementById("charListContainer");
       const badge = document.getElementById("charsBadgeCount");
       if (!container) return;
       const count = chars ? chars.length : 0;
       if (badge) badge.innerText = count;
+
+      const key = (chars || []).map(c => `${c.id}:${c.status}:${(c.inventory||[]).length}:${(c.injuries||[]).length}`).join("|");
+      if (key === lastCharactersKey && container.children.length > 0) return;
+      lastCharactersKey = key;
 
       if (!chars || chars.length === 0) {
         container.innerHTML = `<div style="font-size: 11.5px; color: var(--text-muted); text-align: center; padding: 20px;">暂无登场人物</div>`;
@@ -4294,44 +4348,60 @@
     // ==========================================
     let currentOutlineData = null;
 
+    function renderOutlineData(outline) {
+      if (!outline) return;
+      currentOutlineData = outline;
+      const wv = document.getElementById("outlineWorldView");
+      const ps = document.getElementById("outlinePowerSystem");
+      const mp = document.getElementById("outlineMainPlot");
+      if (wv) wv.value = outline.world_view || "";
+      if (ps) ps.value = outline.power_system || "";
+      if (mp) mp.value = outline.main_plot || "";
+
+      // 渲染分卷
+      const volBox = document.getElementById("outlineVolumesContainer");
+      if (volBox) {
+        const vols = outline.volumes || [];
+        if (vols.length === 0) {
+          volBox.innerHTML = `<div style="font-size: 12px; color: var(--text-muted);">点击右上角【AI 重新策划全书大纲】即可自动构筑三卷架构</div>`;
+        } else {
+          volBox.innerHTML = vols.map((v, i) => `
+            <div style="background: var(--bg-input); border-radius: 6px; padding: 10px 12px;">
+              <div style="font-weight: 600; color: var(--accent-gold); font-size: 13px; margin-bottom: 4px;">${escapeHtml(v.title || `第${i+1}卷`)} · 高潮：${escapeHtml(v.climax_event || v.climax || '待定')}</div>
+              <div style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(v.theme || '')}</div>
+            </div>
+          `).join("");
+        }
+      }
+
+      // 渲染分章
+      const chapBox = document.getElementById("outlineChaptersContainer");
+      if (chapBox) {
+        const chaps = outline.chapter_outlines || [];
+        if (chaps.length === 0) {
+          chapBox.innerHTML = `<div style="font-size: 12px; color: var(--text-muted);">推演著书时将自动根据主线大纲规划每一章细纲蓝图</div>`;
+        } else {
+          chapBox.innerHTML = chaps.map(c => `
+            <div style="background: var(--bg-input); border-left: 2px solid var(--accent-blue); padding: 8px 12px; border-radius: 4px; font-size: 12px;">
+              <b style="color: #fff;">${escapeHtml(c.title || `第${c.chapter_num || '?'}章`)}:</b>
+              <span style="color: var(--text-muted); margin-left: 6px;">[目标] ${escapeHtml(c.goal || '')} · [高潮] ${escapeHtml(c.climax || '')}</span>
+            </div>
+          `).join("");
+        }
+      }
+    }
+
     function loadOutlineData() {
       const bid = globalState ? globalState.book_id : "";
       if (!bid) return;
+      if (globalState && globalState.outline && globalState.outline.main_plot) {
+        renderOutlineData(globalState.outline);
+        return;
+      }
       fetch(`/api/outline?book_id=${encodeURIComponent(bid)}`)
         .then(r => r.json())
         .then(res => {
-          currentOutlineData = res.outline || {};
-          document.getElementById("outlineWorldView").value = currentOutlineData.world_view || "";
-          document.getElementById("outlinePowerSystem").value = currentOutlineData.power_system || "";
-          document.getElementById("outlineMainPlot").value = currentOutlineData.main_plot || "";
-
-          // 渲染分卷
-          const volBox = document.getElementById("outlineVolumesContainer");
-          const vols = currentOutlineData.volumes || [];
-          if (vols.length === 0) {
-            volBox.innerHTML = `<div style="font-size: 12px; color: var(--text-muted);">点击右上角【AI 重新策划全书大纲】即可自动构筑三卷架构</div>`;
-          } else {
-            volBox.innerHTML = vols.map((v, i) => `
-              <div style="background: var(--bg-input); border-radius: 6px; padding: 10px 12px;">
-                <div style="font-weight: 600; color: var(--accent-gold); font-size: 13px; margin-bottom: 4px;">${escapeHtml(v.title || `第${i+1}卷`)} · 高潮：${escapeHtml(v.climax_event || v.climax || '待定')}</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">${escapeHtml(v.theme || '')}</div>
-              </div>
-            `).join("");
-          }
-
-          // 渲染分章
-          const chapBox = document.getElementById("outlineChaptersContainer");
-          const chaps = currentOutlineData.chapter_outlines || [];
-          if (chaps.length === 0) {
-            chapBox.innerHTML = `<div style="font-size: 12px; color: var(--text-muted);">推演著书时将自动根据主线大纲规划每一章细纲蓝图</div>`;
-          } else {
-            chapBox.innerHTML = chaps.map(c => `
-              <div style="background: var(--bg-input); border-left: 2px solid var(--accent-blue); padding: 8px 12px; border-radius: 4px; font-size: 12px;">
-                <b style="color: #fff;">${escapeHtml(c.title || `第${c.chapter_num || '?'}章`)}:</b>
-                <span style="color: var(--text-muted); margin-left: 6px;">[目标] ${escapeHtml(c.goal || '')} · [高潮] ${escapeHtml(c.climax || '')}</span>
-              </div>
-            `).join("");
-          }
+          renderOutlineData(res.outline || {});
         });
     }
 
@@ -4536,12 +4606,18 @@
     // ==========================================
     // 推演实验室单步运行
     // ==========================================
+    let lastSimHistoryKey = "";
     function renderSimViewData(data) {
+      const round = data.current_round || 0;
+      const history = data.history || [];
+      const key = `${data.book_id}:${round}:${history.length}`;
+      if (key === lastSimHistoryKey) return;
+      lastSimHistoryKey = key;
+
       document.getElementById("simRoundBadge").innerText = `第 ${data.current_round || 0} 轮 / 共 ${data.max_rounds || 10} 轮`;
       document.getElementById("simSceneDesc").innerText = data.scene_description || "天地初开，各方博弈在即...";
 
       const stream = document.getElementById("simHistoryStream");
-      const history = data.history || [];
       if (history.length === 0) {
         stream.innerHTML = `<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 30px;">暂无因果推演对决，点击上方【运转单步推演】即刻开始！</div>`;
       } else {

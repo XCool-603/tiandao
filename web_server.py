@@ -108,6 +108,22 @@ class SimulationManager:
                 runner.is_busy = False
             return runner.is_busy
 
+    def is_any_busy(self) -> bool:
+        with self._runners_lock:
+            return any(r.is_busy for r in self.runners.values())
+
+    def get_state_version(self, target_book_id: str = None) -> str:
+        target_book = book_mgr.books.get(target_book_id, self.active_book) if target_book_id else self.active_book
+        if not target_book or not target_book.id:
+            return "empty"
+        is_busy = int(self.is_book_busy(target_book.id))
+        any_busy = int(self.is_any_busy())
+        updated = int(getattr(target_book, "updated_at", 0))
+        chap_count = len(target_book.chapters)
+        round_num = target_book.current_round
+        book_count = len(book_mgr.books)
+        return f"{target_book.id}_{updated}_{chap_count}_{round_num}_{is_busy}_{any_busy}_{book_count}"
+
     def request_stop(self, book_id: str = None):
         """停止指定书籍的推演（若未指定则停止当前活跃书籍或所有推演）"""
         with self._runners_lock:
@@ -801,6 +817,7 @@ class SimulationManager:
         first_chap_content = target_book.chapters[0].get("content", "") if target_book.chapters else ""
 
         return {
+            "v": self.get_state_version(target_book.id),
             "book_id": target_book.id,
             "title": target_book.title,
             "genre": target_book.genre,
@@ -1661,6 +1678,23 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
         if path == "/api/status":
             parsed_qs = urllib.parse.parse_qs(parsed.query)
             bid = parsed_qs.get("book_id", [None])[0]
+            client_v = parsed_qs.get("v", [""])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            
+            if target_book and client_v:
+                curr_v = sim_mgr.get_state_version(target_book.id)
+                if client_v == curr_v:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "unchanged": True,
+                        "book_id": target_book.id,
+                        "v": curr_v,
+                        "is_busy": sim_mgr.is_book_busy(target_book.id)
+                    }).encode("utf-8"))
+                    return
+
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
