@@ -164,6 +164,7 @@ class BookManager:
                     data = json.loads(bf.read_text(encoding="utf-8"))
                     book = Book.from_dict(data)
                     self._self_heal_book_genre(book)
+                    self._self_heal_book_chapters(book)
                     self.books[book.id] = book
                 except Exception as e:
                     print(f"[读取书籍失败] {bf}: {e}")
@@ -192,6 +193,33 @@ class BookManager:
             if needs_heal:
                 book.save()
                 print(f"[天道自愈纠偏] 成功修正现代都市书籍《{book.title}》的题材与人物设定！")
+
+    def _self_heal_book_chapters(self, book: Book):
+        """自动排查并修复因多 AI 并发写入导致的章节重复、乱序或断号"""
+        if not book or not book.chapters:
+            return
+        orig_count = len(book.chapters)
+        # 去重并升序排序
+        seen_ids = set()
+        cleaned = []
+        for c in sorted(book.chapters, key=lambda x: x.get("id", 0)):
+            cid = c.get("id")
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                cleaned.append(c)
+
+        needs_save = (len(cleaned) != orig_count)
+        # 重新规整章节序号为连续递增 1, 2, 3...
+        for idx, c in enumerate(cleaned, start=1):
+            if c.get("id") != idx:
+                c["id"] = idx
+                needs_save = True
+
+        if needs_save:
+            book.chapters = cleaned
+            book.current_round = len(cleaned)
+            book.save()
+            print(f"[天道章节自愈] 成功修复书籍《{book.title}》的乱序/重复章节（原 {orig_count} 章 -> 现 {len(cleaned)} 章）")
 
     def get_active_book(self) -> Book:
         if self.active_book_id and self.active_book_id in self.books:

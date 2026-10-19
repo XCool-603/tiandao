@@ -3695,6 +3695,10 @@
     // 史官流式著书系统 (SSE · 支持 100 章长篇宏大连更)
     // ==========================================
     function triggerSelectedStream() {
+      if (isStreaming) {
+        showToast("天道推演流水线正在运转中，请勿重复点击！");
+        return;
+      }
       const select = document.getElementById("streamScaleSelect");
       const count = parseInt(select.value) || 1;
 
@@ -4185,6 +4189,12 @@
         if (progressLabel) progressLabel.innerText = `第 ${idx}/${total} 章全流程存盘完毕`;
         fetchStatus(false);
       } else if (ev.type === "complete" || ev.type === "stopped" || ev.type === "error") {
+        if (currentStreamSource) {
+          currentStreamSource.onmessage = null;
+          currentStreamSource.onerror = null;
+          try { currentStreamSource.close(); } catch(e){}
+          currentStreamSource = null;
+        }
         stopStageTicker();
         finishTypewriter();
         if (ev.type === "complete") {
@@ -4204,6 +4214,11 @@
       statusEl.innerHTML = `<span>${ICONS.loader} 正在接入备用流式信道 (SSE)...</span>`;
       const isAutoFanqie = document.getElementById("chkAutoFanqie")?.checked || false;
       const url = `/api/simulate_stream?mode=${mode}&custom_count=${count}&book_id=${encodeURIComponent(bid)}&divine_decree=${encodeURIComponent(decree)}&force_mock=${mock ? "1" : "0"}&auto_fanqie=${isAutoFanqie ? "1" : "0"}`;
+      
+      if (currentStreamSource) {
+        try { currentStreamSource.close(); } catch(e){}
+        currentStreamSource = null;
+      }
       currentStreamSource = new EventSource(url);
 
       currentStreamSource.onmessage = (e) => {
@@ -4216,6 +4231,12 @@
       };
 
       currentStreamSource.onerror = () => {
+        if (currentStreamSource) {
+          currentStreamSource.onmessage = null;
+          currentStreamSource.onerror = null;
+          try { currentStreamSource.close(); } catch(e){}
+          currentStreamSource = null;
+        }
         stopStreamUI("演化数据流传输结束");
       };
     }

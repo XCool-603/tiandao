@@ -75,13 +75,59 @@ def clean_fanqie_content(title: str, content: str) -> str:
     return f"{title}\n\n" + "\n\n".join(clean)
 
 class BookRunner:
-    """单一书籍的天道推演独立运行器（支持各书并发多线程推演与独立控制）"""
+    """单一书籍的天道推演独立运行器（严格保证单书单线程排他互斥，杜绝多 AI 并发跑乱）"""
     def __init__(self, book_id: str):
         self.book_id = book_id
         self.is_busy = False
         self.stop_requested = False
         self.last_busy_time = 0.0
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        self.active_session_id = None
+        self.active_thread_id = None
+
+    def acquire(self, session_id: str) -> bool:
+        """
+        原子级获取独占推演锁。
+        若当前书籍正在推演，且持有者的心跳在 180 秒内有效，坚决拒绝任何新推演！
+        只有在超过 180 秒无心跳（彻底挂死）时才允许释放旧锁。
+        """
+        with self.lock:
+            now = time.time()
+            if self.is_busy:
+                if (now - self.last_busy_time) > 180:
+                    print(f"[推演锁自愈] 书籍 {self.book_id} 上次推演心跳超时（已挂起 {int(now - self.last_busy_time)}s），强制释放旧锁！")
+                    self.is_busy = False
+                    self.active_session_id = None
+                    self.active_thread_id = None
+                else:
+                    return False
+
+            self.is_busy = True
+            self.stop_requested = False
+            self.last_busy_time = now
+            self.active_session_id = session_id
+            self.active_thread_id = threading.get_ident()
+            return True
+
+    def heartbeat(self):
+        """刷新推演活跃心跳"""
+        with self.lock:
+            self.last_busy_time = time.time()
+
+    def release(self, session_id: str = None):
+        """仅当锁持有者是自己时才允许释放锁，防止外部其他请求误将正忙的锁清除"""
+        with self.lock:
+            if session_id and self.active_session_id and self.active_session_id != session_id:
+                return
+            self.is_busy = False
+            self.stop_requested = False
+            self.active_session_id = None
+            self.active_thread_id = None
+
+    def force_stop(self):
+        """管理员或用户主动发送停止指令"""
+        with self.lock:
+            self.stop_requested = True
 
 class SimulationManager:
     """全局多书库推演状态管理器（与 BookManager 紧密集成，支持多书并发独立天道推演）"""
@@ -856,10 +902,10 @@ class SimulationManager:
         if not target_book.id:
             return {"error": "当前书库为空，请先点击【➕ 新建作品】创建一部小说！"}
         runner = self.get_runner(target_book.id)
-        if runner.is_busy:
-            return {"error": f"作品《{target_book.title}》推演引擎正忙，请稍候..."}
+        session_id = f"step_{threading.get_ident()}_{time.time()}"
+        if not runner.acquire(session_id):
+            return {"error": f"作品《{target_book.title}》推演引擎已有 AI 正在运行，严禁并发执行！"}
 
-        runner.is_busy = True
         try:
             target_book.current_round += 1
             load_dotenv()
@@ -884,7 +930,7 @@ class SimulationManager:
             target_book.save()
             return result
         finally:
-            runner.is_busy = False
+            runner.release(session_id)
 
     def _step_mock(self, round_num, divine_decree, target_book=None):
         """高质量模拟步（对当前任意自创角色的自适应群像博弈推演，全自动生死流转）"""
@@ -1259,28 +1305,28 @@ class SimulationManager:
         """调用史官撰写小说章节"""
         target_book = target_book or self.active_book
         runner = self.get_runner(target_book.id)
-        if runner.is_busy:
-            return {"error": f"作品《{target_book.title}》引擎正忙，请稍候..."}
+        session_id = f"novel_{threading.get_ident()}_{time.time()}"
+        if not runner.acquire(session_id):
+            return {"error": f"作品《{target_book.title}》已有 AI 正在运行，严禁并发执行！"}
 
-        if not target_book.world.history:
-            # 自动开天辟地推演首轮因果，确保随时可以直接出书
-            print("[史官著书 智能补全] 检测到尚无历史，天道自动开辟天地推演首卷博弈...")
-            self.step(force_mock=force_mock, auto_spawn=True, target_book=target_book)
-
-        runner.is_busy = True
         try:
+            if not target_book.world.history:
+                # 自动开天辟地推演首轮因果，确保随时可以直接出书
+                print("[史官著书 智能补全] 检测到尚无历史，天道自动开辟天地推演首卷博弈...")
+                self.step(force_mock=force_mock, auto_spawn=True, target_book=target_book)
+
             return self._write_novel_internal(force_mock=force_mock, target_book=target_book)
         finally:
-            runner.is_busy = False
+            runner.release(session_id)
 
     def auto_simulate_and_publish(self, rounds=3, force_mock=False, target_book=None):
         """一键全自动推演并著书成卷 (自动连续推进轮次并生成长篇小说正文)"""
         target_book = target_book or self.active_book
         runner = self.get_runner(target_book.id)
-        if runner.is_busy:
-            return {"error": f"作品《{target_book.title}》天道演化正忙，请稍候..."}
+        session_id = f"auto_{threading.get_ident()}_{time.time()}"
+        if not runner.acquire(session_id):
+            return {"error": f"作品《{target_book.title}》已有 AI 正在推演中，严禁并发执行！"}
 
-        runner.is_busy = True
         try:
             load_dotenv()
             current_api_key = os.getenv("OPENAI_API_KEY", "")
@@ -1305,7 +1351,7 @@ class SimulationManager:
             # 终局由史官撰写小说正文
             return self._write_novel_internal(force_mock=use_mock, target_book=target_book)
         finally:
-            runner.is_busy = False
+            runner.release(session_id)
 
     def _write_novel_internal(self, force_mock=False, target_book=None):
         target_book = target_book or self.active_book
@@ -1387,17 +1433,14 @@ class SimulationManager:
             return
 
         runner = self.get_runner(target_book.id)
-        if runner.is_busy:
-            # 自动自愈：若已忙碌超过 180 秒（3分钟）未更新心跳，判定为上次异常挂起，自动强制释放
-            if time.time() - getattr(runner, "last_busy_time", 0) > 180:
-                runner.is_busy = False
-            else:
-                yield {"type": "error", "book_id": target_book.id, "message": f"作品《{target_book.title}》天道演化正在进行中，请稍候..."}
-                return
-
-        runner.is_busy = True
-        runner.last_busy_time = time.time()
-        runner.stop_requested = False
+        session_id = f"sim_{target_book.id}_{threading.get_ident()}_{int(time.time()*1000)}"
+        if not runner.acquire(session_id):
+            yield {
+                "type": "error",
+                "book_id": target_book.id,
+                "message": f"【并发安全拦截】书籍《{target_book.title}》已有 AI 正在推演中！系统已自动阻断并发，防止文章写乱。请等待当前推演完成或点击【安全停止】。"
+            }
+            return
 
         try:
             # 计算目标章节数 (支持自定义章数或全书深度标准)
@@ -1565,15 +1608,39 @@ class SimulationManager:
                 if not first_line.startswith("第") and not "章" in first_line:
                     first_line = f"第{next_chap_id}章 {first_line}"
 
-                # 入库保存
-                target_book.chapters.append({
-                    "id": next_chap_id,
-                    "title": first_line,
-                    "word_count": len(full_content),
-                    "content": full_content
-                })
-                target_book.save()
-                total_generated += 1
+                # 入库保存（原子防重排序）
+                with runner.lock:
+                    runner.heartbeat()
+                    existing_idx = None
+                    for idx, c in enumerate(target_book.chapters):
+                        if c.get("id") == next_chap_id:
+                            existing_idx = idx
+                            break
+
+                    chap_data = {
+                        "id": next_chap_id,
+                        "title": first_line,
+                        "word_count": len(full_content),
+                        "content": full_content
+                    }
+                    if existing_idx is not None:
+                        target_book.chapters[existing_idx] = chap_data
+                    else:
+                        target_book.chapters.append(chap_data)
+
+                    # 强制按章节 ID 升序重排，绝不允许章节顺序颠倒或跑乱
+                    seen_ids = set()
+                    cleaned_chaps = []
+                    for c in sorted(target_book.chapters, key=lambda x: x.get("id", 0)):
+                        cid = c.get("id")
+                        if cid not in seen_ids:
+                            seen_ids.add(cid)
+                            cleaned_chaps.append(c)
+
+                    target_book.chapters = cleaned_chaps
+                    target_book.current_round = len(target_book.chapters)
+                    target_book.save()
+                    total_generated += 1
 
                 # 番茄小说自动上传联动检查 (单章演化即自动上传)
                 should_fanqie = self.fanqie_auto_upload if auto_fanqie is None else bool(auto_fanqie)
@@ -1626,8 +1693,7 @@ class SimulationManager:
         except Exception as e:
             yield {"type": "error", "book_id": target_book.id, "message": f"流式演化异常: {str(e)}"}
         finally:
-            runner.is_busy = False
-            runner.stop_requested = False
+            runner.release(session_id)
 
 # 全局单例
 sim_mgr = SimulationManager()
@@ -1806,7 +1872,6 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     gen.close()
                 except Exception:
                     pass
-                runner.is_busy = False
             return
 
         if path == "/api/drama":
@@ -2880,7 +2945,6 @@ def start_ws_server(ws_port=8089):
                                 gen.close()
                             except Exception:
                                 pass
-                            runner.is_busy = False
                     elif action == "stop":
                         bid = data.get("book_id", None)
                         sim_mgr.request_stop(bid)
