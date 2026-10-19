@@ -499,6 +499,60 @@
           </div>
         </div>
 
+        <!-- 短剧大模型专用设置分区 -->
+        <div class="form-group full" style="margin-top: 14px; padding-top: 16px; border-top: 1px dashed var(--border-subtle);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="font-weight: 700; font-size: 14px; color: var(--accent-gold); display: flex; align-items: center; gap: 6px;">
+              <svg class="icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              短剧分镜大模型独立配置 (可选独立 API / 模型，默认自动继承小说 API)
+            </div>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="runPingDiagnostic('drama')" id="btnPingDramaDiagnostic">
+              <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 测试短剧模型连通性</span>
+            </button>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">
+            短剧生成需要强大的分镜编剧能力与视频提示词构建。您可以让短剧与小说共用相同的大模型接口（默认模式，留空即可）；亦可在此单独接入更高阶或更便宜的第三方大模型（如 Claude-3.5-Sonnet / GPT-4o / Qwen-Max / DeepSeek）。
+          </div>
+        </div>
+
+        <!-- 短剧 API KEY -->
+        <div class="form-group full">
+          <label class="form-label">
+            <span>短剧专用 API Key (DRAMA_API_KEY)</span>
+            <span class="pill pill-gold">留空自动沿用小说 API Key</span>
+          </label>
+          <input type="password" id="adminDramaApiKey" class="form-input" placeholder="留空则自动共享小说 API Key；输入新 Key 则短剧使用独立 API">
+          <div class="form-hint">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> 留空即共享小说 API Key。如需独立计费或使用不同模型提供商，请在此填入独立 Key。
+          </div>
+        </div>
+
+        <!-- 短剧 BASE URL -->
+        <div class="form-group">
+          <label class="form-label">短剧专用 API Base URL (DRAMA_BASE_URL)</label>
+          <input type="text" id="adminDramaBaseUrl" class="form-input" placeholder="留空则自动共享小说 API Base URL">
+          <div class="preset-row">
+            <span class="preset-pill" onclick="setDramaBaseUrl('')">自动共享小说 API</span>
+            <span class="preset-pill" onclick="setDramaBaseUrl('https://api.deepseek.com/v1')">DeepSeek 官方</span>
+            <span class="preset-pill" onclick="setDramaBaseUrl('https://api.openai.com/v1')">OpenAI 官方</span>
+            <span class="preset-pill" onclick="setDramaBaseUrl('https://api.siliconflow.cn/v1')">硅基流动</span>
+            <span class="preset-pill" onclick="setDramaBaseUrl('http://127.0.0.1:11434/v1')">本地 Ollama</span>
+          </div>
+        </div>
+
+        <!-- 短剧 MODEL -->
+        <div class="form-group">
+          <label class="form-label">短剧专用模型名称 (DRAMA_MODEL)</label>
+          <input type="text" id="adminDramaModel" class="form-input" placeholder="留空则自动共享史官/主模型">
+          <div class="preset-row">
+            <span class="preset-pill" onclick="setDramaModel('')">自动共享</span>
+            <span class="preset-pill" onclick="setDramaModel('deepseek-chat')">deepseek-chat</span>
+            <span class="preset-pill" onclick="setDramaModel('gpt-4o')">gpt-4o</span>
+            <span class="preset-pill" onclick="setDramaModel('claude-3-5-sonnet-20241022')">claude-3.5-sonnet</span>
+            <span class="preset-pill" onclick="setDramaModel('qwen-max')">qwen-max</span>
+          </div>
+        </div>
+
         <!-- 修改管理端密码 -->
         <div class="form-group">
           <label class="form-label">修改管理端管理员口令 (ADMIN_KEY)</label>
@@ -765,6 +819,20 @@
           document.getElementById("adminModelName").value = cfg.model_name || "";
           document.getElementById("adminTiandaoModel").value = cfg.tiandao_model || "";
           document.getElementById("adminChroniclerModel").value = cfg.chronicler_model || "";
+
+          // 短剧配置项回显
+          const dramaKeyInput = document.getElementById("adminDramaApiKey");
+          if (dramaKeyInput) {
+            dramaKeyInput.value = "";
+            dramaKeyInput.placeholder = cfg.has_drama_key ? `•••••••• (${cfg.drama_api_key_masked} · 独立配置，留空保持)` : "留空则自动共享小说 API Key";
+          }
+          if (document.getElementById("adminDramaBaseUrl")) {
+            document.getElementById("adminDramaBaseUrl").value = cfg.drama_base_url || "";
+          }
+          if (document.getElementById("adminDramaModel")) {
+            document.getElementById("adminDramaModel").value = cfg.drama_model || "";
+          }
+
           document.getElementById("adminKeyNew").value = "";
           if (document.getElementById("adminHttpPort")) {
             document.getElementById("adminHttpPort").value = cfg.http_port || 8088;
@@ -793,6 +861,11 @@
       const modelName = document.getElementById("adminModelName").value.trim();
       const tiandaoModel = document.getElementById("adminTiandaoModel").value.trim();
       const chroniclerModel = document.getElementById("adminChroniclerModel").value.trim();
+
+      const dramaApiKey = document.getElementById("adminDramaApiKey") ? document.getElementById("adminDramaApiKey").value.trim() : "";
+      const dramaBaseUrl = document.getElementById("adminDramaBaseUrl") ? document.getElementById("adminDramaBaseUrl").value.trim() : "";
+      const dramaModel = document.getElementById("adminDramaModel") ? document.getElementById("adminDramaModel").value.trim() : "";
+
       const adminKeyNew = document.getElementById("adminKeyNew").value.trim();
       const httpPort = document.getElementById("adminHttpPort") ? document.getElementById("adminHttpPort").value.trim() : "8088";
       const wsPort = document.getElementById("adminWsPort") ? document.getElementById("adminWsPort").value.trim() : "8089";
@@ -814,6 +887,9 @@
             model_name: modelName,
             tiandao_model: tiandaoModel,
             chronicler_model: chroniclerModel,
+            drama_api_key: dramaApiKey,
+            drama_base_url: dramaBaseUrl,
+            drama_model: dramaModel,
             admin_key_new: adminKeyNew,
             http_port: httpPort,
             ws_port: wsPort
@@ -986,21 +1062,29 @@
     // ==========================================
     // 接口连通性实测探针 (Ping)
     // ==========================================
-    async function runPingDiagnostic() {
+    async function runPingDiagnostic(target = 'novel') {
       const token = getAdminToken();
-      if (!token) return;
+      if (!token) {
+        alert("请先登录管理员账号！");
+        return;
+      }
 
       const p = document.getElementById("diagnosticPanel");
       p.className = "diagnostic-panel";
       p.style.display = "block";
-      p.innerHTML = "<svg class=\"icon spin\" viewBox=\"0 0 24 24\"><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"6\"/><line x1=\"12\" y1=\"18\" x2=\"12\" y2=\"22\"/><line x1=\"4.93\" y1=\"4.93\" x2=\"7.76\" y2=\"7.76\"/><line x1=\"16.24\" y1=\"16.24\" x2=\"19.07\" y2=\"19.07\"/><line x1=\"2\" y1=\"12\" x2=\"6\" y2=\"12\"/><line x1=\"18\" y1=\"12\" x2=\"22\" y2=\"12\"/><line x1=\"4.93\" y1=\"19.07\" x2=\"7.76\" y2=\"16.24\"/><line x1=\"16.24\" y1=\"7.76\" x2=\"19.07\" y2=\"4.93\"/></svg> 正在向指定大模型 Base URL 发起轻量心跳探针，请稍候...";
+      const targetLabel = target === 'drama' ? '短剧专属模型' : '小说推演主模型';
+      p.innerHTML = `<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 正在向【${targetLabel}】发起轻量心跳探针，评估往返延迟...`;
 
       const apiKey = document.getElementById("adminApiKey").value.trim();
       const baseUrl = document.getElementById("adminBaseUrl").value.trim();
       const modelName = document.getElementById("adminModelName").value.trim();
 
-      const btn = document.getElementById("btnPingDiagnostic");
-      btn.disabled = true;
+      const dramaApiKey = document.getElementById("adminDramaApiKey") ? document.getElementById("adminDramaApiKey").value.trim() : "";
+      const dramaBaseUrl = document.getElementById("adminDramaBaseUrl") ? document.getElementById("adminDramaBaseUrl").value.trim() : "";
+      const dramaModel = document.getElementById("adminDramaModel") ? document.getElementById("adminDramaModel").value.trim() : "";
+
+      const btn = target === 'drama' ? document.getElementById("btnPingDramaDiagnostic") : document.getElementById("btnPingDiagnostic");
+      if (btn) btn.disabled = true;
 
       try {
         const res = await fetch("/api/admin/test_connection", {
@@ -1010,9 +1094,13 @@
             "X-Admin-Token": token
           },
           body: JSON.stringify({
+            target: target,
             api_key: apiKey,
             base_url: baseUrl,
-            model_name: modelName
+            model_name: modelName,
+            drama_api_key: dramaApiKey,
+            drama_base_url: dramaBaseUrl,
+            drama_model: dramaModel
           })
         });
 
@@ -1020,16 +1108,16 @@
         if (data.status === "ok") {
           p.className = "diagnostic-panel success";
           p.innerHTML = `
-            <b><svg class="icon" viewBox="0 0 24 24" style="color:#10b981;"><polyline points="20 6 9 17 4 12"/></svg> 接口连通测试成功！</b><br>
+            <b><svg class="icon" viewBox="0 0 24 24" style="color:#10b981;"><polyline points="20 6 9 17 4 12"/></svg> 【${targetLabel}】接口连通测试成功！</b><br>
             • 测试模型: <code>${data.model}</code><br>
             • 往返延迟: <span style="font-weight: 700;">${data.latency_ms} ms</span><br>
             • 模型回显: <code>${data.reply}</code><br>
-            • 状态结论: API Key 与网关服务正常，可完美支持百章连续推演！
+            • 状态结论: API Key 与网关服务正常，可完美支持业务生成！
           `;
         } else {
           p.className = "diagnostic-panel error";
           p.innerHTML = `
-            <b><svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 接口连通测试失败！</b><br>
+            <b><svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 【${targetLabel}】接口连通测试失败！</b><br>
             • 往返延迟: ${data.latency_ms} ms<br>
             • 错误详情: <code>${data.error}</code><br>
             • 排查建议: 请检查 API Base URL 是否需要加 /v1、API Key 是否有余额或权限、模型名称是否存在拼写错误。
@@ -1039,7 +1127,7 @@
         p.className = "diagnostic-panel error";
         p.innerHTML = `<b><svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> 请求异常:</b> 无法与后端服务通信 (${e.message})`;
       } finally {
-        btn.disabled = false;
+        if (btn) btn.disabled = false;
       }
     }
 
@@ -1048,6 +1136,8 @@
     function setModelName(name) { document.getElementById("adminModelName").value = name; }
     function setTiandaoModel(name) { document.getElementById("adminTiandaoModel").value = name; }
     function setChroniclerModel(name) { document.getElementById("adminChroniclerModel").value = name; }
+    function setDramaBaseUrl(url) { if (document.getElementById("adminDramaBaseUrl")) document.getElementById("adminDramaBaseUrl").value = url; }
+    function setDramaModel(name) { if (document.getElementById("adminDramaModel")) document.getElementById("adminDramaModel").value = name; }
 
     // 系统版本与在线更新逻辑
     async function adminCheckVersion() {

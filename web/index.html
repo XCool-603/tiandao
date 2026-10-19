@@ -2042,7 +2042,10 @@
               <svg class="icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
               AI 爆款微短剧与分镜总台
             </div>
-            <div class="studio-chap-meta">工业级90秒爆款模型 · 黄金抓手(Hook) · 高能反转打脸 · 9:16视频Prompt · 剪映/可灵/即梦一键出海</div>
+            <div class="studio-chap-meta">
+              工业级90秒爆款模型 · 黄金抓手(Hook) · 高能反转打脸 · 9:16视频Prompt · 剪映/可灵/即梦一键出海
+              <span id="dramaModelBadge" class="pill pill-blue" style="font-size: 11px; margin-left: 8px;">短剧模型: 检查中...</span>
+            </div>
           </div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
             <select id="dramaChapterSelect" class="form-select" style="max-width: 160px; font-size: 12px; padding: 5px 8px;" title="选择待改编为短剧的小说章节">
@@ -5066,6 +5069,16 @@
         } else {
           sel.innerHTML = `<option value="">全书开篇设定梗概</option>`;
         }
+      }
+
+      // 刷新短剧模型状态标识
+      const badge = document.getElementById("dramaModelBadge");
+      if (badge && globalState && globalState.config) {
+        const cfg = globalState.config;
+        const dModel = cfg.drama_model || cfg.chronicler_model || cfg.model_name || "deepseek-chat";
+        const isDedicated = Boolean(cfg.has_drama_key || (cfg.drama_base_url && cfg.drama_base_url !== cfg.base_url));
+        badge.className = isDedicated ? "pill pill-gold" : "pill pill-blue";
+        badge.innerHTML = `<svg class="icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> 短剧模型: ${escapeHtml(dModel)} (${isDedicated ? '独立API' : '共享小说API'})`;
       }
 
       fetch(`/api/drama/list?book_id=${encodeURIComponent(bid)}`)

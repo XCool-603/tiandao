@@ -75,6 +75,18 @@ class LLMClient:
 
         return ""
 
+    def call_chat(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        retries: int = 3
+    ) -> str:
+        """兼容接口：支持 messages 首位传参"""
+        target_model = model or "deepseek-chat"
+        return self.chat(model=target_model, messages=messages, temperature=temperature, max_tokens=max_tokens, retries=retries)
+
     def chat_stream(
         self,
         model: str,

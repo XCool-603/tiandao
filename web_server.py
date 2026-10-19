@@ -857,6 +857,9 @@ class SimulationManager:
 
         raw_key = os.getenv("OPENAI_API_KEY", "")
         masked_key = f"{raw_key[:3]}****{raw_key[-4:]}" if (has_real_key and len(raw_key) > 7) else ("••••••••" if has_real_key else "")
+        raw_drama_key = os.getenv("DRAMA_API_KEY", "")
+        has_drama_key = bool(raw_drama_key and raw_drama_key != "your_api_key_here")
+        masked_drama_key = f"{raw_drama_key[:3]}****{raw_drama_key[-4:]}" if (has_drama_key and len(raw_drama_key) > 7) else ("••••••••" if has_drama_key else "")
 
         # 为所有书籍概览附加各自的实时推演状态
         books_summary = book_mgr.list_books_summary()
@@ -889,10 +892,14 @@ class SimulationManager:
             "config": {
                 "has_api_key": has_real_key,
                 "api_key_masked": masked_key,
-                "base_url": os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1"),
-                "model_name": os.getenv("MODEL_NAME", "balanced-model"),
-                "tiandao_model": os.getenv("TIANDAO_MODEL", os.getenv("MODEL_NAME", "balanced-model")),
-                "chronicler_model": os.getenv("CHRONICLER_MODEL", os.getenv("MODEL_NAME", "fast-model"))
+                "base_url": os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1"),
+                "model_name": os.getenv("MODEL_NAME", "deepseek-chat"),
+                "tiandao_model": os.getenv("TIANDAO_MODEL", os.getenv("MODEL_NAME", "deepseek-chat")),
+                "chronicler_model": os.getenv("CHRONICLER_MODEL", os.getenv("MODEL_NAME", "deepseek-chat")),
+                "drama_model": os.getenv("DRAMA_MODEL", ""),
+                "drama_base_url": os.getenv("DRAMA_BASE_URL", ""),
+                "has_drama_key": has_drama_key,
+                "drama_key_masked": masked_drama_key
             }
         }
 
@@ -2400,6 +2407,11 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
             real_key = os.getenv("OPENAI_API_KEY", "")
             masked = f"{real_key[:3]}****{real_key[-4:]}" if len(real_key) > 8 else ("已安全配置" if real_key else "")
+
+            raw_drama_key = os.getenv("DRAMA_API_KEY", "")
+            has_drama_key = bool(raw_drama_key and raw_drama_key != "your_api_key_here")
+            masked_drama_key = f"{raw_drama_key[:3]}****{raw_drama_key[-4:]}" if len(raw_drama_key) > 8 else ("已独立配置" if has_drama_key else "")
+
             cfg = {
                 "has_api_key": bool(real_key and real_key != "your_api_key_here"),
                 "api_key_masked": masked,
@@ -2407,6 +2419,10 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 "model_name": os.getenv("MODEL_NAME", "deepseek-chat"),
                 "tiandao_model": os.getenv("TIANDAO_MODEL", os.getenv("MODEL_NAME", "deepseek-chat")),
                 "chronicler_model": os.getenv("CHRONICLER_MODEL", os.getenv("MODEL_NAME", "deepseek-chat")),
+                "drama_model": os.getenv("DRAMA_MODEL", ""),
+                "drama_base_url": os.getenv("DRAMA_BASE_URL", ""),
+                "has_drama_key": has_drama_key,
+                "drama_api_key_masked": masked_drama_key,
                 "http_port": int(os.getenv("TIANDAO_PORT", "8088")),
                 "ws_port": int(os.getenv("TIANDAO_WS_PORT", "8089"))
             }
@@ -2478,7 +2494,14 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 bid = req_data.get("book_id", "")
                 cid = req_data.get("chapter_id")
                 ep_num = req_data.get("episode_num")
-                use_mock = req_data.get("mock", False) or not os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") == "your_api_key_here"
+
+                # 短剧大模型 API 路由：优先使用短剧专属 API/Base/Model，未配置时无缝继承小说 API
+                drama_api_key = os.getenv("DRAMA_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+                drama_base_url = os.getenv("DRAMA_BASE_URL") or os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
+                drama_model = os.getenv("DRAMA_MODEL") or os.getenv("CHRONICLER_MODEL") or os.getenv("TIANDAO_MODEL") or os.getenv("MODEL_NAME") or "deepseek-chat"
+
+                has_valid_key = bool(drama_api_key and drama_api_key != "your_api_key_here")
+                use_mock = req_data.get("mock", False) or not has_valid_key
 
                 target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
                 
@@ -2502,9 +2525,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 if not ep_num:
                     ep_num = len(getattr(target_book, "dramas", [])) + 1
 
-                llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
-                model_name = os.getenv("CHRONICLER_MODEL") or os.getenv("TIANDAO_MODEL") or os.getenv("DEFAULT_MODEL") or "gemini-2.5-flash"
-                drama_agent = DramaAgent(llm, model_name=model_name)
+                llm = LLMClient(api_key=drama_api_key, base_url=drama_base_url)
+                drama_agent = DramaAgent(llm, model_name=drama_model)
 
                 drama_data = drama_agent.generate_from_chapter(
                     book_title=target_book.title,
@@ -2974,11 +2996,19 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({"status": "error", "error": "权限不足：请先验证管理员身份"}, ensure_ascii=False).encode("utf-8"))
                     return
 
-                test_key = req_data.get("api_key", "").strip()
-                if not test_key or test_key.startswith("•") or "****" in test_key:
-                    test_key = os.getenv("OPENAI_API_KEY", "")
-                test_base = req_data.get("base_url", "").strip() or os.getenv("OPENAI_BASE_URL", "http://dxcool.cn:7863/v1")
-                test_model = req_data.get("model_name", "").strip() or os.getenv("MODEL_NAME", "balanced-model")
+                target = req_data.get("target", "novel")
+                if target == "drama":
+                    test_key = req_data.get("drama_api_key", "").strip()
+                    if not test_key or test_key.startswith("•") or "****" in test_key:
+                        test_key = os.getenv("DRAMA_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
+                    test_base = req_data.get("drama_base_url", "").strip() or os.getenv("DRAMA_BASE_URL", "") or req_data.get("base_url", "").strip() or os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
+                    test_model = req_data.get("drama_model", "").strip() or os.getenv("DRAMA_MODEL", "") or os.getenv("CHRONICLER_MODEL", "") or os.getenv("MODEL_NAME", "deepseek-chat")
+                else:
+                    test_key = req_data.get("api_key", "").strip()
+                    if not test_key or test_key.startswith("•") or "****" in test_key:
+                        test_key = os.getenv("OPENAI_API_KEY", "")
+                    test_base = req_data.get("base_url", "").strip() or os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
+                    test_model = req_data.get("model_name", "").strip() or os.getenv("MODEL_NAME", "deepseek-chat")
 
                 t_start = time.time()
                 try:
@@ -2999,7 +3029,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                         "status": "ok",
                         "latency_ms": latency,
                         "model": test_model,
-                        "reply": reply.strip()
+                        "reply": reply.strip(),
+                        "target": target
                     }, ensure_ascii=False).encode("utf-8"))
                 except Exception as e_test:
                     latency = round((time.time() - t_start) * 1000)
@@ -3009,7 +3040,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({
                         "status": "error",
                         "latency_ms": latency,
-                        "error": str(e_test)
+                        "error": str(e_test),
+                        "target": target
                     }, ensure_ascii=False).encode("utf-8"))
                 return
 
@@ -3034,6 +3066,19 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 new_model = req_data.get("model_name", "").strip() or os.getenv("MODEL_NAME", "deepseek-chat")
                 new_td = req_data.get("tiandao_model", "").strip() or os.getenv("TIANDAO_MODEL", new_model)
                 new_chr = req_data.get("chronicler_model", "").strip() or os.getenv("CHRONICLER_MODEL", new_model)
+
+                # 短剧配置读取与解析
+                input_drama_key = req_data.get("drama_api_key", "").strip()
+                if input_drama_key and not input_drama_key.startswith("•") and not "****" in input_drama_key:
+                    new_drama_key = input_drama_key
+                elif "drama_api_key" in req_data and input_drama_key == "":
+                    new_drama_key = ""
+                else:
+                    new_drama_key = os.getenv("DRAMA_API_KEY", "")
+
+                new_drama_base = req_data.get("drama_base_url", "").strip() if req_data.get("drama_base_url") is not None else os.getenv("DRAMA_BASE_URL", "")
+                new_drama_model = req_data.get("drama_model", "").strip() if req_data.get("drama_model") is not None else os.getenv("DRAMA_MODEL", "")
+
                 new_admin_pwd = req_data.get("admin_key_new", "").strip() or os.getenv("ADMIN_KEY", "admin888")
                 new_port = req_data.get("http_port", os.getenv("TIANDAO_PORT", "8088"))
                 new_ws = req_data.get("ws_port", os.getenv("TIANDAO_WS_PORT", "8089"))
@@ -3046,6 +3091,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     "model_name": new_model,
                     "tiandao_model": new_td,
                     "chronicler_model": new_chr,
+                    "drama_model": new_drama_model,
+                    "drama_api_key": new_drama_key,
+                    "drama_base_url": new_drama_base,
                     "admin_key": new_admin_pwd,
                     "http_port": str(new_port),
                     "ws_port": str(new_ws)
