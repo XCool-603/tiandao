@@ -2777,6 +2777,16 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
                 return
 
+            if path == "/api/fanqie/save_cookie":
+                raw_cookie = req_data.get("cookie", "")
+                author_name = req_data.get("author_name", "")
+                res = fanqie_uploader.save_cookie_auth(raw_cookie, author_name)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
             if path == "/api/fanqie/config":
                 cfg = fanqie_uploader.load_fanqie_config()
                 for k in ("auto_upload", "publish_mode", "ai_disclosure", "author_name"):

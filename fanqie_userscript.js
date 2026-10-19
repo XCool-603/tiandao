@@ -16,7 +16,7 @@
 (function() {
     'use strict';
 
-    const API_BASE = "http://localhost:8088";
+    let API_BASE = localStorage.getItem('tiandao_api_base') || "http://localhost:28088";
     let isRunning = true;
     let pollTimer = null;
     let isUploading = false;
@@ -46,7 +46,7 @@
         div.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                 <div style="font-weight: 700; color: #60a5fa; display: flex; align-items: center; gap: 6px;">
-                    <span>🍅 天道 · 自动挂机发书</span>
+                    <span>【天道】自动挂机发书</span>
                     <span id="tiandao-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981;"></span>
                 </div>
                 <button id="tiandao-btn-toggle" style="background:#2563eb; color:#fff; border:none; padding:3px 10px; border-radius:6px; cursor:pointer; font-size:11px;">运行中</button>
@@ -128,8 +128,20 @@
                 }
             }
         } catch (err) {
+            // 自动在 28088 与 8088 端口之间智能回退尝试
+            if (API_BASE.includes("28088")) {
+                try {
+                    const fb = await httpRequest(`http://localhost:8088/api/fanqie/pending_chapter`);
+                    if (fb && fb.status === 'ok') {
+                        API_BASE = "http://localhost:8088";
+                        localStorage.setItem('tiandao_api_base', API_BASE);
+                        document.getElementById('tiandao-status-dot').style.background = '#10b981';
+                        return;
+                    }
+                } catch(e2){}
+            }
             document.getElementById('tiandao-status-dot').style.background = '#ef4444';
-            updateLog('未连接到天道本地服务 (http://localhost:8088)');
+            updateLog(`未连接到天道服务 (${API_BASE})，请确认天道已启动`);
         }
     }
 

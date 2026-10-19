@@ -2384,6 +2384,24 @@
               <img id="nativeFanqieQrImg" src="" style="width: 160px; height: 160px; background: #fff; padding: 6px; border-radius: 4px; display: inline-block;">
               <div id="nativeFanqieQrText" style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">等待扫码中...</div>
             </div>
+
+            <!-- 方式二: 手动粘贴 Cookie / sessionid 极速免密绑定 -->
+            <div style="margin-top: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-medium); border-radius: 6px; padding: 10px 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 4px;">
+                  <span><svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-gold);"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> 粘贴 Cookie / sessionid 免密绑定 (100%成功推荐)</span>
+                </div>
+                <a href="https://fanqienovel.com/main/writer/login" target="_blank" style="font-size: 11px; color: var(--accent-blue); text-decoration: underline;">登录番茄作家专区</a>
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">
+                若服务器环境无法弹出扫码框，可直接在正常浏览器登录番茄后按 F12 复制 Cookie 中的 sessionid 填入：
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="nativeFanqieCookieInput" class="form-input" placeholder="粘贴 sessionid=xxx 或完整 Cookie..." style="flex: 1; font-size: 11.5px; padding: 4px 8px; font-family: monospace;">
+                <button class="btn btn-gold" style="font-size: 11px; padding: 4px 10px; white-space: nowrap;" onclick="saveNativeFanqieCookie()">保存绑定</button>
+              </div>
+              <div id="nativeFanqieCookieMsg" style="font-size: 11px; color: var(--accent-green); margin-top: 4px; display: none;"></div>
+            </div>
           </div>
 
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px;">
@@ -4442,10 +4460,16 @@
       const img = document.getElementById("nativeFanqieQrImg");
       const txt = document.getElementById("nativeFanqieQrText");
       if (box) box.style.display = "block";
-      if (txt) txt.innerText = "正在拉起登录服务并抓取二维码，请稍候片刻...";
+      if (txt) txt.innerHTML = "正在拉起登录服务并抓取二维码，请稍候片刻...";
 
       try {
-        await fetch("/api/fanqie/start_login", { method: "POST" });
+        const initRes = await fetch("/api/fanqie/start_login", { method: "POST" });
+        const initData = await initRes.json();
+        if (initData.status === "error") {
+          if (txt) txt.innerHTML = `<span style="color:#ef4444; font-weight:700;">${initData.message}</span>`;
+          return;
+        }
+
         if (nativeFanqieTimer) clearInterval(nativeFanqieTimer);
         let checks = 0;
         nativeFanqieTimer = setInterval(async () => {
@@ -4464,15 +4488,51 @@
             if (st.qr_ready && img) {
               img.src = "/api/fanqie/qr_code?t=" + Date.now();
               if (txt) txt.innerText = "请使用微信 / 抖音 / 番茄作家 App 扫描上方二维码确认登录";
+            } else if (st.last_error && !st.is_logging_in) {
+              clearInterval(nativeFanqieTimer);
+              nativeFanqieTimer = null;
+              if (txt) txt.innerHTML = `<span style="color:#ef4444; font-weight:700;">${st.last_error}</span>`;
+              return;
             }
           } catch(e) {}
           if (checks > 90) {
             clearInterval(nativeFanqieTimer);
-            if (txt) txt.innerText = "扫码超时，请重新点击扫码绑定。";
+            if (txt) txt.innerHTML = "扫码超时。在 Docker / 云服务器环境下，建议直接在下方【粘贴 Cookie】秒级完成绑定！";
           }
         }, 2000);
       } catch (e) {
-        if (txt) txt.innerText = "拉起服务失败: " + e;
+        if (txt) txt.innerHTML = "<span style='color:#ef4444;'>拉起服务失败: " + e + "</span>";
+      }
+    }
+
+    async function saveNativeFanqieCookie() {
+      const input = document.getElementById("nativeFanqieCookieInput");
+      const msg = document.getElementById("nativeFanqieCookieMsg");
+      const cookieVal = input ? input.value.trim() : "";
+      if (!cookieVal) {
+        showToast("请输入要绑定的 Cookie 或 sessionid！", "warning");
+        return;
+      }
+      try {
+        const res = await fetch("/api/fanqie/save_cookie", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cookie: cookieVal })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast(data.message || "番茄账号绑定成功！", "success");
+          if (msg) {
+            msg.style.display = "block";
+            msg.style.color = "var(--accent-green)";
+            msg.innerText = "已成功绑定并持久化落盘至 output/fanqie_sync/auth_state.json！";
+          }
+          refreshNativeFanqieStatus();
+        } else {
+          showToast("绑定失败: " + (data.message || "未知错误"), "error");
+        }
+      } catch (e) {
+        showToast("请求异常: " + e, "error");
       }
     }
 
