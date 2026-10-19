@@ -2,7 +2,7 @@
 chcp 65001 >nul
 title 天道 - Docker 一键启动
 echo ========================================================
-echo   🌌 【天道】修仙小说多智能体创作引擎 - Docker 一键部署
+echo   【天道】修仙小说多智能体创作引擎 - Docker 一键部署
 echo ========================================================
 echo.
 
@@ -21,16 +21,16 @@ docker compose up -d --build
 if %ERRORLEVEL% equ 0 (
     echo.
     echo ========================================================
-    echo   ✅ 天道容器已成功在后台启动！
-    echo   🌐 网页控制台: http://localhost:8088
-    echo   ⚡ WebSocket: ws://localhost:8089/ws/simulate
-    echo   📜 查看实时日志: docker compose logs -f
-    echo   ⏹ 停止容器: docker compose down
+    echo   [成功] 天道容器已成功在后台启动！
+    echo   网页控制台: http://localhost:28088
+    echo   WebSocket: ws://localhost:28089/ws/simulate
+    echo   查看实时日志: docker compose logs -f
+    echo   停止容器: docker compose down
     echo ========================================================
     echo.
 ) else (
     echo.
-    echo ❌ Docker 启动失败，请检查 Docker Desktop 是否已开启。
+    echo [错误] Docker 启动失败，请检查 Docker Desktop 是否已开启。
     echo.
 )
 pause

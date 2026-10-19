@@ -7,16 +7,16 @@ services:
     container_name: tiandao
     restart: unless-stopped
     ports:
-      - "${TIANDAO_PORT:-8088}:8088"        # Web 控制台与 RESTful API (可自定义宿主机端口)
-      - "${TIANDAO_WS_PORT:-8089}:8089"     # WebSocket 流式推演信道 (可自定义宿主机端口)
+      - "${TIANDAO_HOST_PORT:-28088}:8088"        # Web 控制台与 RESTful API (宿主机端口 28088 -> 容器 8088)
+      - "${TIANDAO_HOST_WS_PORT:-28089}:8089"     # WebSocket 流式推演信道 (宿主机端口 28089 -> 容器 8089)
     env_file:
       - path: output/.env
         required: false
       - path: .env
         required: false
     environment:
-      - TIANDAO_PORT=${TIANDAO_PORT:-8088}
-      - TIANDAO_WS_PORT=${TIANDAO_WS_PORT:-8089}
+      - TIANDAO_PORT=8088
+      - TIANDAO_WS_PORT=8089
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.deepseek.com/v1}
       - MODEL_NAME=${MODEL_NAME:-deepseek-chat}

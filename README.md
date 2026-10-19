@@ -98,12 +98,12 @@ docker compose up -d --build
 # 构建镜像
 docker build -t tiandao:latest .
 
-# 启动容器（映射 8088 与 8089 端口，并挂载本地正文输出目录）
+# 启动容器（映射宿主机 28088 与 28089 端口，并挂载本地正文输出目录）
 docker run -d \
   --name tiandao \
   --restart unless-stopped \
-  -p 8088:8088 \
-  -p 8089:8089 \
+  -p 28088:8088 \
+  -p 28089:8089 \
   -v $(pwd)/output:/app/output \
   --env-file .env \
   tiandao:latest
@@ -112,8 +112,8 @@ docker run -d \
 ### 3. 端口与持久化说明
 | 宿主机端口 | 容器内端口 | 说明 |
 | :--- | :--- | :--- |
-| **`8088`** | `8088` | **Web 创作者 Studio 控制台** 及 RESTful API（浏览器打开 `http://<IP>:8088`） |
-| **`8089`** | `8089` | **WebSocket 全双工推演通道**（拟真打字机流式输出专属信道） |
+| **`28088`** | `8088` | **Web 创作者 Studio 控制台** 及 RESTful API（浏览器打开 `http://<IP>:28088`） |
+| **`28089`** | `8089` | **WebSocket 全双工推演通道**（拟真打字机流式输出专属信道） |
 
 * **数据持久化**：挂载的 `./output:/app/output` 会实时持久化已生成的全书长篇小说章节（`novel_chapter_xx.md`）、分卷细纲总账与世界历史，容器销毁重建数据永不丢失。
 * **容器常用命令**：
