@@ -22,6 +22,9 @@ services:
       - MODEL_NAME=${MODEL_NAME:-deepseek-chat}
       - TIANDAO_MODEL=${TIANDAO_MODEL:-}
       - CHRONICLER_MODEL=${CHRONICLER_MODEL:-}
+      - DRAMA_MODEL=${DRAMA_MODEL:-}
+      - DRAMA_API_KEY=${DRAMA_API_KEY:-}
+      - DRAMA_BASE_URL=${DRAMA_BASE_URL:-}
       - ADMIN_KEY=${ADMIN_KEY:-admin888}
       - TZ=Asia/Shanghai
     volumes:

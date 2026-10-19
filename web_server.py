@@ -1429,12 +1429,12 @@ class SimulationManager:
             pass
         return {"status": "ok", "content": novel_text, "chapter": chap_num}
 
-    def stream_simulate(self, mode="single", force_mock=False, divine_decree="", book_id=None, custom_count=None, auto_fanqie=None):
+    def stream_simulate(self, mode="single", force_mock=False, divine_decree="", book_id=None, custom_count=None, auto_fanqie=None, target_book=None):
         """
         流式全自动演化成书 (支持 1 章、10 章、以及一本书，可自定义规模 30/50/100 章，支持自动上传番茄)
         实时 yield 事件字典以供 SSE 流式推送
         """
-        target_book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
+        target_book = target_book or (book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book)
         if not target_book or not target_book.id:
             yield {"type": "error", "message": "当前书库为空，请先点击顶部【➕ 新建作品】开辟一部小说！"}
             return
@@ -2043,11 +2043,53 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/chapter":
             parsed_qs = urllib.parse.parse_qs(parsed.query)
-            cid = int(parsed_qs.get("id", ["1"])[0])
+            raw_id = parsed_qs.get("id", ["1"])[0]
+            try:
+                cid = int(raw_id)
+            except Exception:
+                cid = 1
             bid = parsed_qs.get("book_id", [None])[0]
             target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
-            chaps = target_book.chapters
-            target = next((c for c in chaps if c["id"] == cid), None)
+            chaps = target_book.chapters or []
+            target = next((c for c in chaps if str(c.get("id")) == str(cid)), None)
+
+            # 若内存中无此章或正文为空，深度从 output/novel_chapter_*.md 智能寻回并无缝热装配
+            if not target or not target.get("content"):
+                candidates = [
+                    OUTPUT_DIR / f"novel_chapter_{cid:02d}.md",
+                    OUTPUT_DIR / f"novel_chapter_{cid}.md"
+                ]
+                for cand in candidates:
+                    if cand.exists():
+                        try:
+                            disk_txt = cand.read_text(encoding="utf-8", errors="ignore")
+                            if disk_txt:
+                                lines = [l.strip() for l in disk_txt.split("\n") if l.strip()]
+                                disk_title = lines[0].replace("#", "").strip() if lines else f"第{cid}章"
+                                if not disk_title.startswith("第") and not "章" in disk_title:
+                                    disk_title = f"第{cid}章 {disk_title}"
+                                target = {
+                                    "id": cid,
+                                    "title": disk_title,
+                                    "word_count": len(disk_txt),
+                                    "content": disk_txt
+                                }
+                                # 回填进 target_book 内存
+                                found = False
+                                for c in target_book.chapters:
+                                    if str(c.get("id")) == str(cid):
+                                        c["content"] = disk_txt
+                                        c["word_count"] = len(disk_txt)
+                                        found = True
+                                        break
+                                if not found:
+                                    target_book.chapters.append(target)
+                                    target_book.chapters.sort(key=lambda x: int(x.get("id", 0)))
+                                target_book.save()
+                                break
+                        except Exception:
+                            pass
+
             if not target and chaps:
                 target = chaps[0]
             self.send_response(200)

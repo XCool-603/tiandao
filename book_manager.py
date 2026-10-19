@@ -195,9 +195,50 @@ class BookManager:
                 print(f"[天道自愈纠偏] 成功修正现代都市书籍《{book.title}》的题材与人物设定！")
 
     def _self_heal_book_chapters(self, book: Book):
-        """自动排查并修复因多 AI 并发写入导致的章节重复、乱序或断号"""
-        if not book or not book.chapters:
+        """自动排查并修复因多 AI 并发写入导致的章节重复、乱序或断号，并自动对齐 output/ 目录已有物理章节"""
+        if not book:
             return
+
+        # 1. 物理章节对齐：若 output/ 存在历史落盘的章节文件且本书章节缺失，自动平滑找回并补齐，防止小说数据丢失
+        try:
+            import re
+            output_dir = Path(__file__).parent / "output"
+            if output_dir.exists():
+                disk_files = [f for f in os.listdir(output_dir) if re.match(r"novel_chapter_\d+\.md", f)]
+                if disk_files and (not book.chapters or len(disk_files) > len(book.chapters)):
+                    disk_files.sort(key=lambda x: int(re.search(r"\d+", x).group()))
+                    existing_map = {c.get("id"): c for c in (book.chapters or []) if c.get("id")}
+                    for f in disk_files:
+                        cid = int(re.search(r"\d+", f).group())
+                        if cid not in existing_map or not existing_map[cid].get("content"):
+                            try:
+                                txt = (output_dir / f).read_text(encoding="utf-8", errors="ignore")
+                                if txt:
+                                    lines = [l.strip() for l in txt.split("\n") if l.strip()]
+                                    title = lines[0].replace("#", "").strip() if lines else f"第{cid}章"
+                                    if not title.startswith("第") and not "章" in title:
+                                        title = f"第{cid}章 {title}"
+                                    if cid in existing_map:
+                                        existing_map[cid]["content"] = txt
+                                        existing_map[cid]["word_count"] = len(txt)
+                                    else:
+                                        existing_map[cid] = {
+                                            "id": cid,
+                                            "title": title,
+                                            "word_count": len(txt),
+                                            "content": txt
+                                        }
+                            except Exception:
+                                pass
+                    book.chapters = [existing_map[k] for k in sorted(existing_map.keys())]
+                    book.current_round = len(book.chapters)
+                    book.save()
+        except Exception as e_scan:
+            print(f"[章节文件对齐告警] {e_scan}")
+
+        if not book.chapters:
+            return
+
         orig_count = len(book.chapters)
         # 去重并升序排序
         seen_ids = set()

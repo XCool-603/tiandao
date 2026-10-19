@@ -3028,7 +3028,26 @@
               target.word_count = res.word_count || res.content.length;
               formatAndRenderText(res.content);
               metaEl.innerText = `${target.word_count.toLocaleString()} 字 · 约 ${Math.max(1, Math.round(target.word_count / 400))} 分钟阅读`;
+            } else {
+              box.innerHTML = `
+                <div style="padding: 60px 20px; text-align: center; color: var(--text-secondary); max-width: 480px; margin: 0 auto;">
+                  <div style="font-size: 32px; margin-bottom: 12px; color: var(--accent-gold);">${ICONS.fileText}</div>
+                  <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">第 ${target.id} 章暂无正文</div>
+                  <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                    该章节尚未推演著书或正文已被清空。请点击下方控制台【单步演化】或【连续推演】，由天道史官为您自动著书成卷！
+                  </div>
+                </div>
+              `;
             }
+          })
+          .catch(err => {
+            box.innerHTML = `
+              <div style="padding: 40px 20px; text-align: center; color: var(--accent-red);">
+                <div style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">调阅章节失败</div>
+                <div style="font-size: 12px; color: var(--text-muted);">${escapeHtml(err.message)}</div>
+                <button class="btn btn-secondary" style="margin-top: 12px; font-size: 12px;" onclick="selectChapter('${target.id}')">重试调阅</button>
+              </div>
+            `;
           });
       }
     }
