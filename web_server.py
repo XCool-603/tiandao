@@ -2546,12 +2546,21 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 use_mock = req_data.get("mock", False) or not has_valid_key
 
                 target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
-                
+                if not target_book:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "error",
+                        "message": "书库为空或作品不存在，请先在右上角新建作品！"
+                    }, ensure_ascii=False).encode("utf-8"))
+                    return
+
                 target_chap = None
                 if target_book.chapters:
-                    if cid is not None:
+                    if cid is not None and str(cid).strip():
                         for c in target_book.chapters:
-                            if str(c.get("id")) == str(cid):
+                            if str(c.get("id")) == str(cid).strip():
                                 target_chap = c
                                 break
                     if not target_chap:
@@ -2559,13 +2568,15 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
                 if not target_chap:
                     chap_title = "末世惊变·第一幕"
-                    chap_content = f"{target_book.title}。{target_book.synopsis}。世界背景：{target_book.world.scene_description}"
+                    chap_content = f"{target_book.title}。{target_book.synopsis}。世界背景：{getattr(target_book.world, 'scene_description', '')}"
                 else:
                     chap_title = target_chap.get("title", "未命名章节")
                     chap_content = target_chap.get("content", "")
 
                 if not ep_num:
                     ep_num = len(getattr(target_book, "dramas", [])) + 1
+
+                print(f"[短剧引擎] 开始编导短剧分镜: 《{target_book.title}》 第 {ep_num} 集 (源章节: {chap_title}, mock={use_mock}, model={drama_model})")
 
                 llm = LLMClient(api_key=drama_api_key, base_url=drama_base_url)
                 drama_agent = DramaAgent(llm, model_name=drama_model)

@@ -2051,10 +2051,10 @@
             <select id="dramaChapterSelect" class="form-select" style="max-width: 160px; font-size: 12px; padding: 5px 8px;" title="选择待改编为短剧的小说章节">
               <!-- 动态填充章节选项 -->
             </select>
-            <button class="btn btn-primary" id="btnGenerateDrama" onclick="triggerDramaGeneration(false)">
+            <button class="btn btn-primary btn-drama-trigger" id="btnGenerateDrama" onclick="triggerDramaGeneration(false, this)">
               <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> AI 一键生成短剧分镜</span>
             </button>
-            <button class="btn btn-secondary" onclick="triggerDramaGeneration(true)" title="无需消耗 API Key，极速构建高能短剧分镜">
+            <button class="btn btn-secondary btn-drama-trigger" onclick="triggerDramaGeneration(true, this)" title="无需消耗 API Key，极速构建高能短剧分镜">
               <span><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg> 模拟免Key体验</span>
             </button>
             <div style="position: relative; display: inline-block;">
@@ -5153,10 +5153,10 @@
               自动萃取小说核心打脸高潮与生死悬念，生成精准分镜、运镜参数、对白台词，以及直接适配可灵 (Kling AI) / 即梦 (Jimeng) 的 9:16 专业生视频 Prompt！
             </div>
             <div style="display: flex; justify-content: center; gap: 10px;">
-              <button class="btn btn-primary" onclick="triggerDramaGeneration(false)">
+              <button class="btn btn-primary btn-drama-trigger" onclick="triggerDramaGeneration(false, this)">
                 <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> AI 一键生成第 1 集短剧</span>
               </button>
-              <button class="btn btn-secondary" onclick="triggerDramaGeneration(true)">
+              <button class="btn btn-secondary btn-drama-trigger" onclick="triggerDramaGeneration(true, this)">
                 <span><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg> 模拟免Key体验</span>
               </button>
             </div>
@@ -5288,20 +5288,51 @@
       container.innerHTML = html;
     }
 
-    async function triggerDramaGeneration(isMock = false) {
+    async function triggerDramaGeneration(isMock = false, callerBtn = null) {
       const bid = globalState ? globalState.book_id : "";
       if (!bid) {
         alert("书库为空，请先在右上角【新建作品】开辟小说！");
         return;
       }
 
+      if (!callerBtn && window.event && window.event.currentTarget) {
+        callerBtn = window.event.currentTarget;
+      }
+
       const sel = document.getElementById("dramaChapterSelect");
       const cid = sel ? sel.value : "";
-      const btn = document.getElementById("btnGenerateDrama");
-      const origHtml = btn.innerHTML;
+      const topBtn = document.getElementById("btnGenerateDrama");
+      const allTriggers = document.querySelectorAll("#btnGenerateDrama, .btn-drama-trigger");
 
-      btn.disabled = true;
-      btn.innerHTML = `<span>${ICONS.loader} AI 正在编导分镜...</span>`;
+      // 禁用所有生成触发按钮防止重复高频并发
+      allTriggers.forEach(b => {
+        b.disabled = true;
+        if (!b.dataset.origHtml) b.dataset.origHtml = b.innerHTML;
+      });
+
+      if (callerBtn) {
+        callerBtn.innerHTML = `<span>${ICONS.loader} AI 正在编导...</span>`;
+      }
+      if (topBtn && topBtn !== callerBtn) {
+        topBtn.innerHTML = `<span>${ICONS.loader} AI 正在编导分镜...</span>`;
+      }
+
+      showToast(isMock ? "模拟免Key模式已启动，正在极速构建分镜表..." : "AI 导演已启动，正在推演生成竖屏微短剧分镜表...", 8000);
+
+      // 若当前尚未生成任何短剧，在主视窗渲染高科技加载动画卡片
+      const container = document.getElementById("dramaMainContainer");
+      if (container && (!currentDramas || currentDramas.length === 0)) {
+        container.innerHTML = `
+          <div class="studio-card" style="text-align: center; padding: 60px 24px;">
+            <div style="font-size: 36px; color: var(--accent-blue); margin-bottom: 16px;">${ICONS.loader}</div>
+            <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px;">AI 爆款短剧导演正在深度编导第 1 集分镜...</div>
+            <div style="font-size: 13px; color: var(--text-secondary); max-width: 520px; margin: 0 auto; line-height: 1.6;">
+              正在拆解小说章节打脸高潮与生死反转，设计 90 秒黄金卡点、镜头景别、现场音效对白，以及直接适配可灵/即梦的 9:16 专业生视频 Prompt。<br>
+              <span style="color: var(--accent-gold); font-size: 12px; margin-top: 8px; display: inline-block;">${isMock ? '模拟数据快速加载中...' : '大模型推演中（预计耗时 15~35 秒），请耐心等待...'}</span>
+            </div>
+          </div>
+        `;
+      }
 
       try {
         const res = await fetch("/api/drama/generate", {
@@ -5321,13 +5352,23 @@
           renderSelectedDramaEpisode(currentDramaEpisode);
           showToast(`已成功生成第 ${data.drama.episode_num} 集短剧分镜表！`);
         } else {
-          alert("生成短剧分镜失败: " + (data.message || data.error || "大模型连接超时"));
+          alert("生成短剧分镜提示: " + (data.message || data.error || "大模型连接超时，请重试"));
+          if (!currentDramas || currentDramas.length === 0) {
+            renderSelectedDramaEpisode(1);
+          }
         }
       } catch (err) {
         alert("请求异常: " + err.message);
+        if (!currentDramas || currentDramas.length === 0) {
+          renderSelectedDramaEpisode(1);
+        }
       } finally {
-        btn.disabled = false;
-        btn.innerHTML = origHtml;
+        allTriggers.forEach(b => {
+          b.disabled = false;
+          if (b.dataset.origHtml) {
+            b.innerHTML = b.dataset.origHtml;
+          }
+        });
       }
     }
 

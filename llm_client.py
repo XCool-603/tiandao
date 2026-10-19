@@ -101,6 +101,9 @@ class LLMClient:
                     if ("no_account" in err_content or e.code == 503) and m_curr != models_to_try[-1]:
                         print(f"[LLMClient 智能路由] 模型 {m_curr} 渠道繁忙无账号，自动切换候选模型 {models_to_try[-1]}...")
                         break
+                    if e.code in (401, 403):
+                        # 401/403 为明确密钥鉴权失败，直接抛出，无需盲目重试浪费等待时间
+                        raise last_error
                     if attempt == retries - 1 and m_curr == models_to_try[-1]:
                         raise last_error
                     backoff = (attempt + 1) * 3.0 if e.code in (429, 502, 503, 504) else (attempt + 1) * 2.0
