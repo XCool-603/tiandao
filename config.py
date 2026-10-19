@@ -76,6 +76,9 @@ def load_dotenv(override=True):
                     "drama_model": "DRAMA_MODEL",
                     "drama_api_key": "DRAMA_API_KEY",
                     "drama_base_url": "DRAMA_BASE_URL",
+                    "video_model": "VIDEO_MODEL",
+                    "video_api_key": "VIDEO_API_KEY",
+                    "video_base_url": "VIDEO_BASE_URL",
                     "admin_key": "ADMIN_KEY",
                     "admin_password": "ADMIN_KEY",
                     "max_rounds": "MAX_ROUNDS",
@@ -138,6 +141,9 @@ def save_persistent_config(data: dict) -> dict:
         f"DRAMA_MODEL={current.get('drama_model', os.getenv('DRAMA_MODEL', ''))}",
         f"DRAMA_API_KEY={current.get('drama_api_key', os.getenv('DRAMA_API_KEY', ''))}",
         f"DRAMA_BASE_URL={current.get('drama_base_url', os.getenv('DRAMA_BASE_URL', ''))}",
+        f"VIDEO_MODEL={current.get('video_model', os.getenv('VIDEO_MODEL', 'cogvideox-flash'))}",
+        f"VIDEO_API_KEY={current.get('video_api_key', os.getenv('VIDEO_API_KEY', ''))}",
+        f"VIDEO_BASE_URL={current.get('video_base_url', os.getenv('VIDEO_BASE_URL', 'https://open.bigmodel.cn/api/paas/v4'))}",
         f"ADMIN_KEY={current.get('admin_key', current.get('admin_password', os.getenv('ADMIN_KEY', 'admin888')))}",
         f"MAX_ROUNDS={current.get('max_rounds', os.getenv('MAX_ROUNDS', '6'))}",
         f"TZ=Asia/Shanghai",
@@ -159,7 +165,7 @@ def save_persistent_config(data: dict) -> dict:
     return current
 
 def refresh_globals():
-    global API_KEY, BASE_URL, DEFAULT_MODEL, TIANDAO_MODEL, CHRONICLER_MODEL, DRAMA_MODEL, DRAMA_API_KEY, DRAMA_BASE_URL, MAX_ROUNDS, AUTO_GENERATE_NOVEL
+    global API_KEY, BASE_URL, DEFAULT_MODEL, TIANDAO_MODEL, CHRONICLER_MODEL, DRAMA_MODEL, DRAMA_API_KEY, DRAMA_BASE_URL, VIDEO_MODEL, VIDEO_API_KEY, VIDEO_BASE_URL, MAX_ROUNDS, AUTO_GENERATE_NOVEL
     API_KEY = os.getenv("OPENAI_API_KEY", "")
     BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
     DEFAULT_MODEL = os.getenv("MODEL_NAME", "deepseek-chat")
@@ -168,6 +174,9 @@ def refresh_globals():
     DRAMA_MODEL = os.getenv("DRAMA_MODEL", "")
     DRAMA_API_KEY = os.getenv("DRAMA_API_KEY", "")
     DRAMA_BASE_URL = os.getenv("DRAMA_BASE_URL", "")
+    VIDEO_MODEL = os.getenv("VIDEO_MODEL", "cogvideox-flash")
+    VIDEO_API_KEY = os.getenv("VIDEO_API_KEY", "")
+    VIDEO_BASE_URL = os.getenv("VIDEO_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
     MAX_ROUNDS = int(os.getenv("MAX_ROUNDS", "6"))
     AUTO_GENERATE_NOVEL = os.getenv("AUTO_GENERATE_NOVEL", "true").lower() in ("true", "1", "yes")
 

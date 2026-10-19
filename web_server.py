@@ -30,6 +30,7 @@ from agents.tiandao import TiandaoAgent
 from agents.character import CharacterAgent
 from agents.chronicler import ChroniclerAgent
 from agents.drama_agent import DramaAgent
+from agents.video_agent import VideoAgent
 from mock_engine import run_mock_demo
 from book_manager import book_mgr, Book
 
@@ -2454,6 +2455,10 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             has_drama_key = bool(raw_drama_key and raw_drama_key != "your_api_key_here")
             masked_drama_key = f"{raw_drama_key[:3]}****{raw_drama_key[-4:]}" if len(raw_drama_key) > 8 else ("已独立配置" if has_drama_key else "")
 
+            raw_video_key = os.getenv("VIDEO_API_KEY", "")
+            has_video_key = bool(raw_video_key and raw_video_key != "your_api_key_here")
+            masked_video_key = f"{raw_video_key[:3]}****{raw_video_key[-4:]}" if len(raw_video_key) > 8 else ("已独立配置" if has_video_key else "")
+
             cfg = {
                 "has_api_key": bool(real_key and real_key != "your_api_key_here"),
                 "api_key_masked": masked,
@@ -2465,6 +2470,10 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 "drama_base_url": os.getenv("DRAMA_BASE_URL", ""),
                 "has_drama_key": has_drama_key,
                 "drama_api_key_masked": masked_drama_key,
+                "video_model": os.getenv("VIDEO_MODEL", "cogvideox-flash"),
+                "video_base_url": os.getenv("VIDEO_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
+                "has_video_key": has_video_key,
+                "video_api_key_masked": masked_video_key,
                 "http_port": int(os.getenv("TIANDAO_PORT", "8088")),
                 "ws_port": int(os.getenv("TIANDAO_WS_PORT", "8089"))
             }
@@ -2648,6 +2657,168 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok", "message": "短剧分镜已保存"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/shot/generate_video":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                ep_num = req_data.get("episode_num")
+                shot_num = req_data.get("shot_num")
+                use_mock = req_data.get("mock", False)
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if not target_book:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": "作品不存在"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                target_drama = None
+                for d in getattr(target_book, "dramas", []):
+                    if d.get("episode_num") == ep_num:
+                        target_drama = d
+                        break
+
+                if not target_drama:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": f"未找到第 {ep_num} 集短剧数据"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                target_shot = None
+                for s in target_drama.get("shots", []):
+                    if s.get("shot_num") == shot_num:
+                        target_shot = s
+                        break
+
+                if not target_shot:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": f"未找到镜号 #{shot_num}"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                prompt = target_shot.get("ai_prompt") or target_shot.get("visual") or "9:16 vertical cinematic short drama shot"
+                duration = target_shot.get("duration_sec", 5)
+
+                v_agent = VideoAgent()
+                v_res = v_agent.submit_video_task(prompt, aspect_ratio="9:16", duration=duration, force_mock=use_mock)
+
+                if v_res.get("status") == "completed":
+                    target_shot["video_url"] = v_res.get("video_url", "")
+                    target_shot["video_status"] = "completed"
+                    target_shot.pop("video_error", None)
+                elif v_res.get("status") == "processing":
+                    target_shot["video_task_id"] = v_res.get("task_id", "")
+                    target_shot["video_status"] = "processing"
+                    target_shot.pop("video_error", None)
+                else:
+                    target_shot["video_status"] = "failed"
+                    target_shot["video_error"] = v_res.get("error", "视频生成异常")
+
+                target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "shot": target_shot,
+                    "drama": target_drama,
+                    "result": v_res,
+                    "message": v_res.get("message", f"镜号 #{shot_num} 视频已处理")
+                }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/shot/check_video_status":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                ep_num = req_data.get("episode_num")
+                shot_num = req_data.get("shot_num")
+                task_id = req_data.get("task_id", "")
+                use_mock = req_data.get("mock", False)
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                target_drama = next((d for d in getattr(target_book, "dramas", []) if d.get("episode_num") == ep_num), None) if target_book else None
+                target_shot = next((s for s in target_drama.get("shots", []) if s.get("shot_num") == shot_num), None) if target_drama else None
+
+                v_agent = VideoAgent()
+                v_res = v_agent.query_video_status(task_id, force_mock=use_mock)
+
+                if target_shot:
+                    if v_res.get("status") == "completed":
+                        target_shot["video_url"] = v_res.get("video_url", "")
+                        target_shot["video_status"] = "completed"
+                        target_book.save()
+                    elif v_res.get("status") == "failed":
+                        target_shot["video_status"] = "failed"
+                        target_shot["video_error"] = v_res.get("error", "视频生成失败")
+                        target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "video_status": v_res.get("status"),
+                    "video_url": v_res.get("video_url", ""),
+                    "shot": target_shot,
+                    "result": v_res
+                }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/episode/generate_all_videos":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                ep_num = req_data.get("episode_num")
+                use_mock = req_data.get("mock", False)
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if not target_book:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": "作品不存在"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                target_drama = next((d for d in getattr(target_book, "dramas", []) if d.get("episode_num") == ep_num), None)
+                if not target_drama:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": f"未找到第 {ep_num} 集短剧"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                shots = target_drama.get("shots", [])
+                v_agent = VideoAgent()
+                processed_count = 0
+                for s in shots:
+                    prompt = s.get("ai_prompt") or s.get("visual") or "9:16 vertical short drama shot"
+                    res = v_agent.submit_video_task(prompt, aspect_ratio="9:16", duration=s.get("duration_sec", 5), force_mock=use_mock)
+                    if res.get("status") == "completed":
+                        s["video_url"] = res.get("video_url", "")
+                        s["video_status"] = "completed"
+                    elif res.get("status") == "processing":
+                        s["video_task_id"] = res.get("task_id", "")
+                        s["video_status"] = "processing"
+                    else:
+                        s["video_status"] = "failed"
+                        s["video_error"] = res.get("error", "视频生成异常")
+                    processed_count += 1
+
+                target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "drama": target_drama,
+                    "processed_count": processed_count,
+                    "message": f"第 {ep_num} 集全部 {processed_count} 个分镜头视频已触发生成！"
+                }, ensure_ascii=False).encode("utf-8"))
                 return
 
             if path == "/api/outline/generate":
@@ -3050,6 +3221,41 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     return
 
                 target = req_data.get("target", "novel")
+                if target == "video":
+                    test_key = req_data.get("video_api_key", "").strip()
+                    if not test_key or test_key.startswith("•") or "****" in test_key:
+                        test_key = os.getenv("VIDEO_API_KEY", "") or os.getenv("DRAMA_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
+                    test_base = req_data.get("video_base_url", "").strip() or os.getenv("VIDEO_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
+                    test_model = req_data.get("video_model", "").strip() or os.getenv("VIDEO_MODEL", "cogvideox-flash")
+                    t_start = time.time()
+                    try:
+                        v_agent = VideoAgent(api_key=test_key, base_url=test_base, model_name=test_model)
+                        probe_res = v_agent.submit_video_task("9:16 vertical short drama cinematic test", duration=5, force_mock=False)
+                        latency = round((time.time() - t_start) * 1000)
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            "status": "ok" if probe_res.get("status") in ("processing", "completed") else "error",
+                            "latency_ms": latency,
+                            "model": test_model,
+                            "reply": probe_res.get("message", "视频通道响应正常"),
+                            "target": target,
+                            "result": probe_res
+                        }, ensure_ascii=False).encode("utf-8"))
+                    except Exception as e_test:
+                        latency = round((time.time() - t_start) * 1000)
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            "status": "error",
+                            "latency_ms": latency,
+                            "error": str(e_test),
+                            "target": target
+                        }, ensure_ascii=False).encode("utf-8"))
+                    return
+
                 if target == "drama":
                     test_key = req_data.get("drama_api_key", "").strip()
                     if not test_key or test_key.startswith("•") or "****" in test_key:
@@ -3131,12 +3337,23 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 new_drama_base = req_data.get("drama_base_url", "").strip() if req_data.get("drama_base_url") is not None else os.getenv("DRAMA_BASE_URL", "")
                 new_drama_model = req_data.get("drama_model", "").strip() if req_data.get("drama_model") is not None else os.getenv("DRAMA_MODEL", "")
 
+                # 视频大模型配置读取与解析
+                input_video_key = req_data.get("video_api_key", "").strip()
+                if input_video_key and not input_video_key.startswith("•") and not "****" in input_video_key:
+                    new_video_key = input_video_key
+                elif "video_api_key" in req_data and input_video_key == "":
+                    new_video_key = ""
+                else:
+                    new_video_key = os.getenv("VIDEO_API_KEY", "")
+
+                new_video_base = req_data.get("video_base_url", "").strip() if req_data.get("video_base_url") is not None else os.getenv("VIDEO_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
+                new_video_model = req_data.get("video_model", "").strip() if req_data.get("video_model") is not None else os.getenv("VIDEO_MODEL", "cogvideox-flash")
+
                 new_admin_pwd = req_data.get("admin_key_new", "").strip() or os.getenv("ADMIN_KEY", "admin888")
                 new_port = req_data.get("http_port", os.getenv("TIANDAO_PORT", "8088"))
                 new_ws = req_data.get("ws_port", os.getenv("TIANDAO_WS_PORT", "8089"))
 
                 # 核心升级：原子化双写持久化至挂载卷 output/system_config.json 与 output/.env
-                # 无论 Docker 如何升级、更新镜像或重建容器，配置永不丢失！
                 save_persistent_config({
                     "api_key": new_key,
                     "base_url": new_base,
@@ -3146,6 +3363,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     "drama_model": new_drama_model,
                     "drama_api_key": new_drama_key,
                     "drama_base_url": new_drama_base,
+                    "video_model": new_video_model,
+                    "video_api_key": new_video_key,
+                    "video_base_url": new_video_base,
                     "admin_key": new_admin_pwd,
                     "http_port": str(new_port),
                     "ws_port": str(new_ws)

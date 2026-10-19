@@ -2057,6 +2057,12 @@
             <button class="btn btn-secondary btn-drama-trigger" onclick="triggerDramaGeneration(true, this)" title="无需消耗 API Key，极速构建高能短剧分镜">
               <span><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg> 模拟免Key体验</span>
             </button>
+            <button class="btn btn-primary" onclick="triggerEpisodeVideoGeneration(false, this)" title="为当前集全部镜头一键批量生成 9:16 视频" style="background: linear-gradient(135deg, #2563eb, #7c3aed); border: none;">
+              <span><svg class="icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> AI 一键全集生视频</span>
+            </button>
+            <button class="btn btn-secondary" onclick="openEpisodeContinuousPlayer()" title="连续连贯播放当前集所有镜头视频">
+              <span><svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> 全片连续试映</span>
+            </button>
             <div style="position: relative; display: inline-block;">
               <button class="btn btn-ghost" onclick="toggleDramaExportMenu(event)" title="导出多平台规格数据">
                 <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出分镜/字幕</span>
@@ -2502,6 +2508,44 @@
           </a>
         </div>
         <button class="btn btn-secondary" onclick="closePublishModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 竖屏短剧连续试映沉浸式播放器模态框 -->
+  <div id="modalContinuousPlayer" class="modal-overlay">
+    <div class="modal-container" style="max-width: 440px; padding: 0; background: #000; border: 1px solid var(--border-subtle); overflow: hidden; border-radius: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(20,20,25,0.95); border-bottom: 1px solid var(--border-subtle);">
+        <div style="font-size: 13.5px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+          <svg class="icon" viewBox="0 0 24 24" style="color: var(--accent-gold);"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <span id="playerEpTitle">短剧全片连续试映</span>
+        </div>
+        <button class="btn btn-ghost" style="padding: 2px 8px; font-size: 15px; color: #aaa;" onclick="closeContinuousPlayer()">✕</button>
+      </div>
+
+      <!-- 9:16 竖屏播放视窗 -->
+      <div style="position: relative; width: 100%; aspect-ratio: 9/16; max-height: 560px; background: #050508; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+        <video id="continuousVideoPlayer" playsinline style="width: 100%; height: 100%; object-fit: contain;" onended="onContinuousShotEnded()"></video>
+
+        <!-- 悬浮镜号与景别徽章 -->
+        <div style="position: absolute; top: 12px; left: 12px; display: flex; gap: 6px;">
+          <span id="playerShotBadge" class="pill pill-blue" style="font-size: 11px;">镜号 #1</span>
+          <span id="playerTypeBadge" class="pill pill-gold" style="font-size: 11px;">特写</span>
+        </div>
+
+        <!-- 悬浮对白实时字幕 -->
+        <div id="playerSubtitleBox" style="position: absolute; bottom: 44px; left: 16px; right: 16px; text-align: center; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.9); font-size: 12.5px; font-weight: 600; line-height: 1.4; background: rgba(0,0,0,0.55); padding: 6px 12px; border-radius: 6px;">
+        </div>
+
+        <!-- 底部微型进度与控制条 -->
+        <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 6px 14px; background: linear-gradient(transparent, rgba(0,0,0,0.85)); display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-ghost" style="padding: 2px 6px; font-size: 11px;" onclick="prevContinuousShot()">◀ 上一镜</button>
+            <button class="btn btn-primary" id="btnPlayerPlayPause" style="padding: 2px 8px; font-size: 11px;" onclick="toggleContinuousPlay()">暂停</button>
+            <button class="btn btn-ghost" style="padding: 2px 6px; font-size: 11px;" onclick="nextContinuousShot()">下一镜 ▶</button>
+          </div>
+          <span id="playerProgressText" style="font-size: 11px; color: #aaa;">1 / 8</span>
+        </div>
       </div>
     </div>
   </div>
@@ -5280,6 +5324,46 @@
                 <div style="word-break: break-all; padding-right: 48px;">${escapeHtml(s.ai_prompt || '')}</div>
               </div>
             </div>
+
+            <!-- 9:16 竖屏视频渲染预览区 -->
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-subtle);">
+              <div class="shot-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="display: flex; align-items: center; gap: 4px;">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                  9:16 真实视频镜头
+                </span>
+                ${s.video_url ? `<span class="pill pill-green" style="font-size: 10px; padding: 2px 6px;">已生成</span>` : ''}
+              </div>
+
+              ${s.video_url ? `
+                <div style="margin-top: 6px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-subtle);">
+                  <video src="${escapeHtml(s.video_url)}" controls playsinline preload="metadata" style="width: 100%; aspect-ratio: 9/16; max-height: 250px; object-fit: contain; display: block;"></video>
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.6); font-size: 11px;">
+                    <span style="color: var(--accent-green); display: flex; align-items: center; gap: 4px;"><svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> 视频就绪 (${s.duration_sec || 5}s)</span>
+                    <div style="display: flex; gap: 6px;">
+                      <a href="${escapeHtml(s.video_url)}" target="_blank" download="shot_${s.shot_num}.mp4" class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;">下载</a>
+                      <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">重新生成</button>
+                    </div>
+                  </div>
+                </div>
+              ` : (s.video_status === 'processing' ? `
+                <div style="margin-top: 6px; padding: 18px; text-align: center; background: rgba(59,130,246,0.06); border: 1px dashed var(--accent-blue); border-radius: 8px;">
+                  <svg class="icon spin" viewBox="0 0 24 24" style="color: var(--accent-blue); margin-bottom: 6px;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                  <div style="font-size: 12px; color: #fff; font-weight: 600;">AI 视频排队渲染中...</div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">9:16 动态镜头渲染中</div>
+                  <button class="btn btn-ghost" style="font-size: 10.5px; margin-top: 6px; padding: 2px 8px;" onclick="checkShotVideoStatus(${s.shot_num}, '${s.video_task_id || ''}', this)">刷新状态</button>
+                </div>
+              ` : `
+                <div style="margin-top: 6px; display: flex; gap: 6px;">
+                  <button class="btn btn-primary" style="flex: 1; font-size: 11px; padding: 5px 8px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">
+                    <span><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> 生成本镜视频 (9:16)</span>
+                  </button>
+                  <button class="btn btn-secondary" style="font-size: 11px; padding: 5px 8px;" onclick="triggerShotVideoGeneration(${s.shot_num}, true, this)" title="免耗 API Key 构建动态样片">
+                    <span>模拟体验</span>
+                  </button>
+                </div>
+              `)}
+            </div>
           </div>
         `;
       });
@@ -5448,6 +5532,229 @@
       if (menu) menu.style.display = "none";
 
       window.location.href = `/api/drama/export?book_id=${encodeURIComponent(bid)}&episode_num=${currentDramaEpisode}&format=${encodeURIComponent(format)}`;
+    }
+
+    // ==========================================
+    // 短剧分镜生视频与全片连续试映引擎
+    // ==========================================
+    async function triggerShotVideoGeneration(shotNum, isMock = false, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("书库为空，请先新建或选择作品！");
+        return;
+      }
+      let origHtml = "";
+      if (btn) {
+        btn.disabled = true;
+        origHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 渲染中...`;
+      }
+      showToast(isMock ? `正在为镜号 #${shotNum} 构建动态样片...` : `AI 视频引擎已启动，正在为镜号 #${shotNum} 渲染 9:16 视频...`);
+
+      try {
+        const res = await fetch("/api/drama/shot/generate_video", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book_id: bid,
+            episode_num: currentDramaEpisode,
+            shot_num: shotNum,
+            mock: isMock
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok" && data.drama) {
+          const idx = currentDramas.findIndex(x => x.episode_num === currentDramaEpisode);
+          if (idx !== -1) currentDramas[idx] = data.drama;
+          renderSelectedDramaEpisode(currentDramaEpisode);
+          showToast(`镜号 #${shotNum} 视频任务已就绪！`);
+        } else {
+          alert("视频生成提示: " + (data.message || data.error || "未知异常"));
+        }
+      } catch (err) {
+        alert("请求异常: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
+    }
+
+    async function checkShotVideoStatus(shotNum, taskId, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = "查询中...";
+      }
+      try {
+        const res = await fetch("/api/drama/shot/check_video_status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book_id: bid,
+            episode_num: currentDramaEpisode,
+            shot_num: shotNum,
+            task_id: taskId
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          if (data.video_status === "completed") {
+            showToast(`镜号 #${shotNum} 视频渲染已完成！`);
+            loadDramaData();
+          } else if (data.video_status === "processing") {
+            showToast(`镜号 #${shotNum} 视频排队渲染中，请稍候再查`);
+          } else {
+            alert(`视频状态: ${data.video_status}`);
+          }
+        }
+      } catch (e) {
+        alert("查询失败: " + e.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = "刷新状态";
+        }
+      }
+    }
+
+    async function triggerEpisodeVideoGeneration(isMock = false, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("书库为空，请先选择作品！");
+        return;
+      }
+      const d = currentDramas.find(x => x.episode_num === currentDramaEpisode);
+      if (!d || !d.shots || d.shots.length === 0) {
+        alert("当前集尚未生成分镜头，请先点击【AI 一键生成短剧分镜】！");
+        return;
+      }
+
+      let origHtml = "";
+      if (btn) {
+        btn.disabled = true;
+        origHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 批量处理中...`;
+      }
+      showToast(isMock ? "正在为全集镜头批量构建动态样片..." : "AI 视频引擎已启动，正在批量提交全集分镜渲染任务...", 10000);
+
+      try {
+        const res = await fetch("/api/drama/episode/generate_all_videos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book_id: bid,
+            episode_num: currentDramaEpisode,
+            mock: isMock
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok" && data.drama) {
+          const idx = currentDramas.findIndex(x => x.episode_num === currentDramaEpisode);
+          if (idx !== -1) currentDramas[idx] = data.drama;
+          renderSelectedDramaEpisode(currentDramaEpisode);
+          showToast(data.message || "全集视频任务已处理！");
+        } else {
+          alert("全集生成提示: " + (data.message || data.error || "生成失败"));
+        }
+      } catch (err) {
+        alert("请求异常: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
+    }
+
+    let continuousPlayerIndex = 0;
+    let continuousPlayerShots = [];
+
+    function openEpisodeContinuousPlayer() {
+      const d = currentDramas.find(x => x.episode_num === currentDramaEpisode);
+      if (!d || !d.shots || d.shots.length === 0) {
+        alert("暂无可播放的镜头分镜数据，请先生成短剧分镜！");
+        return;
+      }
+      continuousPlayerShots = d.shots;
+      continuousPlayerIndex = 0;
+      document.getElementById("modalContinuousPlayer").classList.add("active");
+      document.getElementById("playerEpTitle").innerText = `第 ${d.episode_num} 集 短剧全片连续试映`;
+      playContinuousIndex(0);
+    }
+
+    function closeContinuousPlayer() {
+      const v = document.getElementById("continuousVideoPlayer");
+      if (v) { v.pause(); v.src = ""; }
+      document.getElementById("modalContinuousPlayer").classList.remove("active");
+    }
+
+    function playContinuousIndex(idx) {
+      if (!continuousPlayerShots || continuousPlayerShots.length === 0) return;
+      if (idx < 0) idx = 0;
+      if (idx >= continuousPlayerShots.length) idx = 0;
+      continuousPlayerIndex = idx;
+      const shot = continuousPlayerShots[idx];
+      const v = document.getElementById("continuousVideoPlayer");
+      const badgeShot = document.getElementById("playerShotBadge");
+      const badgeType = document.getElementById("playerTypeBadge");
+      const sub = document.getElementById("playerSubtitleBox");
+      const prog = document.getElementById("playerProgressText");
+      const btnPlay = document.getElementById("btnPlayerPlayPause");
+
+      badgeShot.innerText = `镜号 #${shot.shot_num || (idx + 1)}`;
+      badgeType.innerText = `${shot.shot_type || '中景'} · ${shot.camera_movement || '运镜'}`;
+      prog.innerText = `${idx + 1} / ${continuousPlayerShots.length}`;
+
+      if (shot.dialogue) {
+        sub.style.display = "block";
+        sub.innerText = shot.dialogue;
+      } else {
+        sub.style.display = "none";
+      }
+
+      const sampleFallback = "https://assets.mixkit.co/videos/preview/mixkit-vertical-view-of-a-neon-city-in-the-rain-42099-large.mp4";
+      v.src = shot.video_url || sampleFallback;
+      v.play().then(() => {
+        if (btnPlay) btnPlay.innerText = "暂停";
+      }).catch(e => {
+        console.warn("自动播放受限:", e);
+      });
+    }
+
+    function onContinuousShotEnded() {
+      if (continuousPlayerIndex + 1 < continuousPlayerShots.length) {
+        playContinuousIndex(continuousPlayerIndex + 1);
+      } else {
+        showToast("本集所有分镜头已连续试映完毕！");
+        playContinuousIndex(0);
+      }
+    }
+
+    function toggleContinuousPlay() {
+      const v = document.getElementById("continuousVideoPlayer");
+      const btn = document.getElementById("btnPlayerPlayPause");
+      if (!v) return;
+      if (v.paused) {
+        v.play();
+        if (btn) btn.innerText = "暂停";
+      } else {
+        v.pause();
+        if (btn) btn.innerText = "播放";
+      }
+    }
+
+    function prevContinuousShot() {
+      if (continuousPlayerIndex > 0) {
+        playContinuousIndex(continuousPlayerIndex - 1);
+      }
+    }
+
+    function nextContinuousShot() {
+      if (continuousPlayerIndex + 1 < continuousPlayerShots.length) {
+        playContinuousIndex(continuousPlayerIndex + 1);
+      }
     }
 
     // ==========================================
