@@ -503,6 +503,39 @@ class BookManager:
                     "status": "alive"
                 }
             }
+        elif cat == "doomsday":
+            book.world.characters = {
+                "c1": {
+                    "name": "林越",
+                    "title": "重生末日先知 / 万亿空间领主",
+                    "camp": "末日独立庇护所",
+                    "cultivation_level": "时空异能·永恒静止空间",
+                    "public_profile": "身穿保暖耐磨战术防寒服，眼神如万丈寒冰般冷冽，指尖把玩着特种折刀，神情从容自若。",
+                    "secret_profile": "【万亿囤货·杀伐果断】重生归来，绑定无限空间清空万亿物资，安全屋打造为特种合金避难堡垒。深谙末世人性黑暗，绝不圣母，顺我者昌逆我者亡。",
+                    "inventory": ["空间纳戒", "军用特种滑轮复合弩", "顶级自热战斧牛排x999", "微光夜视仪"],
+                    "status": "alive"
+                },
+                "c2": {
+                    "name": "张彪",
+                    "title": "恶霸单元长 / 暴徒头领",
+                    "camp": "业主抢粮团伙",
+                    "cultivation_level": "亡命狂徒 / 蛮力强化",
+                    "public_profile": "满脸横肉，身披油腻厚重军大衣，手持开山大砍刀与铁棍，领着红了眼的暴民在楼道疯狂砸门叫嚣。",
+                    "secret_profile": "【自私残忍】在极寒断粮绝境中撕破伪装，试图以道德绑架和暴力破门抢劫主角庇护所的食物与恒温地暖。",
+                    "inventory": ["改装开山砍刀", "防暴钢叉", "单元门备用万能钥匙"],
+                    "status": "alive"
+                },
+                "c3": {
+                    "name": "苏晴",
+                    "title": "绿茶前女友 / 心机投机者",
+                    "camp": "依附阵营",
+                    "cultivation_level": "心术操控 / 伪装受害者",
+                    "public_profile": "昔日校花，容貌清纯，冻得瑟瑟发抖在业主群发语音哭诉卖惨，极具煽动性。",
+                    "secret_profile": "【蛇蝎心肠】前世恩将仇报害死主角，今生见主角吃香喝辣，便企图以旧情与美色诱骗开门，暗通暴徒分赃。",
+                    "inventory": ["冻硬的奢侈包", "求救语音备忘录", "袖中藏毒刀"],
+                    "status": "alive"
+                }
+            }
         else:
             # 仙侠修真 / 传统凡人流通用
             book.world.characters = {

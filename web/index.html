@@ -1425,8 +1425,232 @@
     .view-panel {
       contain: paint;
     }
-    .app-layout {
-      transform: translateZ(0);
+    /* 短剧与分镜工作台样式 */
+    .drama-episodes-bar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 44px;
+    }
+    .drama-ep-tab {
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border-medium);
+      background: var(--bg-input);
+      color: var(--text-secondary);
+      transition: all 0.2s;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .drama-ep-tab:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+    }
+    .drama-ep-tab.active {
+      background: var(--accent-blue);
+      color: #fff;
+      border-color: var(--accent-blue);
+    }
+    .drama-scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 24px;
+    }
+    .drama-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .drama-overview-card {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 1px solid var(--border-medium);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    .drama-structure-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+    @media (max-width: 768px) {
+      .drama-structure-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .drama-struct-box {
+      background: rgba(15, 23, 42, 0.7);
+      border-radius: 8px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-subtle);
+    }
+    .drama-struct-box.hook { border-left: 3px solid #ef4444; }
+    .drama-struct-box.climax { border-left: 3px solid #f59e0b; }
+    .drama-struct-box.cliffhanger { border-left: 3px solid #8b5cf6; }
+    .drama-struct-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .drama-struct-box.hook .drama-struct-label { color: #f87171; }
+    .drama-struct-box.climax .drama-struct-label { color: #fbbf24; }
+    .drama-struct-box.cliffhanger .drama-struct-label { color: #c084fc; }
+    .drama-struct-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .storyboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 14px;
+    }
+    .shot-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .shot-card:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
+    }
+    .shot-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 8px;
+    }
+    .shot-num-badge {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 11.5px;
+    }
+    .shot-meta-pills {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .shot-pill {
+      font-size: 10.5px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--bg-input);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+    }
+    .shot-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .shot-visual-box {
+      font-size: 12px;
+      color: var(--text-primary);
+      line-height: 1.5;
+      background: rgba(15, 23, 42, 0.4);
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+    }
+    .shot-dialogue-box {
+      font-size: 12px;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.08);
+      border-left: 2px solid #10b981;
+      padding: 6px 10px;
+      border-radius: 4px;
+      line-height: 1.4;
+    }
+    .shot-sfx-box {
+      font-size: 11px;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.08);
+      border-radius: 4px;
+      padding: 4px 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .shot-prompt-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px dashed rgba(96, 165, 250, 0.3);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: #93c5fd;
+      position: relative;
+    }
+    .shot-copy-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #93c5fd;
+      padding: 2px 6px;
+      font-size: 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .shot-copy-btn:hover {
+      background: var(--accent-blue);
+      color: #fff;
+    }
+    .export-dropdown-menu {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 100;
+      min-width: 200px;
+      overflow: hidden;
+    }
+    .export-dropdown-menu a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .export-dropdown-menu a:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
     }
   </style>
 </head>
@@ -1458,6 +1682,9 @@
       </button>
       <button id="navTabSim" class="view-tab-btn" onclick="switchView('sim')">
         <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 推演</span>
+      </button>
+      <button id="navTabDrama" class="view-tab-btn" onclick="switchView('drama')">
+        <span><svg class="icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> 短剧</span>
       </button>
     </div>
 
@@ -1807,6 +2034,58 @@
         </div>
       </section>
 
+      <!-- 视图 D: 竖屏微短剧生成与分镜总控台 (Short Drama & Storyboard Studio) -->
+      <section id="viewDrama" class="view-panel">
+        <div class="studio-header">
+          <div>
+            <div class="studio-chap-title">
+              <svg class="icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              AI 爆款微短剧与分镜总台
+            </div>
+            <div class="studio-chap-meta">工业级90秒爆款模型 · 黄金抓手(Hook) · 高能反转打脸 · 9:16视频Prompt · 剪映/可灵/即梦一键出海</div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <select id="dramaChapterSelect" class="form-select" style="max-width: 160px; font-size: 12px; padding: 5px 8px;" title="选择待改编为短剧的小说章节">
+              <!-- 动态填充章节选项 -->
+            </select>
+            <button class="btn btn-primary" id="btnGenerateDrama" onclick="triggerDramaGeneration(false)">
+              <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> AI 一键生成短剧分镜</span>
+            </button>
+            <button class="btn btn-secondary" onclick="triggerDramaGeneration(true)" title="无需消耗 API Key，极速构建高能短剧分镜">
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg> 模拟免Key体验</span>
+            </button>
+            <div style="position: relative; display: inline-block;">
+              <button class="btn btn-ghost" onclick="toggleDramaExportMenu(event)" title="导出多平台规格数据">
+                <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出分镜/字幕</span>
+              </button>
+              <div id="dramaExportDropdown" class="export-dropdown-menu" style="display: none;">
+                <a href="javascript:void(0)" onclick="exportDramaData('csv')"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> 导出 CSV (可灵/即梦生视频)</a>
+                <a href="javascript:void(0)" onclick="exportDramaData('srt')"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/></svg> 导出 SRT (剪映标准字幕)</a>
+                <a href="javascript:void(0)" onclick="exportDramaData('txt')"><svg class="icon" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg> 导出 TXT (导演分镜台本)</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 集数切换横向导航条 -->
+        <div class="drama-episodes-bar">
+          <div id="dramaEpisodeTabs" style="display: flex; gap: 6px; align-items: center; overflow-x: auto; padding: 6px 16px;">
+            <!-- 动态集数标签 -->
+          </div>
+          <div style="padding-right: 16px;">
+            <button class="btn btn-ghost" onclick="addNewDramaEpisodePrompt()" style="font-size: 11px; padding: 3px 8px;" title="基于新章节新增一集短剧">
+              <span><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 新建一集</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="drama-scroll-area">
+          <div class="drama-container" id="dramaMainContainer">
+            <!-- 剧集概览与分镜头动态渲染 -->
+          </div>
+        </div>
+      </section>
+
     </main>
 
     <!-- 3. 右侧可折叠信息栏 (因果伏线总账 & 登场人物) -->
@@ -1868,13 +2147,16 @@
         <div class="form-group">
           <label class="form-label">题材类型风格 (可点击快捷选用)</label>
           <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px; border-color: #38bdf8; color: #38bdf8;" onclick="selectGenrePreset('末日求生', '《极寒天灾：我囤积万亿物资打造末日神级避难所》', '全球断崖式降温至零下70度，重生回到天灾爆发前一个月，掏空万亿空间零元购全球顶级物资，打造合金恒温安全屋，邻居饿哭吃树皮，我躺在暖气房涮顶级战斧牛排，绝不圣母杀伐果断！')"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v20"/><path d="m4.93 4.93 14.14 14.14"/><path d="M2 12h20"/><path d="m4.93 19.07 14.14-14.14"/></svg> 极寒囤货</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px; border-color: #f87171; color: #f87171;" onclick="selectGenrePreset('末日求生', '《丧尸爆发：开局百倍暴击复制军火库》', '神秘病毒席卷全球，开局觉醒神级百倍暴击异能，一粒米变百斤，一把微冲变重装装甲合成营，清空大型山姆超市，建立末日人类第一防御基地！')"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> 丧尸基地</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px; border-color: #fb923c; color: #fb923c;" onclick="selectGenrePreset('末日求生', '《全球高温：我在地下万米打造生态神宫》', '十日凌空地表融化70℃，觉醒地心避难系统，建造封闭水循环与恒温地下堡垒，外界地表炼狱求生，我坐拥千亩绿洲地宫！')"><svg class="icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg> 全球高温</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px; border-color: #a3e635; color: #a3e635;" onclick="selectGenrePreset('末日求生', '《酸雨迷雾：我把破旧金杯改装成末日核能要塞》', '腐蚀性酸雨淹没都市，神级机械重构系统加持，破旧面包车无限进化升级为移动核动力重装装甲要塞，横冲直撞横扫末世！')"><svg class="icon" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg> 酸雨房车</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px; border-color: #22d3ee; color: #22d3ee;" onclick="selectGenrePreset('末日求生', '《全球冰融成海：我有一艘万吨神级方舟》', '陆地沉没汪洋千里，觉醒神级垂钓暴击系统，从一叶破木筏升级为十万吨核动力隐身战舰，深海巨兽与海盗皆为猎物！')"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg> 深海方舟</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px; border-color: #c084fc; color: #c084fc;" onclick="selectGenrePreset('规则怪谈', '《怪谈降临：我的避难所不可侵犯》', '血月当空规则怪谈现实降临，触犯规则者必死，主角觉醒神级破妄金瞳与绝对庇护领地，违背主角意志即违背天道法则！')"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> 规则怪谈</button>
             <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('仙侠修真', '《万古争渡：从执掌因果玉佩开始》', '无钦定天命主角，人人皆怀长生执念，寒渊夺宝与杀伐逆袭')"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> 仙侠修真</button>
             <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('现代都市', '《龙王出渊：开局百亿神豪退婚》', '三年隐忍期满，至尊龙王令解封，横推江南财阀与打脸反派')"><svg class="icon" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M8 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M16 14h.01"/></svg> 现代都市</button>
             <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('科幻星际', '《深空余烬：第七舰队的赛博亡魂》', '柯伊伯带拾荒觉醒高维密钥，退役舰队血战巨型财阀与机械蜂群')"><svg class="icon" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> 科幻星际</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('悬疑怪谈', '《诡异降临：我在规则怪谈中找生路》', '午夜公寓租客生存守则，直视深渊裂隙，以命解构不可名状规则')"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> 悬疑怪谈</button>
             <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('历史架空', '《大明第一权相：从斩贪官开始》', '现代法医刑侦专家戴枷上殿，手撕假账，老朱赐尚方宝剑巡按天下')"><svg class="icon" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> 历史架空</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('剑与魔法', '《破晓领主：开局觉醒黄金龙血》', '孤堡黑石崖抵御兽人与食尸鬼黑潮，奥术高塔禁咒与骑士征伐')"><svg class="icon" viewBox="0 0 24 24"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg> 剑与魔法</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('游戏无限', '《神域诸天：我的被动无限叠加》', '重生封弊者单挑超级垄断公会，极限微操与神级词条破局')"><svg class="icon" viewBox="0 0 24 24"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect width="20" height="12" x="2" y="6" rx="6"/></svg> 游戏无限</button>
             <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('传统武侠', '《快意寒刀：一人一刀踏平天下》', '刀光剑影，快意恩仇，名门宿怨与绝顶刀客雪夜破重围')"><svg class="icon" viewBox="0 0 24 24"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg> 传统武侠</button>
           </div>
           <input type="text" id="createBookGenre" class="form-input" value="传统凡人修仙" placeholder="可手动输入任意自定义流派，如：克苏鲁跑团 / 赛博朋克 / 诸天快穿">
@@ -3160,6 +3442,10 @@
       } else if (viewName === "sim") {
         document.getElementById("viewSim").classList.add("active");
         document.getElementById("navTabSim").classList.add("active");
+      } else if (viewName === "drama") {
+        document.getElementById("viewDrama").classList.add("active");
+        document.getElementById("navTabDrama").classList.add("active");
+        loadDramaData();
       } else {
         document.getElementById("viewReader").classList.add("active");
         document.getElementById("navTabReader").classList.add("active");
@@ -4671,6 +4957,343 @@
         btn.disabled = false;
         fetchStatus(true);
       });
+    }
+
+    // ==========================================
+    // 竖屏微短剧与分镜总控台 (Drama Studio)
+    // ==========================================
+    let currentDramas = [];
+    let currentDramaEpisode = 1;
+
+    function loadDramaData() {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) return;
+
+      // 填充章节下拉选择器
+      const sel = document.getElementById("dramaChapterSelect");
+      if (sel && globalState && globalState.chapters) {
+        const chaps = globalState.chapters;
+        if (chaps.length > 0) {
+          sel.innerHTML = chaps.map(c => `
+            <option value="${c.id}">第${c.id}章 ${escapeHtml(c.title || '')}</option>
+          `).join("");
+          if (currentChapterId) {
+            sel.value = currentChapterId;
+          } else {
+            sel.value = chaps[chaps.length - 1].id;
+          }
+        } else {
+          sel.innerHTML = `<option value="">全书开篇设定梗概</option>`;
+        }
+      }
+
+      fetch(`/api/drama/list?book_id=${encodeURIComponent(bid)}`)
+        .then(r => r.json())
+        .then(res => {
+          currentDramas = res.dramas || [];
+          if (currentDramas.length > 0) {
+            if (!currentDramas.some(d => d.episode_num === currentDramaEpisode)) {
+              currentDramaEpisode = currentDramas[0].episode_num;
+            }
+          }
+          renderDramaEpisodesBar();
+          renderSelectedDramaEpisode(currentDramaEpisode);
+        })
+        .catch(err => {
+          console.error("加载短剧分镜数据失败:", err);
+        });
+    }
+
+    function renderDramaEpisodesBar() {
+      const bar = document.getElementById("dramaEpisodeTabs");
+      if (!bar) return;
+
+      if (!currentDramas || currentDramas.length === 0) {
+        bar.innerHTML = `<span style="font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px;"><svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> 暂无短剧分镜，请点击上方按钮一键生成</span>`;
+        return;
+      }
+
+      bar.innerHTML = currentDramas.map(d => `
+        <button class="drama-ep-tab ${d.episode_num === currentDramaEpisode ? 'active' : ''}" onclick="switchDramaEpisode(${d.episode_num})">
+          <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          第 ${d.episode_num} 集
+        </button>
+      `).join("");
+    }
+
+    function switchDramaEpisode(epNum) {
+      currentDramaEpisode = epNum;
+      renderDramaEpisodesBar();
+      renderSelectedDramaEpisode(epNum);
+    }
+
+    function renderSelectedDramaEpisode(epNum) {
+      const container = document.getElementById("dramaMainContainer");
+      if (!container) return;
+
+      if (!currentDramas || currentDramas.length === 0) {
+        container.innerHTML = `
+          <div class="studio-card" style="text-align: center; padding: 48px 24px;">
+            <div style="font-size: 32px; color: var(--accent-blue); margin-bottom: 12px;"><svg class="icon-xl" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+            <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px;">一键将小说章节改编为 90秒竖屏爆款微短剧</div>
+            <div style="font-size: 13px; color: var(--text-secondary); max-width: 560px; margin: 0 auto 20px auto; line-height: 1.6;">
+              自动萃取小说核心打脸高潮与生死悬念，生成精准分镜、运镜参数、对白台词，以及直接适配可灵 (Kling AI) / 即梦 (Jimeng) 的 9:16 专业生视频 Prompt！
+            </div>
+            <div style="display: flex; justify-content: center; gap: 10px;">
+              <button class="btn btn-primary" onclick="triggerDramaGeneration(false)">
+                <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> AI 一键生成第 1 集短剧</span>
+              </button>
+              <button class="btn btn-secondary" onclick="triggerDramaGeneration(true)">
+                <span><svg class="icon" viewBox="0 0 24 24"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg> 模拟免Key体验</span>
+              </button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const d = currentDramas.find(x => x.episode_num === epNum) || currentDramas[0];
+      if (!d) return;
+
+      const shots = d.shots || [];
+      const chars = d.characters_in_scene || [];
+
+      let html = `
+        <!-- 概览卡片 -->
+        <div class="drama-overview-card">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap;">
+            <div>
+              <div style="font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                <span class="pill pill-blue">第 ${d.episode_num} 集</span>
+                <span>${escapeHtml(d.episode_title || '微短剧分镜')}</span>
+              </div>
+              <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(d.logline || '')}</div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span class="shot-pill"><svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${d.duration_sec || 90} 秒</span>
+              <span class="shot-pill"><svg class="icon-sm" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg> 竖屏 9:16</span>
+              <span class="shot-pill"><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> ${shots.length} 个镜头</span>
+              <button class="btn btn-ghost" style="color: var(--accent-red); font-size: 11px; padding: 2px 6px;" onclick="deleteDramaEpisode(${d.episode_num})" title="删除本集分镜">
+                <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除
+              </button>
+            </div>
+          </div>
+
+          ${chars.length > 0 ? `
+            <div style="display: flex; gap: 6px; align-items: center; margin-top: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+              <span style="font-size: 11px; color: var(--text-muted);"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg> 登场角色:</span>
+              ${chars.map(c => `<span class="pill pill-gold" style="font-size: 11px;">${escapeHtml(c)}</span>`).join("")}
+            </div>
+          ` : ''}
+
+          <!-- 3段式爆款节奏结构 -->
+          <div class="drama-structure-grid">
+            <div class="drama-struct-box hook">
+              <div class="drama-struct-label">
+                <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                0-5秒 黄金抓手 (Hook)
+              </div>
+              <div class="drama-struct-desc">${escapeHtml(d.hook_summary || '开场强反差或危机直逼观众眼球')}</div>
+            </div>
+            <div class="drama-struct-box climax">
+              <div class="drama-struct-label">
+                <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                40-70秒 核心高潮 (Climax)
+              </div>
+              <div class="drama-struct-desc">${escapeHtml(d.climax_summary || '力量悬殊反转，爽快反杀或无情打脸')}</div>
+            </div>
+            <div class="drama-struct-box cliffhanger">
+              <div class="drama-struct-label">
+                <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="12 2 2 22 22 22 12 2"/></svg>
+                85-90秒 断章卡点 (Cliffhanger)
+              </div>
+              <div class="drama-struct-desc">${escapeHtml(d.cliffhanger || '悬念爆发或新危机降临，促使观众划向下一集')}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 逐镜头分镜列表 -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+          <div style="font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+            <svg class="icon" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+            逐镜头导演拍摄分镜表 (Storyboards)
+          </div>
+          <span style="font-size: 11.5px; color: var(--text-muted);">
+            点击镜头右上方按钮可一键复制【可灵/即梦 9:16 视频生成 Prompt】
+          </span>
+        </div>
+
+        <div class="storyboard-grid">
+      `;
+
+      shots.forEach(s => {
+        html += `
+          <div class="shot-card">
+            <div class="shot-card-header">
+              <span class="shot-num-badge">镜号 #${s.shot_num || 1}</span>
+              <div class="shot-meta-pills">
+                <span class="shot-pill">${escapeHtml(s.shot_type || '中景')}</span>
+                <span class="shot-pill">${escapeHtml(s.camera_movement || '推近')}</span>
+                <span class="shot-pill">${s.duration_sec || 4}s</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="shot-section-title"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> 画面视觉</div>
+              <div class="shot-visual-box">${escapeHtml(s.visual || '')}</div>
+            </div>
+
+            ${s.dialogue ? `
+              <div>
+                <div class="shot-section-title"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> 对白 / 旁白OS</div>
+                <div class="shot-dialogue-box">${escapeHtml(s.dialogue)}</div>
+              </div>
+            ` : ''}
+
+            ${s.sfx_bgm ? `
+              <div class="shot-sfx-box">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span>${escapeHtml(s.sfx_bgm)}</span>
+              </div>
+            ` : ''}
+
+            <div>
+              <div class="shot-section-title"><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> AI 视频 Prompt (可灵 / 即梦 9:16)</div>
+              <div class="shot-prompt-box">
+                <button class="shot-copy-btn" onclick="copyShotPrompt(this.getAttribute('data-prompt'), this)" data-prompt="${escapeHtml(s.ai_prompt || '')}">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                  复制
+                </button>
+                <div style="word-break: break-all; padding-right: 48px;">${escapeHtml(s.ai_prompt || '')}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    async function triggerDramaGeneration(isMock = false) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("书库为空，请先在右上角【新建作品】开辟小说！");
+        return;
+      }
+
+      const sel = document.getElementById("dramaChapterSelect");
+      const cid = sel ? sel.value : "";
+      const btn = document.getElementById("btnGenerateDrama");
+      const origHtml = btn.innerHTML;
+
+      btn.disabled = true;
+      btn.innerHTML = `<span>${ICONS.loader} AI 正在编导分镜...</span>`;
+
+      try {
+        const res = await fetch("/api/drama/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book_id: bid,
+            chapter_id: cid,
+            mock: isMock
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok" && data.drama) {
+          currentDramas = data.dramas || [];
+          currentDramaEpisode = data.drama.episode_num;
+          renderDramaEpisodesBar();
+          renderSelectedDramaEpisode(currentDramaEpisode);
+          showToast(`已成功生成第 ${data.drama.episode_num} 集短剧分镜表！`);
+        } else {
+          alert("生成短剧分镜失败: " + (data.message || data.error || "大模型连接超时"));
+        }
+      } catch (err) {
+        alert("请求异常: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    }
+
+    function addNewDramaEpisodePrompt() {
+      const nextEp = currentDramas.length + 1;
+      const sel = document.getElementById("dramaChapterSelect");
+      if (sel) {
+        sel.focus();
+      }
+      if (confirm(`准备新增第 ${nextEp} 集短剧分镜。\n\n请在顶部下拉框中确认要改编的小说章节，点击确定立即开始生成！`)) {
+        triggerDramaGeneration(false);
+      }
+    }
+
+    async function deleteDramaEpisode(epNum) {
+      if (!confirm(`确定要彻底删除第 ${epNum} 集的短剧分镜数据吗？`)) return;
+      const bid = globalState ? globalState.book_id : "";
+      try {
+        const res = await fetch("/api/drama/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: bid, episode_num: epNum })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          currentDramas = data.dramas || [];
+          if (currentDramas.length > 0) {
+            currentDramaEpisode = currentDramas[0].episode_num;
+          } else {
+            currentDramaEpisode = 1;
+          }
+          renderDramaEpisodesBar();
+          renderSelectedDramaEpisode(currentDramaEpisode);
+          showToast(`第 ${epNum} 集分镜已删除`);
+        }
+      } catch (err) {
+        alert("删除失败: " + err.message);
+      }
+    }
+
+    function copyShotPrompt(text, btnEl) {
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btnEl.innerHTML;
+        btnEl.innerHTML = `<svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> 已复制`;
+        setTimeout(() => {
+          btnEl.innerHTML = orig;
+        }, 2000);
+      });
+    }
+
+    function toggleDramaExportMenu(e) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById("dramaExportDropdown");
+      if (menu) {
+        menu.style.display = (menu.style.display === "none" || !menu.style.display) ? "block" : "none";
+      }
+    }
+
+    // 全局点击关闭导出下拉菜单
+    document.addEventListener("click", function (e) {
+      const menu = document.getElementById("dramaExportDropdown");
+      if (menu && menu.style.display === "block") {
+        if (!e.target.closest("#dramaExportDropdown") && !e.target.closest(".export-dropdown-menu")) {
+          menu.style.display = "none";
+        }
+      }
+    });
+
+    function exportDramaData(format) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("请先选择书籍并生成短剧分镜！");
+        return;
+      }
+      const menu = document.getElementById("dramaExportDropdown");
+      if (menu) menu.style.display = "none";
+
+      window.location.href = `/api/drama/export?book_id=${encodeURIComponent(bid)}&episode_num=${currentDramaEpisode}&format=${encodeURIComponent(format)}`;
     }
 
     // ==========================================

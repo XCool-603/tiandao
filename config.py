@@ -211,8 +211,18 @@ def classify_genre(genre: str, title: str = "", theme: str = "") -> str:
     if any(k in full_text for k in history_keywords):
         return "history"
 
-    # 3. 科幻星际 / 赛博废土 / 机械机甲
-    scifi_keywords = ["科幻", "星际", "末世", "赛博", "废土", "机甲", "太空", "战舰", "舰队", "曲率", "高维", "外星", "深空", "避难所", "硬核科幻"]
+    # 3. 末日求生 / 极寒冰河 / 丧尸危机 / 天灾囤货 / 安全屋避难所
+    doomsday_keywords = [
+        "末日", "末世", "极寒", "冰河", "冰封", "零下", "安全屋", "避难所", "囤货", "零元购",
+        "丧尸", "尸潮", "生化危机", "变异体", "烈阳", "高温末日", "极端高温", "天灾",
+        "酸雨", "毒雾", "迷雾求生", "房车求生", "深海求生", "诺亚方舟", "全球淹没", "废土求生",
+        "无限空间", "百倍暴击", "绝不圣母", "晶核"
+    ]
+    if any(k in full_text for k in doomsday_keywords):
+        return "doomsday"
+
+    # 4. 科幻星际 / 赛博世界 / 机械机甲
+    scifi_keywords = ["科幻", "星际", "赛博", "废土", "机甲", "太空", "战舰", "舰队", "曲率", "高维", "外星", "深空", "硬核科幻"]
     if any(k in full_text for k in scifi_keywords):
         return "scifi"
 

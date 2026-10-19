@@ -29,6 +29,7 @@ from world_state import WorldState, RoundLog, CharacterAction
 from agents.tiandao import TiandaoAgent
 from agents.character import CharacterAgent
 from agents.chronicler import ChroniclerAgent
+from agents.drama_agent import DramaAgent
 from mock_engine import run_mock_demo
 from book_manager import book_mgr, Book
 
@@ -39,7 +40,9 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 def get_fanqie_category_tags(genre: str):
     cat = classify_genre(genre)
-    if cat == "urban":
+    if cat == "doomsday":
+        return ["末世求生", "末日天灾", "重生囤货", "避难所", "无敌杀伐"]
+    elif cat == "urban":
         return ["都市生活", "战神归来", "都市脑洞", "神豪打脸"]
     elif cat == "history":
         return ["历史古代", "两宋元明", "架空历史", "穿越权谋"]
@@ -1572,7 +1575,7 @@ class SimulationManager:
                 target_book.save()
                 total_generated += 1
 
-                # 🍅 番茄小说自动上传联动检查 (单章演化即自动上传)
+                # 番茄小说自动上传联动检查 (单章演化即自动上传)
                 should_fanqie = self.fanqie_auto_upload if auto_fanqie is None else bool(auto_fanqie)
                 fanqie_msg = ""
                 if should_fanqie:
@@ -1604,7 +1607,7 @@ class SimulationManager:
                     "word_count": len(full_content),
                     "total_chapters": len(target_book.chapters),
                     "fanqie_auto_uploaded": bool(should_fanqie),
-                    "message": f"🎉 第 {next_chap_id} 章《{first_line}》撰写完毕（{len(full_content)}字）已存盘！" + (f" [{fanqie_msg}]" if fanqie_msg else "")
+                    "message": f"第 {next_chap_id} 章《{first_line}》撰写完毕（{len(full_content)}字）已存盘！" + (f" [{fanqie_msg}]" if fanqie_msg else "")
                 }
 
                 time.sleep(0.5)
@@ -1615,7 +1618,7 @@ class SimulationManager:
                 "total_generated": total_generated,
                 "total_chapters": len(target_book.chapters),
                 "book_title": target_book.title,
-                "message": f"🎉 《{target_book.title}》演化已大功告成！累计共生成 {total_generated} 个新章节！"
+                "message": f"《{target_book.title}》演化已大功告成！累计共生成 {total_generated} 个新章节！"
             }
 
         except GeneratorExit:
@@ -1961,6 +1964,73 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.wfile.write(full_txt.encode("utf-8"))
             return
 
+        if path == "/api/drama/list":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            dramas = getattr(target_book, "dramas", []) if target_book else []
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "dramas": dramas}, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/drama/export":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            ep_str = parsed_qs.get("episode_num", ["1"])[0]
+            fmt = parsed_qs.get("format", ["csv"])[0].lower()
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            dramas = getattr(target_book, "dramas", []) if target_book else []
+
+            selected_drama = None
+            if ep_str.isdigit():
+                ep_num = int(ep_str)
+                for d in dramas:
+                    if d.get("episode_num") == ep_num:
+                        selected_drama = d
+                        break
+            if not selected_drama and dramas:
+                selected_drama = dramas[0]
+
+            if not selected_drama:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": "暂无短剧分镜数据，请先生成"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            clean_book = (target_book.title if target_book else "微短剧").replace("《", "").replace("》", "")
+            ep_val = selected_drama.get("episode_num", 1)
+
+            if fmt == "srt":
+                srt_content = DramaAgent.export_srt(selected_drama)
+                filename = f"{clean_book}_第{ep_val}集_剪映字幕.srt"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(filename)}"')
+                self.end_headers()
+                self.wfile.write(srt_content.encode("utf-8"))
+                return
+            elif fmt == "txt":
+                txt_content = DramaAgent.export_script_txt(selected_drama)
+                filename = f"{clean_book}_第{ep_val}集_导演分镜表.txt"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(filename)}"')
+                self.end_headers()
+                self.wfile.write(txt_content.encode("utf-8"))
+                return
+            else:
+                csv_content = DramaAgent.export_shots_csv(selected_drama)
+                filename = f"{clean_book}_第{ep_val}集_AI视频生图分镜.csv"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv; charset=utf-8-sig")
+                self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(filename)}"')
+                self.end_headers()
+                self.wfile.write(csv_content.encode("utf-8-sig"))
+                return
+
         if path == "/api/publish/audit":
             parsed_qs = urllib.parse.parse_qs(parsed.query)
             bid = parsed_qs.get("book_id", [None])[0]
@@ -2187,6 +2257,108 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 req_data = json.loads(body)
             except Exception:
                 req_data = {}
+
+            if path == "/api/drama/generate":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                cid = req_data.get("chapter_id")
+                ep_num = req_data.get("episode_num")
+                use_mock = req_data.get("mock", False) or not os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") == "your_api_key_here"
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                
+                target_chap = None
+                if target_book.chapters:
+                    if cid is not None:
+                        for c in target_book.chapters:
+                            if str(c.get("id")) == str(cid):
+                                target_chap = c
+                                break
+                    if not target_chap:
+                        target_chap = target_book.chapters[-1]
+
+                if not target_chap:
+                    chap_title = "末世惊变·第一幕"
+                    chap_content = f"{target_book.title}。{target_book.synopsis}。世界背景：{target_book.world.scene_description}"
+                else:
+                    chap_title = target_chap.get("title", "未命名章节")
+                    chap_content = target_chap.get("content", "")
+
+                if not ep_num:
+                    ep_num = len(getattr(target_book, "dramas", [])) + 1
+
+                llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
+                model_name = os.getenv("CHRONICLER_MODEL") or os.getenv("TIANDAO_MODEL") or os.getenv("DEFAULT_MODEL") or "gemini-2.5-flash"
+                drama_agent = DramaAgent(llm, model_name=model_name)
+
+                drama_data = drama_agent.generate_from_chapter(
+                    book_title=target_book.title,
+                    genre=target_book.genre,
+                    chapter_title=chap_title,
+                    chapter_content=chap_content,
+                    episode_num=ep_num,
+                    force_mock=use_mock
+                )
+
+                if not hasattr(target_book, "dramas") or target_book.dramas is None:
+                    target_book.dramas = []
+
+                replaced = False
+                for idx, d in enumerate(target_book.dramas):
+                    if d.get("episode_num") == ep_num:
+                        target_book.dramas[idx] = drama_data
+                        replaced = True
+                        break
+                if not replaced:
+                    target_book.dramas.append(drama_data)
+
+                target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "drama": drama_data,
+                    "dramas": target_book.dramas,
+                    "message": f"成功为《{target_book.title}》生成第 {ep_num} 集竖屏短剧分镜表！"
+                }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/delete":
+                bid = req_data.get("book_id", "")
+                ep_num = req_data.get("episode_num")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if hasattr(target_book, "dramas") and target_book.dramas:
+                    target_book.dramas = [d for d in target_book.dramas if d.get("episode_num") != ep_num]
+                    target_book.save()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "dramas": getattr(target_book, "dramas", [])}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/save":
+                bid = req_data.get("book_id", "")
+                drama_data = req_data.get("drama", {})
+                ep_num = drama_data.get("episode_num")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if not hasattr(target_book, "dramas") or target_book.dramas is None:
+                    target_book.dramas = []
+                replaced = False
+                for idx, d in enumerate(target_book.dramas):
+                    if d.get("episode_num") == ep_num:
+                        target_book.dramas[idx] = drama_data
+                        replaced = True
+                        break
+                if not replaced:
+                    target_book.dramas.append(drama_data)
+                target_book.save()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "message": "短剧分镜已保存"}, ensure_ascii=False).encode("utf-8"))
+                return
 
             if path == "/api/outline/generate":
                 load_dotenv()
@@ -2734,7 +2906,7 @@ def start_server(port=8088):
 
     server = ThreadedHTTPServer(("0.0.0.0", port), TiandaoHTTPHandler)
     print(f"\n=======================================================")
-    print(f"  🌌 【天道】控制台网页服务已启动！")
+    print(f"  [天道] 控制台网页服务已启动！")
     print(f"  HTTP 访问地址: http://localhost:{port}")
     print(f"  WebSocket 地址: ws://localhost:{ws_port}")
     print(f"=======================================================\n")
