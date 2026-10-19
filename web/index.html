@@ -5347,11 +5347,13 @@
                   </div>
                 </div>
               ` : (s.video_status === 'processing' ? `
-                <div style="margin-top: 6px; padding: 18px; text-align: center; background: rgba(59,130,246,0.06); border: 1px dashed var(--accent-blue); border-radius: 8px;">
+                <div id="shotPollingCard_${s.shot_num}" style="margin-top: 6px; padding: 14px; text-align: center; background: rgba(59,130,246,0.06); border: 1px dashed var(--accent-blue); border-radius: 8px;">
                   <svg class="icon spin" viewBox="0 0 24 24" style="color: var(--accent-blue); margin-bottom: 6px;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
                   <div style="font-size: 12px; color: #fff; font-weight: 600;">AI 视频排队渲染中...</div>
-                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">9:16 动态镜头渲染中</div>
-                  <button class="btn btn-ghost" style="font-size: 10.5px; margin-top: 6px; padding: 2px 8px;" onclick="checkShotVideoStatus(${s.shot_num}, '${s.video_task_id || ''}', this)">刷新状态</button>
+                  <div id="shotPollTimerText_${s.shot_num}" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">全自动轮询守护中 · 渲染完毕自动呈现</div>
+                  <div style="margin-top: 6px; display: flex; justify-content: center; gap: 6px;">
+                    <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 8px;" onclick="checkShotVideoStatus(${s.shot_num}, '${s.video_task_id || ''}', this)">立即刷新</button>
+                  </div>
                 </div>
               ` : `
                 <div style="margin-top: 6px; display: flex; gap: 6px;">
@@ -5370,6 +5372,9 @@
 
       html += `</div>`;
       container.innerHTML = html;
+
+      // 自动唤醒并接管所有正在排队中的分镜视频自动轮询
+      autoResumePendingVideoPollers(d);
     }
 
     async function triggerDramaGeneration(isMock = false, callerBtn = null) {
@@ -5535,8 +5540,99 @@
     }
 
     // ==========================================
-    // 短剧分镜生视频与全片连续试映引擎
+    // 短剧分镜生视频与全片连续试映引擎 (带全自动守护轮询)
     // ==========================================
+    const activeVideoPollers = {};
+
+    function autoResumePendingVideoPollers(drama) {
+      if (!drama || !drama.shots) return;
+      drama.shots.forEach(s => {
+        if (s.video_status === "processing" && s.video_task_id && !activeVideoPollers[s.shot_num]) {
+          startVideoAutoPolling(s.shot_num, s.video_task_id);
+        }
+      });
+    }
+
+    function startVideoAutoPolling(shotNum, taskId) {
+      if (!taskId || taskId.startsWith("mock_")) return;
+      if (activeVideoPollers[shotNum]) {
+        clearInterval(activeVideoPollers[shotNum]);
+        delete activeVideoPollers[shotNum];
+      }
+
+      let elapsedSec = 0;
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) return;
+
+      const timerId = setInterval(async () => {
+        elapsedSec += 3;
+        const textEl = document.getElementById(`shotPollTimerText_${shotNum}`);
+        if (textEl) {
+          textEl.innerHTML = `<span style="color:var(--accent-blue); font-weight:600;">已排队渲染 ${elapsedSec}s</span> · 后台守护自动接收 MP4...`;
+        }
+
+        try {
+          const res = await fetch("/api/drama/shot/check_video_status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              book_id: bid,
+              episode_num: currentDramaEpisode,
+              shot_num: shotNum,
+              task_id: taskId
+            })
+          });
+          const data = await res.json();
+          if (data.status === "ok") {
+            if (data.video_status === "completed" && data.video_url) {
+              clearInterval(timerId);
+              delete activeVideoPollers[shotNum];
+              showToast(`镜号 #${shotNum} 视频已成功生成并就绪！`);
+
+              // 更新内存状态并重绘
+              const d = currentDramas.find(x => x.episode_num === currentDramaEpisode);
+              if (d && d.shots) {
+                const s = d.shots.find(x => x.shot_num === shotNum);
+                if (s) {
+                  s.video_status = "completed";
+                  s.video_url = data.video_url;
+                  delete s.video_error;
+                }
+              }
+              renderSelectedDramaEpisode(currentDramaEpisode);
+              return;
+            } else if (data.video_status === "failed") {
+              clearInterval(timerId);
+              delete activeVideoPollers[shotNum];
+              showToast(`镜号 #${shotNum} 视频渲染失败: ` + (data.result ? data.result.error : "网关报错"), 6000);
+              const d = currentDramas.find(x => x.episode_num === currentDramaEpisode);
+              if (d && d.shots) {
+                const s = d.shots.find(x => x.shot_num === shotNum);
+                if (s) {
+                  s.video_status = "failed";
+                  s.video_error = data.result ? data.result.error : "视频生成异常";
+                }
+              }
+              renderSelectedDramaEpisode(currentDramaEpisode);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn(`镜号 #${shotNum} 视频轮询等待中:`, e);
+        }
+
+        // 超时保护：最多持续自动轮询 12 分钟 (240次)
+        if (elapsedSec >= 720) {
+          clearInterval(timerId);
+          delete activeVideoPollers[shotNum];
+          const textEl2 = document.getElementById(`shotPollTimerText_${shotNum}`);
+          if (textEl2) textEl2.innerText = "已等待较长时间，可在后台继续等待或重试";
+        }
+      }, 3500);
+
+      activeVideoPollers[shotNum] = timerId;
+    }
+
     async function triggerShotVideoGeneration(shotNum, isMock = false, btn = null) {
       const bid = globalState ? globalState.book_id : "";
       if (!bid) {
@@ -5567,7 +5663,13 @@
           const idx = currentDramas.findIndex(x => x.episode_num === currentDramaEpisode);
           if (idx !== -1) currentDramas[idx] = data.drama;
           renderSelectedDramaEpisode(currentDramaEpisode);
-          showToast(`镜号 #${shotNum} 视频任务已就绪！`);
+
+          if (data.shot && data.shot.video_status === "processing") {
+            startVideoAutoPolling(shotNum, data.shot.video_task_id);
+            showToast(`镜号 #${shotNum} 视频渲染任务已提交网关，全自动实时轮询中，完成立即呈现！`, 5000);
+          } else if (data.shot && data.shot.video_status === "completed") {
+            showToast(`镜号 #${shotNum} 视频已成功生成！`);
+          }
         } else {
           alert("视频生成提示: " + (data.message || data.error || "未知异常"));
         }
@@ -5604,7 +5706,8 @@
             showToast(`镜号 #${shotNum} 视频渲染已完成！`);
             loadDramaData();
           } else if (data.video_status === "processing") {
-            showToast(`镜号 #${shotNum} 视频排队渲染中，请稍候再查`);
+            showToast(`镜号 #${shotNum} 视频仍在排队渲染中，后台与页面持续守护接收`);
+            startVideoAutoPolling(shotNum, taskId);
           } else {
             alert(`视频状态: ${data.video_status}`);
           }
@@ -5614,7 +5717,7 @@
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.innerText = "刷新状态";
+          btn.innerText = "立即刷新";
         }
       }
     }
@@ -5654,7 +5757,15 @@
           const idx = currentDramas.findIndex(x => x.episode_num === currentDramaEpisode);
           if (idx !== -1) currentDramas[idx] = data.drama;
           renderSelectedDramaEpisode(currentDramaEpisode);
-          showToast(data.message || "全集视频任务已处理！");
+          // 自动为所有排队中的镜头启动轮询
+          if (data.drama.shots) {
+            data.drama.shots.forEach(s => {
+              if (s.video_status === "processing" && s.video_task_id) {
+                startVideoAutoPolling(s.shot_num, s.video_task_id);
+              }
+            });
+          }
+          showToast(`全集 ${data.processed_count || ''} 个分镜视频已提交渲染，全自动双重守护轮询中，完成一个呈现一个！`, 8000);
         } else {
           alert("全集生成提示: " + (data.message || data.error || "生成失败"));
         }

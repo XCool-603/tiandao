@@ -30,7 +30,7 @@ from agents.tiandao import TiandaoAgent
 from agents.character import CharacterAgent
 from agents.chronicler import ChroniclerAgent
 from agents.drama_agent import DramaAgent
-from agents.video_agent import VideoAgent
+from agents.video_agent import VideoAgent, VideoTaskManager
 from mock_engine import run_mock_demo
 from book_manager import book_mgr, Book
 
@@ -908,7 +908,7 @@ class SimulationManager:
         """执行单步演化"""
         target_book = target_book or self.active_book
         if not target_book.id:
-            return {"error": "当前书库为空，请先点击【➕ 新建作品】创建一部小说！"}
+            return {"error": "当前书库为空，请先点击【新建作品】创建一部小说！"}
         runner = self.get_runner(target_book.id)
         session_id = f"step_{threading.get_ident()}_{time.time()}"
         if not runner.acquire(session_id):
@@ -1437,7 +1437,7 @@ class SimulationManager:
         """
         target_book = target_book or (book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book)
         if not target_book or not target_book.id:
-            yield {"type": "error", "message": "当前书库为空，请先点击顶部【➕ 新建作品】开辟一部小说！"}
+            yield {"type": "error", "message": "当前书库为空，请先点击顶部【新建作品】开辟一部小说！"}
             return
 
         runner = self.get_runner(target_book.id)
@@ -1855,6 +1855,9 @@ class SimulationManager:
 
 # 全局单例
 sim_mgr = SimulationManager()
+video_task_mgr = VideoTaskManager.get_instance()
+video_task_mgr.initialize(book_mgr, sim_mgr)
+video_task_mgr.scan_and_register_pending_shots()
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
@@ -2227,6 +2230,36 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(filename)}"')
             self.end_headers()
             self.wfile.write(full_txt.encode("utf-8"))
+            return
+
+        if path == "/api/drama/video_proxy":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            target_url = parsed_qs.get("url", [None])[0]
+            if not target_url or not (target_url.startswith("http://") or target_url.startswith("https://")):
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Invalid url")
+                return
+            try:
+                req = urllib.request.Request(target_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    self.send_response(resp.status)
+                    self.send_header("Content-Type", resp.headers.get("Content-Type", "video/mp4"))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Accept-Ranges", "bytes")
+                    cl = resp.headers.get("Content-Length")
+                    if cl:
+                        self.send_header("Content-Length", cl)
+                    self.end_headers()
+                    while True:
+                        chunk = resp.read(64 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+            except Exception as e:
+                self.send_response(502)
+                self.end_headers()
+                self.wfile.write(f"Proxy error: {str(e)}".encode("utf-8"))
             return
 
         if path == "/api/drama/list":
@@ -2714,6 +2747,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     target_shot["video_task_id"] = v_res.get("task_id", "")
                     target_shot["video_status"] = "processing"
                     target_shot.pop("video_error", None)
+                    video_task_mgr.register_task(target_book.id, ep_num, shot_num, v_res.get("task_id", ""), v_agent)
                 else:
                     target_shot["video_status"] = "failed"
                     target_shot["video_error"] = v_res.get("error", "视频生成异常")
@@ -2751,6 +2785,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     if v_res.get("status") == "completed":
                         target_shot["video_url"] = v_res.get("video_url", "")
                         target_shot["video_status"] = "completed"
+                        target_shot.pop("video_error", None)
                         target_book.save()
                     elif v_res.get("status") == "failed":
                         target_shot["video_status"] = "failed"
@@ -2800,9 +2835,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     if res.get("status") == "completed":
                         s["video_url"] = res.get("video_url", "")
                         s["video_status"] = "completed"
+                        s.pop("video_error", None)
                     elif res.get("status") == "processing":
                         s["video_task_id"] = res.get("task_id", "")
                         s["video_status"] = "processing"
+                        s.pop("video_error", None)
+                        video_task_mgr.register_task(target_book.id, ep_num, s.get("shot_num"), res.get("task_id", ""), v_agent)
                     else:
                         s["video_status"] = "failed"
                         s["video_error"] = res.get("error", "视频生成异常")
@@ -3151,7 +3189,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     out_msg = pull_res.stdout.strip() or pull_res.stderr.strip() or fetch_res.stderr.strip() or "已是最新版本"
                     res = {
                         "status": "ok" if ok else "error",
-                        "message": "✅ 代码已成功从 GitHub 更新至最新版本！请重启控制台生效。" if ok else f"更新异常: {out_msg}",
+                        "message": "代码已成功从 GitHub 更新至最新版本！请重启控制台生效。" if ok else f"更新异常: {out_msg}",
                         "details": out_msg
                     }
                 except Exception as e_up:
@@ -3230,16 +3268,17 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     t_start = time.time()
                     try:
                         v_agent = VideoAgent(api_key=test_key, base_url=test_base, model_name=test_model)
-                        probe_res = v_agent.submit_video_task("9:16 vertical short drama cinematic test", duration=5, force_mock=False)
+                        probe_res = v_agent.test_connection()
                         latency = round((time.time() - t_start) * 1000)
                         self.send_response(200)
                         self.send_header("Content-Type", "application/json; charset=utf-8")
                         self.end_headers()
                         self.wfile.write(json.dumps({
-                            "status": "ok" if probe_res.get("status") in ("processing", "completed") else "error",
+                            "status": "ok" if probe_res.get("status") == "ok" else "error",
                             "latency_ms": latency,
                             "model": test_model,
                             "reply": probe_res.get("message", "视频通道响应正常"),
+                            "error": probe_res.get("error", ""),
                             "target": target,
                             "result": probe_res
                         }, ensure_ascii=False).encode("utf-8"))
@@ -3435,7 +3474,7 @@ def start_ws_server(ws_port=8089):
             except Exception:
                 pass
 
-        print(f"  ⚡ 【WebSocket】全双工流式推演服务已启动: ws://localhost:{ws_port}")
+        print(f"  [WebSocket] 全双工流式推演服务已启动: ws://localhost:{ws_port}")
         # 关闭内部死板的 20 秒 Ping 超时掐断机制 (ping_interval=None)，彻底杜绝大模型长耗时思考时被误判超时断开
         with serve(handle_ws, "0.0.0.0", ws_port, ping_interval=None, ping_timeout=None) as ws_server:
             ws_server.serve_forever()
