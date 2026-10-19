@@ -241,6 +241,73 @@ class ChroniclerAgent:
             yield mock_text[i:i+step_len]
             time.sleep(0.015)
 
+    def continue_writing_stream(
+        self,
+        book_title: str,
+        genre: str,
+        chapter_num: int,
+        existing_content: str,
+        target_outline: Optional[Dict[str, Any]] = None,
+        force_mock: bool = False
+    ) -> Iterator[str]:
+        """
+        断章续写补全流式接口：
+        当检测到当前章节在中途截断、字数不足或未能自然完结时，
+        携带已有前半段正文进行精准无缝续写补足，直至高潮收尾。
+        """
+        if force_mock:
+            mock_ext = f"\n\n    风雷渐息，局势彻底落定。{book_title}的这一场风暴终在天地间徐徐收束，但在暗处，更加汹涌的暗流已然悄然汇聚……"
+            step_len = 6
+            for i in range(0, len(mock_ext), step_len):
+                yield mock_ext[i:i+step_len]
+                time.sleep(0.015)
+            return
+
+        tail_content = existing_content[-800:] if len(existing_content) > 800 else existing_content
+        prompt = f"""
+你正在创作小说《{book_title}》（题材：{genre}）的第 {chapter_num} 章。
+本章前半部分内容已经写出，但因篇幅或传输原因在中途戛然而止！
+
+【已完成的上文末尾片段】：
+“……{tail_content}”
+
+【核心续写任务要求】：
+1. 请紧接上面最后一句的剧情与语境，无缝继续向下续写本章剩余正文。
+2. 迅速将本章的情绪与矛盾推向核心高潮，解决当场冲突，并在章末留下引人追读的自然悬念或收束结语。
+3. 严格禁止重复已写出的上文，第一句直接承接上文输出！
+4. 续写篇幅要求 800~1500 字，语言纯正通畅，保持小说正文格式。
+"""
+        messages = [
+            {"role": "system", "content": f"你是一位享誉业界的顶级小说作家。擅长接续前文进行无缝高质量剧情续写与高潮收束。"},
+            {"role": "user", "content": prompt}
+        ]
+
+        model_to_use = self.model or "fast-model"
+        chunk_received = False
+        try:
+            for chunk in self.llm.chat_stream(model_to_use, messages, temperature=0.75, max_tokens=2500):
+                chunk_received = True
+                yield chunk
+            if chunk_received:
+                return
+        except Exception as e:
+            print(f"[史官著书 断点续写告警] 主模型续写中断: {e}，尝试备选模型...")
+
+        if not chunk_received:
+            try:
+                for chunk in self.llm.chat_stream("fast-model", messages, temperature=0.75, max_tokens=2500):
+                    chunk_received = True
+                    yield chunk
+                if chunk_received:
+                    return
+            except Exception as e2:
+                print(f"[史官著书 续写兜底] 备选模型亦失败: {e2}，启动沙盒拟真终章收尾")
+
+        mock_ext = f"\n\n    四周杀机渐敛，各方势力的试探与交锋终于暂告一段落。{book_title}的这一场风暴终在天地间徐徐收束，但在暗处，更加汹涌的暗流已然悄然汇聚……"
+        for i in range(0, len(mock_ext), 6):
+            yield mock_ext[i:i+6]
+            time.sleep(0.015)
+
     def write_chapter(
         self,
         world: WorldState,
