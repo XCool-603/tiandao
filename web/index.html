@@ -381,7 +381,7 @@
       font-weight: 500;
     }
 
-    /* 🎧 真人有声听书悬浮/嵌入条 */
+    /* 真人有声听书悬浮/嵌入条 */
     .audio-player-bar {
       background: linear-gradient(135deg, rgba(20, 26, 40, 0.98), rgba(15, 20, 32, 0.98));
       border-bottom: 1px solid var(--border-medium);
@@ -635,7 +635,7 @@
       border-color: var(--accent-blue);
     }
 
-    /* 🚀 演化流水线步骤跟踪卡片 (Evolution Stepper) */
+    /* 演化流水线步骤跟踪卡片 (Evolution Stepper) */
     .evolution-stepper-card {
       background: rgba(17, 24, 39, 0.9);
       border: 1px solid var(--border-medium);
@@ -1032,7 +1032,7 @@
       background: transparent;
     }
     /* ========================================================
-       📱 全面移动端与平板自适应架构 (Responsive Studio Styles)
+       全面移动端与平板自适应架构 (Responsive Studio Styles)
        ======================================================== */
     .mobile-only-btn {
       display: none !important;
@@ -1104,7 +1104,7 @@
       transform: scale(0.95);
     }
 
-    /* 📱 平板与中等屏幕 (<= 1024px) */
+    /* 平板与中等屏幕 (<= 1024px) */
     @media (max-width: 1024px) {
       .mobile-only-btn {
         display: inline-flex !important;
@@ -1160,7 +1160,7 @@
       }
     }
 
-    /* 📱 手机端全面适配 (<= 768px) */
+    /* 手机端全面适配 (<= 768px) */
     @media (max-width: 768px) {
       :root {
         --header-h: 52px;
@@ -1244,7 +1244,7 @@
         padding: 6px 6px;
       }
 
-      /* 🎧 有声听书条自适应 */
+      /* 有声听书条自适应 */
       .audio-player-bar {
         flex-direction: column;
         align-items: stretch;
@@ -1363,7 +1363,7 @@
       }
     }
 
-    /* 📱 超窄屏幕 (<= 480px) */
+    /* 超窄屏幕 (<= 480px) */
     @media (max-width: 480px) {
       .view-tab-btn {
         padding: 5px 6px;
@@ -1379,6 +1379,43 @@
         padding: 5px 6px;
       }
     }
+
+    /* 统一矢量图标与状态圆点规范 (无外部 CDN 依赖) */
+    .icon {
+      width: 14px;
+      height: 14px;
+      display: inline-block;
+      vertical-align: -2px;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+    .icon-sm { width: 12px; height: 12px; vertical-align: -1px; }
+    .icon-lg { width: 18px; height: 18px; vertical-align: -3px; }
+    .icon-xl { width: 24px; height: 24px; vertical-align: middle; }
+    @keyframes icon-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .icon.spin { animation: icon-spin 1s linear infinite; }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+    .status-dot.green { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.5); }
+    .status-dot.gray { background: #6b7280; }
+    .status-dot.blue { background: #3b82f6; box-shadow: 0 0 6px rgba(59, 130, 246, 0.5); }
+    .status-dot.amber { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5); }
+    .status-dot.red { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.5); }
+
   </style>
 </head>
 <body>
@@ -1387,7 +1424,7 @@
   <header>
     <div class="brand-section">
       <button id="btnToggleLeftSidebar" class="btn btn-secondary mobile-only-btn" onclick="toggleLeftDrawer()" title="打开章节目录">
-        <span>☰ 目录</span>
+        <span><svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg> 目录</span>
       </button>
       <div class="logo-badge">天</div>
       <div class="brand-title">天道 · 创作者工坊</div>
@@ -1395,39 +1432,39 @@
         <option value="">加载书目中...</option>
       </select>
       <button class="btn btn-ghost" onclick="deleteCurrentBook()" title="永久删除当前作品" style="color: var(--accent-red); font-size: 13px; padding: 4px 6px; margin-left: 2px;">
-        <span>🗑️</span>
+        <span><svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
       </button>
     </div>
 
     <!-- 核心视图切换 (正文 / 大纲 / 推演) -->
     <div class="view-switcher">
       <button id="navTabReader" class="view-tab-btn active" onclick="switchView('reader')">
-        <span>📖 正文</span>
+        <span><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 2v20"/></svg> 正文</span>
       </button>
       <button id="navTabOutline" class="view-tab-btn" onclick="switchView('outline')">
-        <span>📜 大纲</span>
+        <span><svg class="icon" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> 大纲</span>
       </button>
       <button id="navTabSim" class="view-tab-btn" onclick="switchView('sim')">
-        <span>⚡ 推演</span>
+        <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 推演</span>
       </button>
     </div>
 
     <!-- 右侧动作按钮 -->
     <div class="header-actions">
       <button class="btn btn-secondary" onclick="openPublishModal()" title="番茄小说与全网网文发布总控台">
-        <span style="color:#ef4444;">🍅</span><span class="btn-label-text"> 番茄发书</span>
+        <svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg><span class="btn-label-text"> 番茄发书</span>
       </button>
       <button class="btn btn-secondary" onclick="openNewBookModal()" title="新建作品">
-        <span>➕</span><span class="btn-label-text"> 新建作品</span>
+        <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-label-text"> 新建作品</span>
       </button>
       <button class="btn btn-ghost" onclick="triggerSystemUpdate()" title="检查并同步 GitHub 最新版本代码">
-        <span id="updateBtnText">🔄</span><span class="btn-label-text"> 检查更新</span>
+        <span id="updateBtnText"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg></span><span class="btn-label-text"> 检查更新</span>
       </button>
       <button class="btn btn-ghost" onclick="openSettingsModal()" title="系统与模型设置">
-        <span>⚙️</span><span class="btn-label-text"> 设置</span>
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="btn-label-text"> 设置</span>
       </button>
       <button id="btnToggleRightSidebar" class="btn btn-secondary" onclick="toggleRightDrawer()" title="展开/收起因果总账与人物设定">
-        <span>◨</span><span class="btn-label-text"> 设定</span>
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-10 10 10 10 0 0 0 10 10V2z"/></svg><span class="btn-label-text"> 设定</span>
       </button>
     </div>
   </header>
@@ -1451,7 +1488,7 @@
             <span id="sideBookChaptersCount">0 章</span>
           </div>
         </div>
-        <button class="drawer-close-btn mobile-only-btn" onclick="closeAllDrawers()" title="关闭目录">✕</button>
+        <button class="drawer-close-btn mobile-only-btn" onclick="closeAllDrawers()" title="关闭目录"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
 
       <div class="chapter-search-box">
@@ -1461,7 +1498,7 @@
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; font-size: 11px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-card);">
         <span style="color: var(--text-muted); font-weight: 600;">章节列表</span>
         <button class="btn btn-ghost" onclick="clearAllBookChapters()" style="color: var(--accent-red); font-size: 11px; padding: 1px 6px;" title="清空本书所有正文章节，从零开篇推演">
-          <span>🧹 清空章节</span>
+          <span><svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 清空章节</span>
         </button>
       </div>
 
@@ -1483,41 +1520,41 @@
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
               <button class="btn btn-secondary mobile-only-btn" onclick="uploadCurrentChapterFanqie()" title="一键上传本章至番茄小说">
-                <span style="color:#ef4444;">🍅</span> <span>传番茄</span>
+                <svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg> <span>传番茄</span>
               </button>
               <button class="btn btn-secondary mobile-only-btn" onclick="toggleAudiobookBar()" id="btnAudiobookToggleMobile" title="真人有声听书">
-                <span>🎧 听书</span>
+                <span><svg class="icon" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg> 听书</span>
               </button>
             </div>
           </div>
           <div class="studio-header-btns">
             <button class="btn btn-secondary" onclick="uploadCurrentChapterFanqie()" title="手动上传当前章节到番茄小说草稿箱">
-              <span style="color:#ef4444;">🍅</span> <span>传番茄</span>
+              <svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg> <span>传番茄</span>
             </button>
             <button class="btn btn-secondary desktop-only" onclick="toggleAudiobookBar()" id="btnAudiobookToggle" title="真人有声听书 (支持多音色、倍速与高亮跟读)">
-              <span>🎧 有声听书</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg> 有声听书</span>
             </button>
             <button class="btn btn-secondary" onclick="toggleSerifFont()" id="btnFontToggle" title="衬线/无衬线切换">
-              <span>🔤 衬线体</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg> 衬线体</span>
             </button>
             <button class="btn btn-secondary" onclick="copyCurrentChapter()" title="一键复制本章正文">
-              <span>📋 复制全文</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> 复制全文</span>
             </button>
             <button class="btn btn-secondary" onclick="toggleEditMode()" id="btnEditToggle">
-              <span>✏️ 精修编辑</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg> 精修编辑</span>
             </button>
             <button class="btn btn-primary" onclick="saveEditedChapter()" id="btnSaveChapter" style="display: none;">
-              <span>💾 保存修改</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> 保存修改</span>
             </button>
           </div>
         </div>
 
-        <!-- 🎧 真人有声听书控制条 (Audiobook Neural Player) -->
+        <!-- 真人有声听书控制条 (Audiobook Neural Player) -->
         <div id="audioPlayerBar" class="audio-player-bar" style="display: none;">
           <div class="audio-top-row">
-            <div class="audio-icon-pulse" id="ttsWaveIcon">🎧</div>
+            <div class="audio-icon-pulse" id="ttsWaveIcon"><svg class="icon-lg" viewBox="0 0 24 24" style="color:var(--accent-gold);"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></div>
             <div class="audio-info">
-              <div class="audio-title" id="ttsCurrentTitle">🎙️ 真人有声听书</div>
+              <div class="audio-title" id="ttsCurrentTitle"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> 真人有声听书</div>
               <div class="audio-status-text" id="ttsStatusText">支持真人自然音色 · 点击任意段落即可跳转朗读</div>
             </div>
             <!-- 实时跳动声波频谱条 -->
@@ -1530,14 +1567,14 @@
               <span class="eq-bar"></span>
               <span class="eq-bar"></span>
             </div>
-            <button class="drawer-close-btn" onclick="toggleAudiobookBar(false)" title="收起听书面板" style="margin-left: 4px;">✕</button>
+            <button class="drawer-close-btn" onclick="toggleAudiobookBar(false)" title="收起听书面板" style="margin-left: 4px;"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
 
           <div class="audio-controls">
             <div class="audio-controls-row-1">
               <!-- 声音角色选择器 (优先嗅探中文真人自然音色) -->
               <select id="ttsVoiceSelect" class="form-input" style="font-size: 12px; padding: 4px 8px; flex: 1;" onchange="changeTtsVoice()" title="选择朗读声音角色">
-                <option value="">🎙️ 智能优选真人自然音</option>
+                <option value="">智能优选真人自然音</option>
               </select>
               <!-- 语速微调药丸 -->
               <div class="speed-capsules">
@@ -1556,23 +1593,23 @@
 
             <div class="audio-controls-row-2">
               <button id="ttsPrevBtn" class="btn btn-secondary" onclick="prevTtsParagraph()" title="朗读上一段">
-                <span>⏮ 上段</span>
+                <span><svg class="icon" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg> 上段</span>
               </button>
               <button id="ttsPlayBtn" class="btn btn-primary" onclick="toggleAudiobook()">
-                <span>▶ 开始听书</span>
+                <span><svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> 开始听书</span>
               </button>
               <button id="ttsNextBtn" class="btn btn-secondary" onclick="nextTtsParagraph()" title="朗读下一段">
-                <span>⏭ 下段</span>
+                <span><svg class="icon" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg> 下段</span>
               </button>
               <button id="ttsStopBtn" class="btn btn-secondary" onclick="stopAudiobook()" title="停止听书">
-                <span>⏹ 停止</span>
+                <span><svg class="icon" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/></svg> 停止</span>
               </button>
             </div>
           </div>
         </div>
 
         <div class="reader-scroll-area" id="readerScrollArea">
-          <!-- 🚀 演化推演阶段状态跟踪面板 (清晰呈现：第一步/第二步/第三步/第四步) -->
+          <!-- 演化推演阶段状态跟踪面板 (清晰呈现：第一步/第二步/第三步/第四步) -->
           <div id="readerEvolutionStepper" style="display: none; width: 100%; max-width: 900px; margin: 0 auto 16px auto;"></div>
           <div class="reader-content-box" id="readerContentBox">
             <!-- 沉浸正文阅读展示 -->
@@ -1603,31 +1640,31 @@
               <option value="10">连更 10 章</option>
               <option value="30">连更 30 章</option>
               <option value="50">连更 50 章</option>
-              <option value="100" selected>🚀 宏大连更 100 章</option>
+              <option value="100" selected>宏大连更 100 章</option>
             </select>
 
             <button id="btnStartStream" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;" onclick="triggerSelectedStream()">
-              <span>⚡ 启动演化</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 启动演化</span>
             </button>
             <button id="btnStopStream" class="btn btn-danger" style="display: none; padding: 8px 14px;" onclick="stopStream()">
-              <span>⏹ 安全停止</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/></svg> 安全停止</span>
             </button>
           </div>
           <div class="studio-actions-row">
             <div class="progress-status-badge" id="studioProgressStatus">
-              <span>🟢 就绪</span>
+              <span><span class="status-dot green"></span> 就绪</span>
             </div>
             <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
               <label style="display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; cursor: pointer; color: var(--text-secondary); user-select: none;" title="开启后，每推演演化完一章正文，立即自动格式化并上传至番茄发布通道">
                 <input type="checkbox" id="chkAutoFanqie" onchange="onToggleAutoFanqie(this.checked)" style="accent-color: #ef4444; width: 14px; height: 14px; cursor: pointer;">
-                <span style="color: #ef4444; font-weight: 700;">🍅</span>
+                <svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg>
                 <span>自动上传番茄</span>
               </label>
               <span style="font-size: 11.5px; color: var(--text-muted);" class="desktop-only">
                 天道 Turbo 双盲矩阵推演 · 主线大纲牵引 · 每写一章实时存盘防丢
               </span>
               <button class="bottom-bar-minimize-btn" onclick="toggleBottomBarMinimize(true)" title="折叠底部控制台">
-                <span>▼ 折叠</span>
+                <span><svg class="icon" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg> 折叠</span>
               </button>
             </div>
           </div>
@@ -1635,7 +1672,7 @@
 
         <!-- 手机端悬浮演化快捷呼出按钮 (FAB) -->
         <button id="mobileEvolutionFab" class="mobile-evolution-fab" onclick="toggleBottomBarMinimize(false)" title="展开创作演化控制台">
-          <span>⚡ 演化</span>
+          <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 演化</span>
         </button>
       </section>
 
@@ -1643,26 +1680,26 @@
       <section id="viewOutline" class="view-panel">
         <div class="studio-header">
           <div>
-            <div class="studio-chap-title">📜 全书主线架构与分卷蓝图</div>
+            <div class="studio-chap-title"><svg class="icon" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> 全书主线架构与分卷蓝图</div>
             <div class="studio-chap-meta">世界观设定 · 晋升阶梯 · 核心矛盾 · 分卷大纲</div>
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" id="btnGenerateOutline" onclick="generateOutlineFromUI()">
-              <span>✨ AI 重新策划全书大纲</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg> AI 重新策划全书大纲</span>
             </button>
             <button class="btn btn-primary" onclick="saveOutlineFromUI()">
-              <span>💾 保存大纲设定</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> 保存大纲设定</span>
             </button>
           </div>
         </div>
 
         <div class="outline-scroll-area">
           <div class="outline-container">
-            <!-- 📜 大纲推演进度与步骤跟踪卡片 -->
+            <!-- 大纲推演进度与步骤跟踪卡片 -->
             <div id="outlineProgressCard" style="display: none; background: rgba(30, 41, 59, 0.95); border: 1px solid var(--accent-blue); border-radius: 10px; padding: 16px 18px; margin-bottom: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.35);">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
                 <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #60a5fa; font-size: 13.5px;">
-                  <span class="pulsing-dot" style="background: #60a5fa;">●</span>
+                  <span class="status-dot blue"></span>
                   <span id="outlineProgressTitle">AI 终极大纲策划宗师正在推演全局大纲...</span>
                 </div>
                 <span class="pill pill-blue" id="outlineProgressBadge">构筑世界观中</span>
@@ -1694,35 +1731,35 @@
 
             <div class="studio-card">
               <div class="studio-card-header">
-                <div class="studio-card-title">🌍 世界观与时代背景格局</div>
+                <div class="studio-card-title"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> 世界观与时代背景格局</div>
               </div>
               <textarea id="outlineWorldView" class="studio-textarea" style="height: 100px;" placeholder="描述世界观隐秘、地理势力与时代格局..."></textarea>
             </div>
 
             <div class="studio-card">
               <div class="studio-card-header">
-                <div class="studio-card-title">⚡ 战力 / 阶层晋升脉络体系</div>
+                <div class="studio-card-title"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 战力 / 阶层晋升脉络体系</div>
               </div>
               <textarea id="outlinePowerSystem" class="studio-textarea" style="height: 100px;" placeholder="境界划分或实力晋升标准..."></textarea>
             </div>
 
             <div class="studio-card">
               <div class="studio-card-header">
-                <div class="studio-card-title">🎯 全书不可调和的核心主线矛盾</div>
+                <div class="studio-card-title"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> 全书不可调和的核心主线矛盾</div>
               </div>
               <textarea id="outlineMainPlot" class="studio-textarea" style="height: 90px;" placeholder="主角终极追求与宿命冲突..."></textarea>
             </div>
 
             <div class="studio-card">
               <div class="studio-card-header">
-                <div class="studio-card-title">📚 分卷史诗演进架构 (Volumes)</div>
+                <div class="studio-card-title"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H10v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M10 2h10v20H10"/></svg> 分卷史诗演进架构 (Volumes)</div>
               </div>
               <div id="outlineVolumesContainer" style="display: flex; flex-direction: column; gap: 10px;"></div>
             </div>
 
             <div class="studio-card">
               <div class="studio-card-header">
-                <div class="studio-card-title">📋 已规划分章细纲蓝图 (Chapter Blueprints)</div>
+                <div class="studio-card-title"><svg class="icon" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> 已规划分章细纲蓝图 (Chapter Blueprints)</div>
               </div>
               <div id="outlineChaptersContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
             </div>
@@ -1734,12 +1771,12 @@
       <section id="viewSim" class="view-panel">
         <div class="studio-header">
           <div>
-            <div class="studio-chap-title">⚡ 多智能体双盲对决与因果裁决台</div>
+            <div class="studio-chap-title"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 多智能体双盲对决与因果裁决台</div>
             <div class="studio-chap-meta" id="simRoundBadge">第 0 轮</div>
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" onclick="runSimSingleStep()" id="btnSimSingleStep">
-              <span>⚡ 运转单步推演</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 运转单步推演</span>
             </button>
           </div>
         </div>
@@ -1747,7 +1784,7 @@
         <div class="sim-scroll-area">
           <div class="sim-container">
             <div class="studio-card">
-              <div class="studio-card-title" style="margin-bottom: 8px;">⛩ 当前秘境天地格局</div>
+              <div class="studio-card-title" style="margin-bottom: 8px;"><svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 22 22 22 12 2"/></svg> 当前秘境天地格局</div>
               <div id="simSceneDesc" style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">天地初开，各方博弈在即...</div>
             </div>
 
@@ -1764,12 +1801,12 @@
     <aside class="sidebar-right" id="sidebarRight">
       <div class="sidebar-right-tabs" style="align-items: center;">
         <button id="tabBtnForeshadow" class="sidebar-tab-btn active" onclick="switchRightTab('foreshadow')">
-          <span>🕸️ 伏线 (<span id="foreshadowBadgeCount">0</span>)</span>
+          <span><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg> 伏线 (<span id="foreshadowBadgeCount">0</span>)</span>
         </button>
         <button id="tabBtnChars" class="sidebar-tab-btn" onclick="switchRightTab('chars')">
-          <span>👥 人物 (<span id="charsBadgeCount">0</span>)</span>
+          <span><svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg> 人物 (<span id="charsBadgeCount">0</span>)</span>
         </button>
-        <button class="drawer-close-btn mobile-only-btn" onclick="closeAllDrawers()" title="关闭侧栏" style="margin-right: 6px;">✕</button>
+        <button class="drawer-close-btn mobile-only-btn" onclick="closeAllDrawers()" title="关闭侧栏" style="margin-right: 6px;"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
 
       <!-- 选项卡 1: 伏线账本 -->
@@ -1777,7 +1814,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px;">
           <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">全书长程因果线</span>
           <button class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="toggleAddForeshadowForm()">
-            <span>➕ 埋新线</span>
+            <span><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 埋新线</span>
           </button>
         </div>
 
@@ -1812,21 +1849,21 @@
   <div id="modalCreateBook" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <div class="modal-title">➕ 开辟新书天地</div>
-        <button class="modal-close-btn" onclick="closeModal('modalCreateBook')">✕</button>
+        <div class="modal-title"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 开辟新书天地</div>
+        <button class="modal-close-btn" onclick="closeModal('modalCreateBook')"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="modal-body">
         <div class="form-group">
           <label class="form-label">题材类型风格 (可点击快捷选用)</label>
           <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('仙侠修真', '《万古争渡：从执掌因果玉佩开始》', '无钦定天命主角，人人皆怀长生执念，寒渊夺宝与杀伐逆袭')">🌌 仙侠修真</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('现代都市', '《龙王出渊：开局百亿神豪退婚》', '三年隐忍期满，至尊龙王令解封，横推江南财阀与打脸反派')">🏙️ 现代都市</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('科幻星际', '《深空余烬：第七舰队的赛博亡魂》', '柯伊伯带拾荒觉醒高维密钥，退役舰队血战巨型财阀与机械蜂群')">🚀 科幻星际</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('悬疑怪谈', '《诡异降临：我在规则怪谈中找生路》', '午夜公寓租客生存守则，直视深渊裂隙，以命解构不可名状规则')">👁️ 悬疑怪谈</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('历史架空', '《大明第一权相：从斩贪官开始》', '现代法医刑侦专家戴枷上殿，手撕假账，老朱赐尚方宝剑巡按天下')">📜 历史架空</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('剑与魔法', '《破晓领主：开局觉醒黄金龙血》', '孤堡黑石崖抵御兽人与食尸鬼黑潮，奥术高塔禁咒与骑士征伐')">⚔️ 剑与魔法</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('游戏无限', '《神域诸天：我的被动无限叠加》', '重生封弊者单挑超级垄断公会，极限微操与神级词条破局')">🎮 游戏无限</button>
-            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('传统武侠', '《快意寒刀：一人一刀踏平天下》', '刀光剑影，快意恩仇，名门宿怨与绝顶刀客雪夜破重围')">🗡️ 传统武侠</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('仙侠修真', '《万古争渡：从执掌因果玉佩开始》', '无钦定天命主角，人人皆怀长生执念，寒渊夺宝与杀伐逆袭')"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> 仙侠修真</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('现代都市', '《龙王出渊：开局百亿神豪退婚》', '三年隐忍期满，至尊龙王令解封，横推江南财阀与打脸反派')"><svg class="icon" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M8 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M16 14h.01"/></svg> 现代都市</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('科幻星际', '《深空余烬：第七舰队的赛博亡魂》', '柯伊伯带拾荒觉醒高维密钥，退役舰队血战巨型财阀与机械蜂群')"><svg class="icon" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> 科幻星际</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('悬疑怪谈', '《诡异降临：我在规则怪谈中找生路》', '午夜公寓租客生存守则，直视深渊裂隙，以命解构不可名状规则')"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> 悬疑怪谈</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('历史架空', '《大明第一权相：从斩贪官开始》', '现代法医刑侦专家戴枷上殿，手撕假账，老朱赐尚方宝剑巡按天下')"><svg class="icon" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> 历史架空</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('剑与魔法', '《破晓领主：开局觉醒黄金龙血》', '孤堡黑石崖抵御兽人与食尸鬼黑潮，奥术高塔禁咒与骑士征伐')"><svg class="icon" viewBox="0 0 24 24"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg> 剑与魔法</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('游戏无限', '《神域诸天：我的被动无限叠加》', '重生封弊者单挑超级垄断公会，极限微操与神级词条破局')"><svg class="icon" viewBox="0 0 24 24"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect width="20" height="12" x="2" y="6" rx="6"/></svg> 游戏无限</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 3px 8px;" onclick="selectGenrePreset('传统武侠', '《快意寒刀：一人一刀踏平天下》', '刀光剑影，快意恩仇，名门宿怨与绝顶刀客雪夜破重围')"><svg class="icon" viewBox="0 0 24 24"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg> 传统武侠</button>
           </div>
           <input type="text" id="createBookGenre" class="form-input" value="传统凡人修仙" placeholder="可手动输入任意自定义流派，如：克苏鲁跑团 / 赛博朋克 / 诸天快穿">
         </div>
@@ -1841,7 +1878,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('modalCreateBook')">取消</button>
-        <button class="btn btn-primary" onclick="submitCreateBook()">⚡ 立即开辟新书</button>
+        <button class="btn btn-primary" onclick="submitCreateBook()"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 立即开辟新书</button>
       </div>
     </div>
   </div>
@@ -1850,23 +1887,23 @@
   <div id="modalSettings" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <div class="modal-title">⚙️ 工作台排版与偏好设置</div>
-        <button class="modal-close-btn" onclick="closeModal('modalSettings')">✕</button>
+        <div class="modal-title"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 工作台排版与偏好设置</div>
+        <button class="modal-close-btn" onclick="closeModal('modalSettings')"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="modal-body">
         <!-- 大模型服务托管状态卡片 -->
         <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div style="font-weight: 600; font-size: 13.5px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-              <span>🤖 大模型推演引擎</span>
-              <span id="userModelStatusBadge" class="pill pill-green" style="font-size: 11px;">🟢 管理端托管运行中</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><rect width="18" height="12" x="3" y="8" rx="2"/><path d="M12 2v6"/><circle cx="8.5" cy="14" r="1.5"/><circle cx="15.5" cy="14" r="1.5"/></svg> 大模型推演引擎</span>
+              <span id="userModelStatusBadge" class="pill pill-green" style="font-size: 11px;"><span class="status-dot green"></span> 管理端托管运行中</span>
             </div>
             <a href="/admin" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px;">
-              <span>🔐 管理端控制台</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> 管理端控制台</span>
             </a>
           </div>
           <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-            🔒 <b>安全策略保护</b>：系统底层 API Key 与大模型网关由管理员统一维护管理。创作者端仅供小说阅读、大纲推演与内容精修，不开放敏感密钥修改权限以防盗用泄露。
+            <svg class="icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <b>安全策略保护</b>：系统底层 API Key 与大模型网关由管理员统一维护管理。创作者端仅供小说阅读、大纲推演与内容精修，不开放敏感密钥修改权限以防盗用泄露。
           </div>
         </div>
 
@@ -1911,19 +1948,19 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('modalSettings')">关闭</button>
-        <button class="btn btn-primary" onclick="closeModal('modalSettings'); alert('✔ 工作台偏好已保存！');">保存偏好</button>
+        <button class="btn btn-primary" onclick="closeModal('modalSettings'); alert('工作台偏好已保存！');">保存偏好</button>
       </div>
     </div>
   </div>
 
-  <!-- 🔒 管理员鉴权弹窗 (清空章节、删章与敏感修改安全防线) -->
+  <!-- 管理员鉴权弹窗 (清空章节、删章与敏感修改安全防线) -->
   <div id="modalAdminAuth" class="modal-overlay">
     <div class="modal-card" style="max-width: 440px; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);">
       <div class="modal-header">
         <div class="modal-title" style="color: var(--accent-red); display: flex; align-items: center; gap: 8px;">
-          <span>🔒 管理员权限验证</span>
+          <span><svg class="icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> 管理员权限验证</span>
         </div>
-        <button class="modal-close-btn" onclick="closeAdminAuthModal(false)">✕</button>
+        <button class="modal-close-btn" onclick="closeAdminAuthModal(false)"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="modal-body" style="padding: 18px 20px;">
         <div id="adminAuthActionDesc" style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 14px; background: rgba(239, 68, 68, 0.08); border-left: 3px solid #ef4444; padding: 10px 12px; border-radius: 4px;">
@@ -1942,18 +1979,18 @@
     </div>
   </div>
 
-  <!-- 🍅 番茄小说 / 全网网文平台 · 一键发布与上传总控台 -->
+  <!-- 番茄小说 / 全网网文平台 · 一键发布与上传总控台 -->
   <div id="publishModal" class="modal-overlay">
     <div class="modal-card" style="max-width: 820px; width: 95%;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 22px;">🍅</span>
+          <svg class="icon-xl" viewBox="0 0 24 24" style="color:#ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg>
           <div>
             <div class="modal-title" style="color: var(--accent-gold);">番茄小说 / 全网网文 · 一键上传与自动发布总控台</div>
             <div style="font-size: 11.5px; color: var(--text-muted);">支持单章手动即时上传、全自动推演自动同步、全本 ZIP 规范导入</div>
           </div>
         </div>
-        <button class="modal-close-btn" onclick="closePublishModal()">✕</button>
+        <button class="modal-close-btn" onclick="closePublishModal()"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       
       <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
@@ -1961,8 +1998,8 @@
         <div style="background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: 8px; padding: 12px 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
             <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-              <span>⚡ 番茄通道自动同步配置</span>
-              <span id="fanqieAutoStatusBadge" class="pill pill-green" style="font-size: 10.5px;">🟢 实时联动</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 番茄通道自动同步配置</span>
+              <span id="fanqieAutoStatusBadge" class="pill pill-green" style="font-size: 10.5px;"><span class="status-dot green"></span> 实时联动</span>
             </div>
             <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--text-primary); user-select: none;">
               <input type="checkbox" id="modalChkAutoFanqie" style="accent-color: #ef4444; width: 15px; height: 15px; cursor: pointer;">
@@ -1981,8 +2018,8 @@
         <!-- 番茄签约合规体检看板 -->
         <div style="background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div style="font-size: 13px; font-weight: 700; color: var(--accent-gold);">📋 番茄小说签约规范与机审体检看板</div>
-            <span id="auditBadge" class="pill pill-green">✅ 符合番茄签约标准</span>
+            <div style="font-size: 13px; font-weight: 700; color: var(--accent-gold);"><svg class="icon" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> 番茄小说签约规范与机审体检看板</div>
+            <span id="auditBadge" class="pill pill-green"><span class="status-dot green"></span> 符合番茄签约标准</span>
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; font-size: 12px;">
             <div style="background: var(--bg-input); padding: 8px 10px; border-radius: 6px;">
@@ -2004,11 +2041,11 @@
           </div>
         </div>
 
-        <!-- 🔥 全自动挂机发书模式：写一章·自动发一章 -->
+        <!-- 全自动挂机发书模式：写一章·自动发一章 -->
         <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 14px 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 20px;">🤖</span>
+              <svg class="icon-lg" viewBox="0 0 24 24"><rect width="18" height="12" x="3" y="8" rx="2"/><path d="M12 2v6"/><circle cx="8.5" cy="14" r="1.5"/><circle cx="15.5" cy="14" r="1.5"/></svg>
               <div>
                 <div style="font-size: 14px; font-weight: 800; color: #ef4444; display: flex; align-items: center; gap: 6px;">
                   <span>全自动无人值守挂机发书 (写一章 · 自动上传一章)</span>
@@ -2024,23 +2061,23 @@
             </div>
           </div>
 
-          <!-- 🌟 本项目原生内置直推引擎 (无需油猴脚本 / 无需外部插件) -->
+          <!-- 本项目原生内置直推引擎 (无需油猴脚本 / 无需外部插件) -->
           <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 12px 14px; margin-top: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
               <div style="font-size: 13px; font-weight: 700; color: #10b981; display: flex; align-items: center; gap: 6px;">
-                <span>🌟 本项目原生直推引擎</span>
+                <span><svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-gold);"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg> 本项目原生直推引擎</span>
                 <span class="pill pill-green" style="font-size: 10px;">零插件 · 原生免密</span>
                 <span id="nativeFanqieStatus" style="font-size: 11.5px; color: var(--text-primary); font-weight: 500;">检测中...</span>
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                 <button class="btn btn-primary" style="font-size: 11px; padding: 4px 10px;" onclick="triggerNativeFanqieLogin()">
-                  <span>📲 扫码绑定番茄账号</span>
+                  <span><svg class="icon" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg> 扫码绑定番茄账号</span>
                 </button>
                 <button class="btn btn-gold" style="font-size: 11px; padding: 4px 10px;" onclick="uploadCurrentChapterNative()">
-                  <span>🍅 一键直推当前章节</span>
+                  <span><svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg> 一键直推当前章节</span>
                 </button>
                 <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="uploadAllChaptersNative()">
-                  <span>📚 一键全书直推草稿箱</span>
+                  <span><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H10v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M10 2h10v20H10"/></svg> 一键全书直推草稿箱</span>
                 </button>
               </div>
             </div>
@@ -2060,7 +2097,7 @@
             <div style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
               <div>
                 <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                  <span>🐒 备选：油猴插件挂机助手</span>
+                  <span><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/></svg> 备选：油猴插件挂机助手</span>
                   <span class="pill pill-blue" style="font-size: 9.5px;">备选方式</span>
                 </div>
                 <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
@@ -2069,7 +2106,7 @@
               </div>
               <div style="display: flex; gap: 6px;">
                 <a href="/api/fanqie/script.user.js" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; text-decoration: none; flex: 1; text-align: center;">
-                  <span>📥 安装油猴脚本</span>
+                  <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 安装油猴脚本</span>
                 </a>
                 <button class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px;" onclick="copyTampermonkeyUrl()">复制直链</button>
               </div>
@@ -2079,7 +2116,7 @@
             <div style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
               <div>
                 <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                  <span>🌐 备选：独立 Edge 守护机器人</span>
+                  <span><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> 备选：独立 Edge 守护机器人</span>
                   <span class="pill pill-gold" style="font-size: 9.5px;">备选方式</span>
                 </div>
                 <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
@@ -2088,7 +2125,7 @@
               </div>
               <div>
                 <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; width: 100%;" onclick="launchEdgeBot()">
-                  <span>🚀 唤起 Edge 挂机机器人</span>
+                  <span><svg class="icon" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> 唤起 Edge 挂机机器人</span>
                 </button>
               </div>
             </div>
@@ -2100,7 +2137,7 @@
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
             <div>
               <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                <span>📦 方案 A：下载【番茄小说官方·批量导入专用 ZIP 包】</span>
+                <span><svg class="icon" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg> 方案 A：下载【番茄小说官方·批量导入专用 ZIP 包】</span>
                 <span class="pill pill-gold" style="font-size: 10px;">1秒批量导入</span>
               </div>
               <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
@@ -2108,7 +2145,7 @@
               </div>
             </div>
             <a id="btnDownloadFanqieZip" href="/api/export/fanqie_zip" download class="btn btn-gold" style="padding: 6px 14px;">
-              <span>📥 下载官方 ZIP 导入包</span>
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载官方 ZIP 导入包</span>
             </a>
           </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
@@ -2124,14 +2161,14 @@
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
             <div>
               <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary);">
-                📋 方案 B：逐章手动上传与复制助手 (一章传一行)
+                <svg class="icon" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> 方案 B：逐章手动上传与复制助手 (一章传一行)
               </div>
               <div style="font-size: 11.5px; color: var(--text-muted);">
                 点击即可上传指定章节，或一键复制去除 Markdown 的纯净首行缩进正文。
               </div>
             </div>
             <button class="btn btn-primary" style="font-size: 12px;" onclick="uploadAllChaptersFanqie()">
-              <span>🍅 一键全书批量上传</span>
+              <span><svg class="icon" viewBox="0 0 24 24" style="color:#ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg> 一键全书批量上传</span>
             </button>
           </div>
           <div id="publishChaptersList" style="max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
@@ -2143,10 +2180,10 @@
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <div style="display: flex; gap: 8px;">
           <a href="https://fanqienovel.com/writer/zone" target="_blank" class="btn btn-ghost" style="font-size: 12px;">
-            <span>🔑 番茄作家专区 (登录入口)</span>
+            <span><svg class="icon" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3"/><path d="M18.5 4.5 20 6"/></svg> 番茄作家专区 (登录入口)</span>
           </a>
           <a href="https://fanqienovel.com/main/writer/book-manage" target="_blank" class="btn btn-ghost" style="font-size: 12px;">
-            <span>📚 作品管理与章节发布</span>
+            <span><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H10v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M10 2h10v20H10"/></svg> 作品管理与章节发布</span>
           </a>
         </div>
         <button class="btn btn-secondary" onclick="closePublishModal()">关闭</button>
@@ -2155,6 +2192,61 @@
   </div>
 
   <script>
+
+    // ==========================================
+    // 矢量 SVG 图标库定义 (轻量纯本地矢量，零外部依赖)
+    // ==========================================
+    const ICONS = {
+      book: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 2v20"/></svg>',
+      books: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H10v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M10 2h10v20H10"/></svg>',
+      fileText: '<svg class="icon" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
+      zap: '<svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+      check: '<svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+      checkCircle: '<svg class="icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+      x: '<svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+      loader: '<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>',
+      refresh: '<svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>',
+      trash: '<svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+      edit: '<svg class="icon" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+      plus: '<svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+      settings: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+      play: '<svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+      pause: '<svg class="icon" viewBox="0 0 24 24"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>',
+      stop: '<svg class="icon" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/></svg>',
+      save: '<svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
+      copy: '<svg class="icon" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
+      sparkles: '<svg class="icon" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
+      headphones: '<svg class="icon" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>',
+      mic: '<svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>',
+      tomato: '<svg class="icon" viewBox="0 0 24 24" style="color: #ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg>',
+      lock: '<svg class="icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+      user: '<svg class="icon" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      users: '<svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+      target: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+      compass: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
+      globe: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+      download: '<svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+      smartphone: '<svg class="icon" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>',
+      bot: '<svg class="icon" viewBox="0 0 24 24"><rect width="18" height="12" x="3" y="8" rx="2"/><path d="M12 2v6"/><circle cx="8.5" cy="14" r="1.5"/><circle cx="15.5" cy="14" r="1.5"/></svg>',
+      type: '<svg class="icon" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>',
+      eye: '<svg class="icon" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+      feather: '<svg class="icon" viewBox="0 0 24 24"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>',
+      chevronDown: '<svg class="icon" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>',
+      chevronRight: '<svg class="icon" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>',
+      chevronLeft: '<svg class="icon" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>',
+      skipBack: '<svg class="icon" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>',
+      skipForward: '<svg class="icon" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>',
+      package: '<svg class="icon" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+      menu: '<svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg>',
+      shield: '<svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+      alertTriangle: '<svg class="icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+      rocket: '<svg class="icon" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>',
+      clock: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      layers: '<svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+      code: '<svg class="icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+      share: '<svg class="icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>'
+    };
+
     // ==========================================
     // 全局状态与基础变量
     // ==========================================
@@ -2187,6 +2279,48 @@
       }, 5000);
     });
 
+    // 应用状态至前端界面
+    function applyState(data, refreshFullView = true) {
+      if (!data) return;
+      globalState = data;
+
+      renderTopBookSelector(data.books_summary || [], data.book_id);
+      renderSideBookInfo(data);
+      renderChapterList(data.chapters || []);
+
+      if (refreshFullView) {
+        if (data.chapters && data.chapters.length > 0) {
+          const chap = data.chapters.find(c => c.id === currentChapterId) || data.chapters[0];
+          selectChapter(chap.id);
+        } else {
+          currentChapterId = 0;
+          const titleEl = document.getElementById("currentChapHeaderTitle");
+          const metaEl = document.getElementById("currentChapHeaderMeta");
+          const box = document.getElementById("readerContentBox");
+          if (titleEl) titleEl.innerText = data.book_id ? `${data.title} · 尚未开始推演` : "书库为空 · 暂无作品";
+          if (metaEl) metaEl.innerText = "0 字 · 章节列表为空";
+          if (box) {
+            box.innerHTML = `
+              <div style="padding: 60px 20px; text-align: center; color: var(--text-secondary); max-width: 520px; margin: 0 auto; user-select: none;">
+                <div style="font-size: 36px; margin-bottom: 16px; color: var(--accent-gold);">${ICONS.book}</div>
+                <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">
+                  ${data.book_id ? '本书暂无章节' : '书库为空，暂无作品'}
+                </div>
+                <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                  ${data.book_id 
+                    ? '当前为全新纯净起步状态（0章节）。请在下方控制台点击【单步演化】或【连续推演】，由天道多智能体为您推演开辟真正的第一章！' 
+                    : '请点击右上角【新建作品】创建你的第一本小说作品！'}
+                </div>
+              </div>
+            `;
+          }
+        }
+        renderForeshadowings(data.foreshadowings || []);
+        renderCharacters(data.characters || []);
+        renderSimViewData(data);
+      }
+    }
+
     // 拉取后端最新状态
     async function fetchStatus(refreshFullView = true) {
       try {
@@ -2195,61 +2329,33 @@
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
-        globalState = data;
-
-        renderTopBookSelector(data.books_summary || [], data.book_id);
-        renderSideBookInfo(data);
-        renderChapterList(data.chapters || []);
-
-        if (refreshFullView) {
-          if (data.chapters && data.chapters.length > 0) {
-            const chap = data.chapters.find(c => c.id === currentChapterId) || data.chapters[0];
-            selectChapter(chap.id);
-          } else {
-            currentChapterId = 0;
-            const titleEl = document.getElementById("currentChapHeaderTitle");
-            const metaEl = document.getElementById("currentChapHeaderMeta");
-            const box = document.getElementById("readerContentBox");
-            if (titleEl) titleEl.innerText = data.book_id ? `${data.title} · 尚未开始推演` : "书库为空 · 暂无作品";
-            if (metaEl) metaEl.innerText = "0 字 · 章节列表为空";
-            if (box) {
-              box.innerHTML = `
-                <div style="padding: 60px 20px; text-align: center; color: var(--text-secondary); max-width: 520px; margin: 0 auto; user-select: none;">
-                  <div style="font-size: 40px; margin-bottom: 16px;">📖</div>
-                  <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">
-                    ${data.book_id ? '本书暂无章节' : '书库为空，暂无作品'}
-                  </div>
-                  <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
-                    ${data.book_id 
-                      ? '当前为全新纯净起步状态（0章节）。请在下方控制台点击【⚡ 单步演化】或【🚀 连续推演】，由天道多智能体为您推演开辟真正的第一章！' 
-                      : '请点击右上角【➕ 新建作品】创建你的第一本小说作品！'}
-                  </div>
-                </div>
-              `;
-            }
-          }
-          renderForeshadowings(data.foreshadowings || []);
-          renderCharacters(data.characters || []);
-          renderSimViewData(data);
-        }
+        applyState(data, refreshFullView);
       } catch (e) {
         console.error("拉取状态异常:", e);
       }
     }
 
-    // 渲染顶部书籍切换下拉框
+    // 渲染顶部书籍切换下拉框 (带增量缓存对比，杜绝无意义重绘打断交互)
+    let lastRenderedBooksKey = "";
     function renderTopBookSelector(books, activeId) {
       const select = document.getElementById("bookSelectDropdown");
       if (!select) return;
+      const currentKey = (books || []).map(b => `${b.id}:${b.title}:${b.chapter_count}:${b.is_simulating}`).join("|") + `::active=${activeId}`;
+      if (lastRenderedBooksKey === currentKey && select.options.length > 0) {
+        if (select.value !== activeId) select.value = activeId;
+        return;
+      }
+      lastRenderedBooksKey = currentKey;
+
       if (!books || books.length === 0) {
-        select.innerHTML = `<option value="">(书库为空，请点击右侧➕新建)</option>`;
+        select.innerHTML = `<option value="">(书库为空，请点击右侧新建)</option>`;
         return;
       }
       select.innerHTML = (books || []).map(b => {
         const count = b.chapter_count ?? b.chapters_count ?? 0;
         const bTitle = b.title || "未命名小说";
         const bGenre = b.genre || "小说";
-        const simBadge = b.is_simulating ? " ⚡[推演中]" : "";
+        const simBadge = b.is_simulating ? " [推演中]" : "";
         return `
           <option value="${b.id}" ${b.id === activeId ? 'selected' : ''}>
             ${escapeHtml(bTitle)} (${escapeHtml(bGenre)}) · ${count}章${simBadge}
@@ -2258,22 +2364,42 @@
       }).join("");
     }
 
+    // 秒级切书：后端单次往返直出新书 state，避免二次拉取与竞态延迟
     function onSwitchBookSelect(bookId) {
       if (!bookId || (globalState && globalState.book_id === bookId)) return;
+      
+      const select = document.getElementById("bookSelectDropdown");
+      if (select) select.value = bookId;
+      const box = document.getElementById("readerContentBox");
+      if (box) {
+        box.innerHTML = `<div style="padding: 60px 20px; text-align: center; color: var(--text-muted);">${ICONS.loader} 正在秒级加载小说世界...</div>`;
+      }
+      const titleEl = document.getElementById("currentChapHeaderTitle");
+      if (titleEl) titleEl.innerText = "切换作品中...";
+
       fetch("/api/switch_book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ book_id: bookId })
       })
       .then(r => r.json())
-      .then(() => {
+      .then(data => {
         currentChapterId = 1;
+        if (data && data.state) {
+          applyState(data.state, true);
+        } else {
+          if (globalState) globalState.book_id = bookId;
+          fetchStatus(true);
+        }
+      })
+      .catch(err => {
+        console.error("切书失败:", err);
         fetchStatus(true);
       });
     }
 
     // ==========================================
-    // 🔒 管理员鉴权控制器 (高危删改防护与口令校验)
+    // 管理员鉴权控制器 (高危删改防护与口令校验)
     // ==========================================
     let adminAuthResolver = null;
 
@@ -2304,7 +2430,7 @@
         const descEl = document.getElementById("adminAuthActionDesc");
         const input = document.getElementById("modalAdminPasswordInput");
         const errEl = document.getElementById("modalAdminAuthErrMsg");
-        if (descEl) descEl.innerHTML = `⚠️ <b>【安全拦截】</b>：<br>${escapeHtml(actionDesc)}属于受保护操作，不允许随便修改，请输入管理员密码授权执行：`;
+        if (descEl) descEl.innerHTML = `<svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-red);"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <b>【安全拦截】</b>：<br>${escapeHtml(actionDesc)}属于受保护操作，不允许随便修改，请输入管理员密码授权执行：`;
         if (input) {
           input.value = "";
           setTimeout(() => input.focus(), 150);
@@ -2348,7 +2474,7 @@
       const token = await requestAdminAuth(`彻底删除作品《${bTitle}》`);
       if (!token) return;
 
-      if (!confirm(`⚠️ 危险操作：确认彻底删除作品《${bTitle}》吗？删除后该书的所有大纲、伏线与正文章节都将被永久清除！`)) return;
+      if (!confirm(`危险操作：确认彻底删除作品《${bTitle}》吗？删除后该书的所有大纲、伏线与正文章节都将被永久清除！`)) return;
 
       try {
         const res = await fetch("/api/book/delete", {
@@ -2362,7 +2488,7 @@
         const data = await res.json();
         if (res.status === 403 || data.need_auth) {
           clearAdminAuthToken();
-          alert(data.error || "❌ 管理员密码错误，权限不足，拒绝删除！");
+          alert(data.error || "管理员密码错误，权限不足，拒绝删除！");
           return;
         }
         if (data.status === "ok") {
@@ -2395,7 +2521,7 @@
         const data = await res.json();
         if (res.status === 403 || data.need_auth) {
           clearAdminAuthToken();
-          alert(data.error || "❌ 管理员密码错误，不允许随便修改或删除章节！");
+          alert(data.error || "管理员密码错误，不允许随便修改或删除章节！");
           return;
         }
         if (data.status === "ok") {
@@ -2414,7 +2540,7 @@
       const token = await requestAdminAuth("清空本书所有章节");
       if (!token) return;
 
-      if (!confirm("⚠️ 危险操作：确认清空本书的所有章节吗？清空后章节数归零，你可以从零开始全新推演！")) return;
+      if (!confirm("危险操作：确认清空本书的所有章节吗？清空后章节数归零，你可以从零开始全新推演！")) return;
       const bid = globalState ? globalState.book_id : "";
       try {
         const res = await fetch("/api/chapter/clear_all", {
@@ -2428,7 +2554,7 @@
         const data = await res.json();
         if (res.status === 403 || data.need_auth) {
           clearAdminAuthToken();
-          alert(data.error || "❌ 管理员密码错误，不允许清空章节！");
+          alert(data.error || "管理员密码错误，不允许清空章节！");
           return;
         }
         if (data.status === "ok") {
@@ -2460,6 +2586,7 @@
       if (globalState) renderChapterList(globalState.chapters || []);
     }
 
+    let lastChaptersFingerprint = "";
     function renderChapterList(chapters) {
       const container = document.getElementById("chapterListContainer");
       if (!container) return;
@@ -2470,6 +2597,20 @@
         return t.toLowerCase().includes(currentChapterFilter) || String(c.id).includes(currentChapterFilter);
       });
 
+      const fingerprint = (globalState ? globalState.book_id : "") + ":" + currentChapterFilter + ":" + filtered.length + ":" + (filtered.length > 0 ? (filtered[filtered.length - 1].id + ":" + filtered[filtered.length - 1].word_count) : "0");
+      
+      if (fingerprint === lastChaptersFingerprint && container.children.length > 0) {
+        container.querySelectorAll(".chapter-item").forEach(el => {
+          if (el.dataset.chapId === String(currentChapterId)) {
+            el.classList.add("active");
+          } else {
+            el.classList.remove("active");
+          }
+        });
+        return;
+      }
+      lastChaptersFingerprint = fingerprint;
+
       if (filtered.length === 0) {
         container.innerHTML = `<div style="font-size: 12px; color: var(--text-muted); padding: 14px; text-align: center;">暂无章节</div>`;
         return;
@@ -2479,18 +2620,20 @@
         const titleStr = c.title || `第${c.id}章`;
         const wc = c.word_count || (c.content ? c.content.length : 0);
         return `
-          <div class="chapter-item ${String(c.id) === String(currentChapterId) ? 'active' : ''}" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+          <div class="chapter-item ${String(c.id) === String(currentChapterId) ? 'active' : ''}" data-chap-id="${c.id}" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
             <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" onclick="selectChapter('${c.id}')">
               ${escapeHtml(titleStr)}
             </div>
             <span class="chapter-item-meta" style="cursor: pointer;" onclick="selectChapter('${c.id}')">${wc.toLocaleString()}字</span>
-            <button class="btn btn-ghost" title="删除本章" style="padding: 1px 5px; font-size: 11px; color: var(--text-muted); opacity: 0.6;" onmouseover="this.style.opacity='1'; this.style.color='#ef4444';" onmouseout="this.style.opacity='0.6'; this.style.color='var(--text-muted)';" onclick="event.stopPropagation(); deleteSingleChapter('${c.id}')">✕</button>
+            <button class="btn btn-ghost" title="删除本章" style="padding: 1px 5px; font-size: 11px; color: var(--text-muted); opacity: 0.6;" onmouseover="this.style.opacity='1'; this.style.color='#ef4444';" onmouseout="this.style.opacity='0.6'; this.style.color='var(--text-muted)';" onclick="event.stopPropagation(); deleteSingleChapter('${c.id}')">
+              <svg class="icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
         `;
       }).join("");
     }
 
-    // 选中章节并加载正文
+    // 选中章节并加载正文 (类名轻量切换，杜绝全列表 DOM 销毁卡顿)
     function selectChapter(chapId) {
       const chapters = globalState ? (globalState.chapters || []) : [];
       if (!chapters || chapters.length === 0) return;
@@ -2499,7 +2642,18 @@
       if (!target) return;
 
       currentChapterId = target.id;
-      renderChapterList(chapters);
+      
+      const container = document.getElementById("chapterListContainer");
+      if (container) {
+        container.querySelectorAll(".chapter-item").forEach(el => {
+          if (el.dataset.chapId === String(currentChapterId)) {
+            el.classList.add("active");
+          } else {
+            el.classList.remove("active");
+          }
+        });
+      }
+
       if (window.innerWidth <= 1024) {
         closeAllDrawers();
       }
@@ -2521,7 +2675,7 @@
       if (target.content) {
         formatAndRenderText(target.content);
       } else {
-        box.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 40px;">调阅第 ${target.id} 章正文中...</div>`;
+        box.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 40px;">${ICONS.loader} 调阅第 ${target.id} 章正文中...</div>`;
         const bid = globalState ? globalState.book_id : "";
         fetch(`/api/chapter?id=${target.id}&book_id=${encodeURIComponent(bid)}`)
           .then(r => r.json())
@@ -2537,7 +2691,7 @@
     }
 
     // ==========================================
-    // 🎙️ 顶级真人有声听书系统 (Audiobook Studio Engine)
+    // 顶级真人有声听书系统 (Audiobook Studio Engine)
     // ==========================================
     let isTtsPlaying = false;
     let ttsCurrentPIndex = 0;
@@ -2609,15 +2763,15 @@
         if (zhVoices.length > 0) {
           zhVoices.forEach(v => {
             let label = v.name;
-            if (v.name.includes("Yunxi") || v.name.includes("云希")) label = "🌟 云希 · 青年男声 (热血/小说推荐)";
-            else if (v.name.includes("Xiaoxiao") || v.name.includes("晓晓")) label = "🌟 晓晓 · 沉浸女声 (自然生动/旁白)";
-            else if (v.name.includes("Yunyang") || v.name.includes("云扬")) label = "🌟 云扬 · 沉稳正气 (历史/评书风)";
-            else if (v.name.includes("Xiaoyi") || v.name.includes("晓伊")) label = "🌟 晓伊 · 温婉清丽 (都市/言情)";
-            else if (v.name.includes("Yunjian") || v.name.includes("云健")) label = "🌟 云健 · 解说男音 (纪实沉着)";
-            else if (v.name.includes("Huihui") || v.name.includes("慧慧")) label = "🎙️ 慧慧 · 标准女声";
-            else if (v.name.includes("Kangkang") || v.name.includes("康康")) label = "🎙️ 康康 · 阳光男声";
-            else if (v.name.includes("Yaoyao") || v.name.includes("瑶瑶")) label = "🎙️ 瑶瑶 · 柔美女声";
-            else if (v.name.includes("Natural") || v.name.includes("Online")) label = "🌟 " + v.name.replace(/Microsoft |Online \(Natural\) - Chinese \(Mainland\)/g, "").trim() + " (真人自然音)";
+            if (v.name.includes("Yunxi") || v.name.includes("云希")) label = "云希 · 青年男声 (热血/小说推荐)";
+            else if (v.name.includes("Xiaoxiao") || v.name.includes("晓晓")) label = "晓晓 · 沉浸女声 (自然生动/旁白)";
+            else if (v.name.includes("Yunyang") || v.name.includes("云扬")) label = "云扬 · 沉稳正气 (历史/评书风)";
+            else if (v.name.includes("Xiaoyi") || v.name.includes("晓伊")) label = "晓伊 · 温婉清丽 (都市/言情)";
+            else if (v.name.includes("Yunjian") || v.name.includes("云健")) label = "云健 · 解说男音 (纪实沉着)";
+            else if (v.name.includes("Huihui") || v.name.includes("慧慧")) label = "慧慧 · 标准女声";
+            else if (v.name.includes("Kangkang") || v.name.includes("康康")) label = "康康 · 阳光男声";
+            else if (v.name.includes("Yaoyao") || v.name.includes("瑶瑶")) label = "瑶瑶 · 柔美女声";
+            else if (v.name.includes("Natural") || v.name.includes("Online")) label = v.name.replace(/Microsoft |Online \(Natural\) - Chinese \(Mainland\)/g, "").trim() + " (真人自然音)";
 
             const opt = document.createElement("option");
             opt.value = v.name;
@@ -2632,7 +2786,7 @@
             selectedTtsVoice = bestVoice;
           }
         } else {
-          sel.innerHTML = `<option value="">🎙️ 系统默认朗读引擎</option>`;
+          sel.innerHTML = `<option value="">系统默认朗读引擎</option>`;
         }
       }
 
@@ -2696,7 +2850,7 @@
       const eq = document.getElementById("audioEqualizer");
       if (eq) eq.classList.add("playing");
       const btn = document.getElementById("ttsPlayBtn");
-      if (btn) btn.innerHTML = `<span>⏸ 暂停听书</span>`;
+      if (btn) btn.innerHTML = `<span>${ICONS.pause} 暂停听书</span>`;
       speakCurrentParagraph();
     }
 
@@ -2705,7 +2859,7 @@
       if (ttsCurrentPIndex >= ttsParagraphs.length) {
         stopAudiobook();
         const statusEl = document.getElementById("ttsStatusText");
-        if (statusEl) statusEl.innerText = "🎉 本章听书朗读完毕！";
+        if (statusEl) statusEl.innerText = "本章听书朗读完毕！";
         return;
       }
 
@@ -2762,7 +2916,7 @@
       if (eq) eq.classList.remove("playing");
       window.speechSynthesis.pause();
       const btn = document.getElementById("ttsPlayBtn");
-      if (btn) btn.innerHTML = `<span>▶ 继续听书</span>`;
+      if (btn) btn.innerHTML = `<span>${ICONS.play} 继续听书</span>`;
       const statusEl = document.getElementById("ttsStatusText");
       if (statusEl) statusEl.innerText = `已暂停在第 ${ttsCurrentPIndex + 1} 段`;
     }
@@ -2775,7 +2929,7 @@
       ttsCurrentPIndex = 0;
       clearHighlightParagraphs();
       const btn = document.getElementById("ttsPlayBtn");
-      if (btn) btn.innerHTML = `<span>▶ 开始听书</span>`;
+      if (btn) btn.innerHTML = `<span><svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> 开始听书</span>`;
       const statusEl = document.getElementById("ttsStatusText");
       if (statusEl) statusEl.innerText = "已停止听书 · 点击任意段落随时继续畅听";
     }
@@ -2810,7 +2964,7 @@
         const eq = document.getElementById("audioEqualizer");
         if (eq) eq.classList.add("playing");
         const btn = document.getElementById("ttsPlayBtn");
-        if (btn) btn.innerHTML = `<span>⏸ 暂停听书</span>`;
+        if (btn) btn.innerHTML = `<span>${ICONS.pause} 暂停听书</span>`;
       }
       speakCurrentParagraph();
     }
@@ -2838,12 +2992,12 @@
       ttsParagraphs = paragraphs;
       ttsCurrentPIndex = 0;
       box.innerHTML = paragraphs.map((p, idx) => `
-        <p id="p-text-${idx}" onclick="playAudiobookFromParagraph(${idx})" title="点击从本段开始听书 🎧">${escapeHtml(p)}</p>
+        <p id="p-text-${idx}" onclick="playAudiobookFromParagraph(${idx})" title="点击从本段开始听书">${escapeHtml(p)}</p>
       `).join("");
 
       const titleEl = document.getElementById("ttsCurrentTitle");
       if (titleEl) {
-        titleEl.innerText = `🎙️ 真人有声听书 · ${document.getElementById("currentChapHeaderTitle").innerText}`;
+        titleEl.innerText = `真人有声听书 · ${document.getElementById("currentChapHeaderTitle").innerText}`;
       }
       const statusEl = document.getElementById("ttsStatusText");
       if (statusEl) {
@@ -2858,10 +3012,10 @@
       const btn = document.getElementById("btnFontToggle");
       if (isSerif) {
         box.classList.add("serif");
-        btn.innerText = "🔤 黑体";
+        btn.innerHTML = `${ICONS.type} 黑体`;
       } else {
         box.classList.remove("serif");
-        btn.innerText = "🔤 衬线体";
+        btn.innerHTML = `${ICONS.type} 衬线体`;
       }
     }
 
@@ -2873,7 +3027,7 @@
         return;
       }
       navigator.clipboard.writeText(textarea.value).then(() => {
-        alert("✔ 本章正文已成功复制至剪贴板！");
+        alert("本章正文已成功复制至剪贴板！");
       });
     }
 
@@ -2889,12 +3043,12 @@
         box.style.display = "none";
         textarea.style.display = "block";
         textarea.focus();
-        btnEdit.innerText = "👁 退出编辑";
+        btnEdit.innerHTML = `${ICONS.eye} 退出编辑`;
         btnSave.style.display = "inline-flex";
       } else {
         box.style.display = "block";
         textarea.style.display = "none";
-        btnEdit.innerText = "✏️ 精修编辑";
+        btnEdit.innerHTML = `${ICONS.edit} 精修编辑`;
         btnSave.style.display = "none";
       }
     }
@@ -2925,7 +3079,7 @@
         const data = await res.json();
         if (res.status === 403 || data.need_auth) {
           clearAdminAuthToken();
-          alert(data.error || "❌ 管理员密码错误，不允许随便修改！");
+          alert(data.error || "管理员密码错误，不允许随便修改！");
           return;
         }
         if (data.status === "ok") {
@@ -2939,7 +3093,7 @@
           }
           formatAndRenderText(newContent);
           toggleEditMode();
-          alert("✔ 章节修改已成功存盘！");
+          alert("章节修改已成功存盘！");
         } else {
           alert("存盘失败: " + (data.error || "未知原因"));
         }
@@ -2969,7 +3123,7 @@
     }
 
     // ==========================================
-    // 📱 移动端抽屉与边栏触控交互控制
+    // 移动端抽屉与边栏触控交互控制
     // ==========================================
     function toggleLeftDrawer() {
       const sidebarLeft = document.getElementById("sidebarLeft");
@@ -3065,8 +3219,8 @@
       container.innerHTML = list.map(f => {
         const isResolved = f.status === "resolved";
         const statusBadge = isResolved
-          ? `<span class="pill pill-green">✅ 已回收 (第${f.resolved_chapter || '?'}章)</span>`
-          : `<span class="pill pill-blue">🌱 潜伏中 (第${f.planted_chapter || 1}章)</span>`;
+          ? `<span class="pill pill-green"><span class="status-dot green"></span> 已回收 (第${f.resolved_chapter || '?'}章)</span>`
+          : `<span class="pill pill-blue"><span class="status-dot blue"></span> 潜伏中 (第${f.planted_chapter || 1}章)</span>`;
 
         return `
           <div class="foreshadow-item">
@@ -3162,17 +3316,17 @@
         const isDead = c.status === "dead";
         const isInjured = c.status === "critically_injured" || (c.injuries && c.injuries.length > 0);
         const statusBadge = isDead
-          ? `<span class="pill pill-red">💀 陨落</span>`
-          : (isInjured ? `<span class="pill pill-gold">🩸 负伤</span>` : `<span class="pill pill-green">🟢 存活</span>`);
+          ? `<span class="pill pill-red"><span class="status-dot red"></span> 陨落</span>`
+          : (isInjured ? `<span class="pill pill-gold"><span class="status-dot amber"></span> 负伤</span>` : `<span class="pill pill-green"><span class="status-dot green"></span> 存活</span>`);
 
         const items = (c.inventory || []).map(it => {
           const itemText = typeof it === 'object' ? (it.name || it.title || JSON.stringify(it)) : it;
-          return `<span class="inv-item-pill">🎒 ${escapeHtml(itemText)}</span>`;
+          return `<span class="inv-item-pill"><svg class="icon-sm" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg> ${escapeHtml(itemText)}</span>`;
         }).join("");
 
         const injuries = (c.injuries || []).map(inj => {
           const injText = typeof inj === 'object' ? (inj.name || inj.desc || JSON.stringify(inj)) : inj;
-          return `<span class="injury-pill">🩹 ${escapeHtml(injText)}</span>`;
+          return `<span class="injury-pill"><svg class="icon-sm" viewBox="0 0 24 24"><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg> ${escapeHtml(injText)}</span>`;
         }).join("");
 
         const cult = c.cultivation || c.cultivation_level || '';
@@ -3205,7 +3359,7 @@
       const count = parseInt(select.value) || 1;
 
       if (count >= 30) {
-        if (!confirm(`🚀 确定要启动长篇演化管线，连续自动推演撰写【${count} 章】吗？\n\n系统将自动依据全书主线大纲、因果伏线与角色状态机逐章推演，每写完一章均会实时存盘，您可随时点击【安全停止】终止后续章节。`)) {
+        if (!confirm(`确定要启动长篇演化管线，连续自动推演撰写【${count} 章】吗？\n\n系统将自动依据全书主线大纲、因果伏线与角色状态机逐章推演，每写完一章均会实时存盘，您可随时点击【安全停止】终止后续章节。`)) {
           return;
         }
       }
@@ -3344,7 +3498,7 @@
       pEls.forEach((el, idx) => {
         el.id = `p-text-${idx}`;
         el.onclick = () => playAudiobookFromParagraph(idx);
-        el.title = "点击从本段开始听书 🎧";
+        el.title = "点击从本段开始听书";
         const clean = el.innerText.trim();
         if (clean) ttsParagraphs.push(clean);
       });
@@ -3404,8 +3558,8 @@
     let currentWebSocket = null;
 
     // ==========================================
-    // 🚀 演化流水线步骤跟踪器 (Evolution Stepper)
-    // 第一步：细纲规划 ➔ 第二步：双盲博弈 ➔ 第三步：史官著书 ➔ 第四步：存盘发布
+    // 演化流水线步骤跟踪器 (Evolution Stepper)
+    // 第一步：细纲规划 -> 第二步：双盲博弈 -> 第三步：史官著书 -> 第四步：存盘发布
     // ==========================================
     function renderEvolutionStepper(chapIndex, totalChapters, chapTitle = "") {
       const stepper = document.getElementById("readerEvolutionStepper");
@@ -3416,8 +3570,8 @@
         <div class="evolution-stepper-card">
           <div class="stepper-header">
             <div class="stepper-title">
-              <span class="pulsing-dot">●</span>
-              <span id="stepperChapTitle">🌌 正在推演演化：${displayTitle} (进度 ${chapIndex} / ${totalChapters} 章)</span>
+              <span class="status-dot green"></span>
+              <span id="stepperChapTitle">正在推演演化：${displayTitle} (进度 ${chapIndex} / ${totalChapters} 章)</span>
             </div>
             <div id="stepperChapSubBadge" class="pill pill-gold" style="font-size: 11px;">天道因果流水线运转中</div>
           </div>
@@ -3469,12 +3623,12 @@
         if (s < stepNum) {
           item.className = "stepper-step-item done";
           badge.className = "step-item-status status-done";
-          badge.innerText = "已完成 ✔";
+          badge.innerHTML = `<span class="status-dot green"></span> 已完成`;
         } else if (s === stepNum) {
           if (status === "done") {
             item.className = "stepper-step-item done";
             badge.className = "step-item-status status-done";
-            badge.innerText = "已完成 ✔";
+            badge.innerHTML = `<span class="status-dot green"></span> 已完成`;
           } else if (status === "running") {
             item.className = "stepper-step-item active";
             badge.className = "step-item-status status-running";
@@ -3509,7 +3663,7 @@
         if (textarea) textarea.style.display = "none";
         const btnEdit = document.getElementById("btnEditToggle");
         const btnSave = document.getElementById("btnSaveChapter");
-        if (btnEdit) btnEdit.innerText = "✏️ 编辑";
+        if (btnEdit) btnEdit.innerHTML = `${ICONS.edit} 编辑`;
         if (btnSave) btnSave.style.display = "none";
       }
 
@@ -3533,21 +3687,21 @@
 
       const statusEl = document.getElementById("studioProgressStatus");
       statusEl.className = "progress-status-badge busy";
-      statusEl.innerHTML = `<span>⏳ 正在启动推演流水线：第一步 规划细纲 [正在推演] ➔ 第二步 双盲博弈 [等待] ➔ 第三步 史官著书 [等待]</span>`;
+      statusEl.innerHTML = `<span>${ICONS.loader} 正在启动推演流水线：第一步 规划细纲 [正在推演] -> 第二步 双盲博弈 [等待] -> 第三步 史官著书 [等待]</span>`;
 
       // 立即切换到正文阅读区并初始化多步骤流水线看板
       switchView("reader");
-      document.getElementById("currentChapHeaderTitle").innerText = `🌌 正在演化推演新章节...`;
-      document.getElementById("currentChapHeaderMeta").innerText = `⚡ Socket 全双工通信 · 天道因果律流水线运转中`;
+      document.getElementById("currentChapHeaderTitle").innerText = `正在演化推演新章节...`;
+      document.getElementById("currentChapHeaderMeta").innerText = `Socket 全双工通信 · 天道因果律流水线运转中`;
       renderEvolutionStepper(1, count, "");
       const readerBox = document.getElementById("readerContentBox");
       if (readerBox) {
         readerBox.innerHTML = `
           <div style="padding: 30px 20px; text-align: center; color: var(--text-secondary); max-width: 600px; margin: 0 auto; user-select: none;">
-            <div style="font-size: 32px; margin-bottom: 12px;">🌌</div>
+            <div style="font-size: 32px; margin-bottom: 12px; color: var(--accent-gold);"><svg class="icon-xl" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
             <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">天道大千演化推进中</div>
             <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
-              全流程依次执行：【第一步 细纲规划】➔【第二步 双盲博弈】➔【第三步 史官著书】➔【第四步 存盘同步】。<br>
+              全流程依次执行：【第一步 细纲规划】->【第二步 双盲博弈】->【第三步 史官著书】->【第四步 存盘同步】。<br>
               当前步骤完成后，正文将在此以拟真打字机流式呈现，请稍候片刻...
             </div>
           </div>
@@ -3587,7 +3741,7 @@
       const isAutoFanqie = document.getElementById("chkAutoFanqie")?.checked || false;
       currentWebSocket.onopen = () => {
         wsConnected = true;
-        statusEl.innerHTML = `<span>⚡ 信道已接通：第 1 章 [第一步 规划细纲 正在推演...]</span>`;
+        statusEl.innerHTML = `<span>${ICONS.zap} 信道已接通：第 1 章 [第一步 规划细纲 正在推演...]</span>`;
         currentWebSocket.send(JSON.stringify({
           action: "start",
           mode: mode,
@@ -3618,7 +3772,7 @@
         if (!wsConnected) {
           doFallback("onclose before connect");
         } else if (isStreaming) {
-          stopStreamUI("🟢 演化传输结束");
+          stopStreamUI("演化传输结束");
         }
       };
     }
@@ -3640,33 +3794,33 @@
       if (ev.type === "planning") {
         renderEvolutionStepper(idx, total, "");
         updateEvolutionStep(1, "running", "大纲策划师正在规划主线冲突与因果伏笔...");
-        statusEl.innerHTML = `<span>📋【第 ${idx}/${total} 章】第一步：规划细纲 [正在推演] ➔ 第二步：双盲博弈 [等待] ➔ 第三步：史官著书 [等待]</span>`;
+        statusEl.innerHTML = `<span>${ICONS.fileText}【第 ${idx}/${total} 章】第一步：规划细纲 [正在推演] -> 第二步：双盲博弈 [等待] -> 第三步：史官著书 [等待]</span>`;
         if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第一步：规划主线细纲 [正在推演]`;
         startStageTicker(`【第 ${idx}/${total} 章】第一步：规划细纲与因果伏笔中`);
       } else if (ev.type === "outline_ready") {
         const outTitle = ev.outline?.title || '';
         const titleEl = document.getElementById("stepperChapTitle");
-        if (titleEl && outTitle) titleEl.innerText = `🌌 正在推演演化：第 ${idx} 章《${escapeHtml(outTitle)}》 (进度 ${idx} / ${total} 章)`;
+        if (titleEl && outTitle) titleEl.innerText = `正在推演演化：第 ${idx} 章《${escapeHtml(outTitle)}》 (进度 ${idx} / ${total} 章)`;
         updateEvolutionStep(1, "done", `《${escapeHtml(outTitle)}》细纲已就绪！`);
         updateEvolutionStep(2, "running", "多角色隐秘底牌交锋，天道因果裁决中...");
-        statusEl.innerHTML = `<span>🎯【第 ${idx}/${total} 章】第一步 [已完成] ➔ 第二步：双盲博弈裁决 [正在推演] ➔ 第三步：史官著书 [等待]</span>`;
+        statusEl.innerHTML = `<span>${ICONS.target}【第 ${idx}/${total} 章】第一步 [已完成] -> 第二步：双盲博弈裁决 [正在推演] -> 第三步：史官著书 [等待]</span>`;
         if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第二步：多角色双盲因果博弈 [正在推演]`;
         startStageTicker(`【第 ${idx}/${total} 章】第二步：双盲博弈与天道因果裁决中`);
       } else if (ev.type === "sim_step") {
         updateEvolutionStep(1, "done");
         updateEvolutionStep(2, "running", "多智能体隐秘底牌交锋，因果律客观裁决落定中...");
-        statusEl.innerHTML = `<span>⚡【第 ${idx}/${total} 章】第一步 [已完成] ➔ 第二步：双盲博弈裁决 [正在推演] ➔ 第三步：史官著书 [等待]</span>`;
+        statusEl.innerHTML = `<span>${ICONS.zap}【第 ${idx}/${total} 章】第一步 [已完成] -> 第二步：双盲博弈裁决 [正在推演] -> 第三步：史官著书 [等待]</span>`;
         if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第二步：双盲博弈裁决 [正在推演]`;
       } else if (ev.type === "write_start") {
         stopStageTicker();
         const chapTitle = ev.title || `第 ${ev.chapter_id || idx} 章`;
         document.getElementById("currentChapHeaderTitle").innerText = chapTitle;
         const titleEl = document.getElementById("stepperChapTitle");
-        if (titleEl) titleEl.innerText = `🌌 正在推演演化：《${escapeHtml(chapTitle)}》 (进度 ${idx} / ${total} 章)`;
+        if (titleEl) titleEl.innerText = `正在推演演化：《${escapeHtml(chapTitle)}》 (进度 ${idx} / ${total} 章)`;
         updateEvolutionStep(1, "done");
         updateEvolutionStep(2, "done", "因果博弈判定落定，局势已成");
         updateEvolutionStep(3, "running", "史官正在流式挥毫撰写正文（打字机实时吐字中...）");
-        statusEl.innerHTML = `<span>✍️【第 ${idx}/${total} 章】第一步 [已完成] ➔ 第二步 [已完成] ➔ 第三步：正文流式著书 [正在推演/实时吐字中]</span>`;
+        statusEl.innerHTML = `<span>${ICONS.feather}【第 ${idx}/${total} 章】第一步 [已完成] -> 第二步 [已完成] -> 第三步：正文流式著书 [正在推演/实时吐字中]</span>`;
         if (progressLabel) progressLabel.innerText = `【第 ${idx}/${total} 章】第三步：史官流式著书《${escapeHtml(chapTitle)}》[正在推演]`;
         resetTypewriter();
         renderTypewriterDOM("", true);
@@ -3674,21 +3828,21 @@
         const deltaText = ev.delta ?? ev.chunk ?? "";
         pushTypewriterChunk(deltaText);
       } else if (ev.type === "fanqie_auto_uploaded") {
-        updateEvolutionStep(4, "running", `🍅 第 ${ev.chapter_id} 章正在同步至番茄发布通道...`);
-        showToast(`🍅 第 ${ev.chapter_id} 章《${escapeHtml(ev.title)}》已自动同步上传番茄！`);
+        updateEvolutionStep(4, "running", `第 ${ev.chapter_id} 章正在同步至番茄发布通道...`);
+        showToast(`第 ${ev.chapter_id} 章《${escapeHtml(ev.title)}》已自动同步上传番茄！`);
       } else if (ev.type === "chapter_done") {
         stopStageTicker();
         finishTypewriter();
         updateEvolutionStep(1, "done");
         updateEvolutionStep(2, "done");
         updateEvolutionStep(3, "done", `正文挥毫成卷，共 ${ev.word_count || ''} 字`);
-        updateEvolutionStep(4, "done", `本章已成功存盘入库！` + (ev.fanqie_auto_uploaded ? " (🍅 已同步番茄)" : ""));
+        updateEvolutionStep(4, "done", `本章已成功存盘入库！` + (ev.fanqie_auto_uploaded ? " (已同步番茄)" : ""));
         const pct = Math.round((idx / total) * 100);
         if (progressFill) progressFill.style.width = `${pct}%`;
         if (progressStat) progressStat.innerText = `${idx} / ${total} 章 (${pct}%)`;
-        const fqNotice = ev.fanqie_auto_uploaded ? " (🍅 已自动同步番茄)" : "";
-        statusEl.innerHTML = `<span>✔ 第 ${idx}/${total} 章全套推演步骤 [已完成]！${fqNotice}</span>`;
-        if (progressLabel) progressLabel.innerText = `✔ 第 ${idx}/${total} 章全流程存盘完毕`;
+        const fqNotice = ev.fanqie_auto_uploaded ? " (已自动同步番茄)" : "";
+        statusEl.innerHTML = `<span>${ICONS.check} 第 ${idx}/${total} 章全套推演步骤 [已完成]！${fqNotice}</span>`;
+        if (progressLabel) progressLabel.innerText = `第 ${idx}/${total} 章全流程存盘完毕`;
         fetchStatus(false);
       } else if (ev.type === "complete" || ev.type === "stopped" || ev.type === "error") {
         stopStageTicker();
@@ -3700,14 +3854,14 @@
           updateEvolutionStep(4, "done");
         }
         const isErr = ev.type === "error";
-        const msg = isErr ? ("❌ " + ev.message) : (ev.type === "stopped" ? "⏹ 已响应安全停止指令并存盘" : `🎉 全部 ${total} 章演化圆满完成！`);
+        const msg = isErr ? ev.message : (ev.type === "stopped" ? "已响应安全停止指令并存盘" : `全部 ${total} 章演化圆满完成！`);
         stopStreamUI(msg);
       }
     }
 
     // 备用降级 SSE 管道
     function fallbackToSSE(mode, count, bid, decree, mock, statusEl, progressLabel, progressFill, progressStat) {
-      statusEl.innerHTML = `<span>⏳ 正在接入备用流式信道 (SSE)...</span>`;
+      statusEl.innerHTML = `<span>${ICONS.loader} 正在接入备用流式信道 (SSE)...</span>`;
       const isAutoFanqie = document.getElementById("chkAutoFanqie")?.checked || false;
       const url = `/api/simulate_stream?mode=${mode}&custom_count=${count}&book_id=${encodeURIComponent(bid)}&divine_decree=${encodeURIComponent(decree)}&force_mock=${mock ? "1" : "0"}&auto_fanqie=${isAutoFanqie ? "1" : "0"}`;
       currentStreamSource = new EventSource(url);
@@ -3722,7 +3876,7 @@
       };
 
       currentStreamSource.onerror = () => {
-        stopStreamUI("🟢 演化数据流传输结束");
+        stopStreamUI("演化数据流传输结束");
       };
     }
 
@@ -3736,7 +3890,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ book_id: bid })
       });
-      stopStreamUI("⏹ 已响应安全停止指令并存盘");
+      stopStreamUI("已响应安全停止指令并存盘");
     }
 
     function stopStreamUI(msg) {
@@ -3768,13 +3922,13 @@
       const statusEl = document.getElementById("studioProgressStatus");
       if (statusEl) {
         statusEl.className = "progress-status-badge";
-        statusEl.innerHTML = `<span>${msg || '🟢 就绪'}</span>`;
+        statusEl.innerHTML = `<span>${msg || '<span class="status-dot green"></span> 就绪'}</span>`;
       }
       fetchStatus(true);
     }
 
     // ==========================================
-    // 🍅 番茄小说 / 全网网文手动与自动上传中心
+    // 番茄小说 / 全网网文手动与自动上传中心
     // ==========================================
     let fanqieConfig = { auto_upload: false, webhook_url: "", publish_mode: "drafts" };
     let publishAuditData = null;
@@ -3801,10 +3955,10 @@
       if (!badge) return;
       if (fanqieConfig.auto_upload) {
         badge.className = "pill pill-green";
-        badge.innerText = fanqieConfig.webhook_url ? "🟢 自动推送到 Webhook" : "🟢 自动生成番茄排版存盘";
+        badge.innerHTML = fanqieConfig.webhook_url ? `<span class="status-dot green"></span> 自动推送到 Webhook` : `<span class="status-dot green"></span> 自动生成番茄排版存盘`;
       } else {
         badge.className = "pill pill-gold";
-        badge.innerText = "⚪ 未开启自动上传";
+        badge.innerHTML = `<span class="status-dot gray"></span> 未开启自动上传`;
       }
     }
 
@@ -3819,7 +3973,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ auto_upload: checked })
         });
-        showToast(checked ? "🍅 已开启【自动演化自动上传番茄】：每推演写完一章，立即自动上传！" : "⚪ 已关闭自动上传番茄");
+        showToast(checked ? "已开启【自动演化自动上传番茄】：每推演写完一章，立即自动上传！" : "已关闭自动上传番茄");
       } catch (e) {
         console.error(e);
       }
@@ -3843,7 +3997,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ auto_upload: isAuto, webhook_url: wh })
         });
-        alert("✔ 番茄上传配置已成功保存！" + (wh ? "\n已绑定 Webhook 通道：" + wh : "\n已设为本地番茄规范排版存盘模式。"));
+        alert("番茄上传配置已成功保存！" + (wh ? "\n已绑定 Webhook 通道：" + wh : "\n已设为本地番茄规范排版存盘模式。"));
       } catch (e) {
         alert("保存失败: " + e.message);
       }
@@ -3873,9 +4027,9 @@
               await navigator.clipboard.writeText(data.clean_body);
             } catch(e) {}
           }
-          alert(`🎉 ${data.message}\n\n已自动将【符合番茄首行缩进规范的正文】复制至剪贴板，可随时直接粘贴至番茄作家助手后台发布！`);
+          alert(`${data.message}\n\n已自动将【符合番茄首行缩进规范的正文】复制至剪贴板，可随时直接粘贴至番茄作家助手后台发布！`);
         } else {
-          alert(`❌ 上传提示: ${data.message || '未知错误'}`);
+          alert(`上传提示: ${data.message || '未知错误'}`);
         }
       } catch (e) {
         alert("上传请求异常: " + e.message);
@@ -3892,7 +4046,7 @@
           body: JSON.stringify({ book_id: bid })
         });
         const data = await res.json();
-        alert(`🎉 ${data.message}\n成功同步：${data.success_count} / ${data.total_chapters} 章！`);
+        alert(`${data.message}\n成功同步：${data.success_count} / ${data.total_chapters} 章！`);
       } catch (e) {
         alert("批量上传异常: " + e.message);
       }
@@ -3907,7 +4061,7 @@
         const statusEl = document.getElementById("nativeFanqieStatus");
         if (!statusEl) return;
         if (data.logged_in) {
-          statusEl.innerHTML = `<span style="color: #10b981; font-weight: 700;">🟢 已绑定番茄签约账号: ${data.author_name}</span>`;
+          statusEl.innerHTML = `<span style="color: #10b981; font-weight: 700;"><span class="status-dot green"></span> 已绑定番茄签约账号: ${data.author_name}</span>`;
           if (nativeFanqieTimer) {
             clearInterval(nativeFanqieTimer);
             nativeFanqieTimer = null;
@@ -3915,7 +4069,7 @@
             if (c) c.style.display = "none";
           }
         } else {
-          statusEl.innerHTML = `<span style="color: var(--text-muted);">⚪ 暂未绑定番茄账号 (点击扫码绑定)</span>`;
+          statusEl.innerHTML = `<span style="color: var(--text-muted);"><span class="status-dot gray"></span> 暂未绑定番茄账号 (点击扫码绑定)</span>`;
         }
       } catch (e) {
         console.warn("获取原生番茄状态失败:", e);
@@ -3927,7 +4081,7 @@
       const img = document.getElementById("nativeFanqieQrImg");
       const txt = document.getElementById("nativeFanqieQrText");
       if (box) box.style.display = "block";
-      if (txt) txt.innerText = "⏳ 正在拉起登录服务并抓取二维码，请稍候片刻...";
+      if (txt) txt.innerText = "正在拉起登录服务并抓取二维码，请稍候片刻...";
 
       try {
         await fetch("/api/fanqie/start_login", { method: "POST" });
@@ -3942,22 +4096,22 @@
               clearInterval(nativeFanqieTimer);
               nativeFanqieTimer = null;
               if (box) box.style.display = "none";
-              showToast("🎉 恭喜！番茄账号已成功绑定并落盘，推演章节可直接直推！", "success");
+              showToast("恭喜！番茄账号已成功绑定并落盘，推演章节可直接直推！", "success");
               refreshNativeFanqieStatus();
               return;
             }
             if (st.qr_ready && img) {
               img.src = "/api/fanqie/qr_code?t=" + Date.now();
-              if (txt) txt.innerText = "📲 请使用微信 / 抖音 / 番茄作家 App 扫描上方二维码确认登录";
+              if (txt) txt.innerText = "请使用微信 / 抖音 / 番茄作家 App 扫描上方二维码确认登录";
             }
           } catch(e) {}
           if (checks > 90) {
             clearInterval(nativeFanqieTimer);
-            if (txt) txt.innerText = "⏰ 扫码超时，请重新点击扫码绑定。";
+            if (txt) txt.innerText = "扫码超时，请重新点击扫码绑定。";
           }
         }, 2000);
       } catch (e) {
-        if (txt) txt.innerText = "❌ 拉起服务失败: " + e;
+        if (txt) txt.innerText = "拉起服务失败: " + e;
       }
     }
 
@@ -3990,7 +4144,7 @@
         document.getElementById("auditTags").innerText = (data.fanqie_tags || []).join(" / ") || "--";
         const att = document.getElementById("auditAttendance");
         if (att) {
-          att.innerText = data.is_attendance_qualified ? `✅ 均字达标 (${data.avg_words.toLocaleString()}字)` : `⚠️ 均字略少 (${data.avg_words}字)`;
+          att.innerHTML = data.is_attendance_qualified ? `<span class="status-dot green"></span> 均字达标 (${data.avg_words.toLocaleString()}字)` : `<span class="status-dot amber"></span> 均字略少 (${data.avg_words}字)`;
           att.style.color = data.is_attendance_qualified ? "#10b981" : "#f59e0b";
         }
 
@@ -4021,7 +4175,7 @@
         const res = await fetch("/api/fanqie/launch_edge_bot", { method: "POST" });
         const data = await res.json();
         if (data.status === "ok") {
-          showToast("🚀 Edge 挂机机器人已唤起！请在弹出的浏览器中登录番茄作家后台", "success");
+          showToast("Edge 挂机机器人已唤起！请在弹出的浏览器中登录番茄作家后台", "success");
         } else {
           showToast(data.message || "唤起失败", "error");
         }
@@ -4057,8 +4211,8 @@
               <span style="color: var(--text-muted); font-size: 11px; margin-left: 6px;">(${wc.toLocaleString()} 字)</span>
             </div>
             <div style="display: flex; gap: 6px;">
-              <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="uploadSingleChapterFanqie('${cid}')">🍅 上传本章</button>
-              <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="copyCleanChapterByIndex('${cid}')">📋 复制排版</button>
+              <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="uploadSingleChapterFanqie('${cid}')"><svg class="icon-sm" viewBox="0 0 24 24" style="color:#ef4444;"><circle cx="12" cy="14" r="8"/><path d="M12 6c0-2 2-3 4-3"/><path d="M10 6c-1-1.5-3-1.5-4-1"/><path d="M12 6v2"/></svg> 上传本章</button>
+              <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="copyCleanChapterByIndex('${cid}')"><svg class="icon-sm" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> 复制排版</button>
             </div>
           </div>
         `;
@@ -4079,7 +4233,7 @@
         let full = `${title}\n\n${clean}`;
         if (navigator.clipboard) {
           await navigator.clipboard.writeText(full);
-          alert(`🎉 《${title}》排版已复制到剪贴板！\n已自动清除 Markdown 标记，并添加番茄规范首行两字符缩进，可直接粘贴！`);
+          alert(`《${title}》排版已复制到剪贴板！\n已自动清除 Markdown 标记，并添加番茄规范首行两字符缩进，可直接粘贴！`);
         }
       } catch(e) {
         alert("读取失败: " + e.message);
@@ -4103,17 +4257,17 @@
     function copyBookTitle() {
       const t = publishAuditData ? publishAuditData.title : (globalState ? globalState.title : "");
       if (!t) return alert("暂无书名！");
-      navigator.clipboard.writeText(t).then(() => alert(`✅ 已复制书名：${t}`));
+      navigator.clipboard.writeText(t).then(() => alert(`已复制书名：${t}`));
     }
     function copyBookSynopsis() {
       const syn = publishAuditData ? (publishAuditData.synopsis || publishAuditData.theme_prompt) : (globalState ? globalState.synopsis : "");
       if (!syn) return alert("暂无作品简介数据！");
-      navigator.clipboard.writeText(syn).then(() => alert(`✅ 已成功复制【作品简介】到剪贴板！`));
+      navigator.clipboard.writeText(syn).then(() => alert(`已成功复制【作品简介】到剪贴板！`));
     }
     function copyBookHighlights() {
       const high = publishAuditData ? (publishAuditData.theme_prompt || publishAuditData.synopsis) : "";
       if (!high) return alert("暂无看点数据！");
-      navigator.clipboard.writeText(high).then(() => alert(`✅ 已成功复制【核心看点】到剪贴板！`));
+      navigator.clipboard.writeText(high).then(() => alert(`已成功复制【核心看点】到剪贴板！`));
     }
     function copyAllBookInfo() {
       const title = publishAuditData ? publishAuditData.clean_title : (globalState ? globalState.title : "");
@@ -4121,7 +4275,7 @@
       const syn = publishAuditData ? (publishAuditData.synopsis || publishAuditData.theme_prompt) : "";
       const high = publishAuditData ? publishAuditData.theme_prompt : "";
       const text = `【作品名称】：${title}\n【推荐标签】：${tags}\n【作品简介】：\n${syn}\n\n【核心看点】：\n${high}`;
-      navigator.clipboard.writeText(text).then(() => alert(`🎉 已一键复制全套【番茄新书建档资料】！可以直接粘贴至作家后台建新书。`));
+      navigator.clipboard.writeText(text).then(() => alert(`已一键复制全套【番茄新书建档资料】！可以直接粘贴至作家后台建新书。`));
     }
 
     function showToast(msg) {
@@ -4193,7 +4347,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ book_id: bid, outline: updated })
-      }).then(() => alert("✔ 全书大纲设定已保存！"));
+      }).then(() => alert("全书大纲设定已保存！"));
     }
 
     function updateOutlineStep(stepNum, status, detailText = "") {
@@ -4206,12 +4360,12 @@
         if (s < stepNum) {
           item.className = "stepper-step-item done";
           badge.className = "step-item-status status-done";
-          badge.innerText = "已完成 ✔";
+          badge.innerHTML = `<span class="status-dot green"></span> 已完成`;
         } else if (s === stepNum) {
           if (status === "done") {
             item.className = "stepper-step-item done";
             badge.className = "step-item-status status-done";
-            badge.innerText = "已完成 ✔";
+            badge.innerHTML = `<span class="status-dot green"></span> 已完成`;
           } else if (status === "running") {
             item.className = "stepper-step-item active";
             badge.className = "step-item-status status-running";
@@ -4293,7 +4447,7 @@
     async function generateOutlineFromUI() {
       const bid = globalState ? globalState.book_id : "";
       if (!bid) {
-        alert("书库为空或尚未选择书籍，请先点击右上角【➕ 新建作品】开辟一部小说！");
+        alert("书库为空或尚未选择书籍，请先点击右上角【新建作品】开辟一部小说！");
         return;
       }
       const bTitle = globalState.title || "当前作品";
@@ -4302,7 +4456,7 @@
       const btn = document.getElementById("btnGenerateOutline");
       if (btn) {
         btn.disabled = true;
-        btn.innerHTML = `<span>⏳ AI 正在深度构筑大纲...</span>`;
+        btn.innerHTML = `<span>${ICONS.loader} AI 正在深度构筑大纲...</span>`;
       }
 
       const pCard = document.getElementById("outlineProgressCard");
@@ -4326,8 +4480,8 @@
       document.getElementById("outlineWorldView").placeholder = "【推演中】AI 策划师正在构筑宏大世界观格局与地理势力...";
       document.getElementById("outlinePowerSystem").placeholder = "【推演中】实力阶梯、修为境界与晋升脉络构建中...";
       document.getElementById("outlineMainPlot").placeholder = "【推演中】全书终极目标、宿命强敌与核心主线冲突构建中...";
-      document.getElementById("outlineVolumesContainer").innerHTML = `<div style="font-size: 12.5px; color: var(--accent-gold); padding: 12px; text-align: center;">⏳ AI 宗师正在深度构想三卷宏大主线架构...</div>`;
-      document.getElementById("outlineChaptersContainer").innerHTML = `<div style="font-size: 12.5px; color: var(--accent-blue); padding: 12px; text-align: center;">⏳ AI 宗师正在规划前序分章蓝图细纲...</div>`;
+      document.getElementById("outlineVolumesContainer").innerHTML = `<div style="font-size: 12.5px; color: var(--accent-gold); padding: 12px; text-align: center;">${ICONS.loader} AI 宗师正在深度构想三卷宏大主线架构...</div>`;
+      document.getElementById("outlineChaptersContainer").innerHTML = `<div style="font-size: 12.5px; color: var(--accent-blue); padding: 12px; text-align: center;">${ICONS.loader} AI 宗师正在规划前序分章蓝图细纲...</div>`;
 
       const mock = document.getElementById("settingMockToggle")?.checked || false;
 
@@ -4366,15 +4520,15 @@
 
         if (pBadge) {
           pBadge.className = "pill pill-green";
-          pBadge.innerText = "✔ 大纲推演大功告成";
+          pBadge.innerHTML = `<span class="status-dot green"></span> 大纲推演大功告成`;
         }
-        showToast("🎉 全书总大纲已成功重构并打字完成！");
+        showToast("全书总大纲已成功重构并打字完成！");
       } catch (err) {
         alert("请求异常: " + err.message);
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.innerHTML = `<span>✨ AI 重新策划全书大纲</span>`;
+          btn.innerHTML = `<span><svg class="icon" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg> AI 重新策划全书大纲</span>`;
         }
       }
     }
@@ -4405,7 +4559,7 @@
             return `
               <div class="action-row">
                 <b style="color: #fff;">${escapeHtml(charName)}:</b> "${escapeHtml(speech)}" <i>(${escapeHtml(action)})</i>
-                ${inner ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;"><i>💭 心声：${escapeHtml(inner)}</i></div>` : ''}
+                ${inner ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;"><i>心声：${escapeHtml(inner)}</i></div>` : ''}
               </div>
             `;
           }).join("");
@@ -4428,7 +4582,7 @@
       const decree = document.getElementById("decreeInput").value.trim();
       const mock = document.getElementById("settingMockToggle").checked;
       const btn = document.getElementById("btnSimSingleStep");
-      btn.innerText = "⏳ 运转中...";
+      btn.innerHTML = `${ICONS.loader} 运转中...`;
       btn.disabled = true;
 
       fetch("/api/step", {
@@ -4437,7 +4591,7 @@
         body: JSON.stringify({ divine_decree: decree, mock: mock, auto_spawn: true })
       })
       .then(() => {
-        btn.innerText = "⚡ 运转单步推演";
+        btn.innerHTML = `${ICONS.zap} 运转单步推演`;
         btn.disabled = false;
         fetchStatus(true);
       });
@@ -4463,10 +4617,10 @@
       if (badge && globalState && globalState.config) {
         if (globalState.config.has_api_key) {
           badge.className = "pill pill-green";
-          badge.innerText = "🟢 管理端托管运行中";
+          badge.innerHTML = `<span class="status-dot green"></span> 管理端托管运行中`;
         } else {
           badge.className = "pill pill-gold";
-          badge.innerText = "⚪ 沙盒模拟模式";
+          badge.innerHTML = `<span class="status-dot gray"></span> 沙盒模拟模式`;
         }
       }
     }
@@ -4516,23 +4670,23 @@
           closeModal("modalCreateBook");
           currentChapterId = 1;
           fetchStatus(true);
-          alert("🎉 新天地已成功开辟！");
+          alert("新天地已成功开辟！");
         }
       });
     }
 
     async function triggerSystemUpdate() {
       const btn = document.getElementById("updateBtnText");
-      if (btn) btn.innerText = "⏳ 检查中...";
+      if (btn) btn.innerHTML = `${ICONS.loader} 检查中...`;
       try {
         const res = await fetch("/api/system/version");
         const ver = await res.json();
-        const msg = `🌌 【天道】版本与更新\n\n当前版本: ${ver.version}\n当前 Commit: ${ver.commit}\n当前分支: ${ver.branch}\n开源仓库: ${ver.github_repo || 'https://github.com/XCool-603/tiandao'}\n\n是否立即拉取 GitHub 最新代码并热重载系统？`;
+        const msg = `【天道】版本与更新\n\n当前版本: ${ver.version}\n当前 Commit: ${ver.commit}\n当前分支: ${ver.branch}\n开源仓库: ${ver.github_repo || 'https://github.com/XCool-603/tiandao'}\n\n是否立即拉取 GitHub 最新代码并热重载系统？`;
         if (confirm(msg)) {
-          if (btn) btn.innerText = "⏳ 正在更新...";
+          if (btn) btn.innerHTML = `${ICONS.loader} 正在更新...`;
           const upRes = await fetch("/api/system/update", { method: "POST" });
           const upData = await upRes.json();
-          alert(upData.message || (upData.status === "ok" ? "✅ 更新完毕！" : "更新异常"));
+          alert(upData.message || (upData.status === "ok" ? "更新完毕！" : "更新异常"));
           if (upData.status === "ok") {
             window.location.reload();
           }
@@ -4540,7 +4694,7 @@
       } catch (err) {
         alert("无法连接更新服务: " + err);
       } finally {
-        if (btn) btn.innerText = "🔄 检查更新";
+        if (btn) btn.innerHTML = `${ICONS.refresh} 检查更新`;
       }
     }
   </script>

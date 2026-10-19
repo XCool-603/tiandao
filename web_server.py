@@ -733,7 +733,6 @@ class SimulationManager:
         if not target_book:
             target_book = self.active_book
 
-        load_dotenv()
         current_api_key = os.getenv("OPENAI_API_KEY", "")
         has_real_key = bool(current_api_key and current_api_key != "your_api_key_here")
 
@@ -2204,10 +2203,16 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             if path == "/api/switch_book":
                 bid = req_data.get("book_id", "")
                 success = book_mgr.set_active_book(bid)
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                state = sim_mgr.get_state(target_book_id=target_book.id) if target_book else None
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok" if success else "not_found", "active_book": sim_mgr.active_book.id}, ensure_ascii=False).encode("utf-8"))
+                self.wfile.write(json.dumps({
+                    "status": "ok" if success else "not_found",
+                    "active_book": target_book.id if target_book else "",
+                    "state": state
+                }, ensure_ascii=False).encode("utf-8"))
                 return
 
             if path == "/api/admin/create_book":
