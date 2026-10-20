@@ -333,11 +333,16 @@ class VideoAgent:
         """多候选端点智能探查通用网关的视频任务状态"""
         candidate_urls = [
             f"{self.base_url}/videos/generations/{task_id}",
-            f"{self.base_url}/async-result/{task_id}",
+            f"{self.base_url}/v1/videos/generations/{task_id}",
             f"{self.base_url}/tasks/{task_id}",
+            f"{self.base_url}/v1/tasks/{task_id}",
             f"{self.base_url}/task/{task_id}",
+            f"{self.base_url}/query/video_generation?task_id={task_id}",
+            f"{self.base_url}/v1/query/video_generation?task_id={task_id}",
+            f"{self.base_url}/async-result/{task_id}",
             f"{self.base_url}/videos/text2video/{task_id}",
-            f"{self.base_url}/videos/{task_id}"
+            f"{self.base_url}/videos/{task_id}",
+            f"{self.base_url}/v1/videos/{task_id}"
         ]
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
@@ -408,7 +413,7 @@ class VideoAgent:
             return None
         if isinstance(data, dict):
             # 高频字段优先判断
-            for k in ("video_url", "url"):
+            for k in ("video_url", "url", "download_url", "file_url", "play_url", "output_url", "video"):
                 val = data.get(k)
                 if isinstance(val, str) and (val.startswith("http://") or val.startswith("https://")):
                     if any(ext in val.lower() for ext in (".mp4", ".mov", ".webm", "/video", "cdn", "oss", "s3", "generations")):
