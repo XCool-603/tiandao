@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import re
 import threading
 import urllib.request
 import urllib.error
@@ -53,24 +54,51 @@ class VideoAgent:
         if not self.api_key or self.api_key == "your_api_key_here":
             return {"status": "error", "error": "未配置有效的 API Key"}
 
-        # 探测 GET /models
+        root_url = re.sub(r'/v1/?$', '', self.base_url)
         test_urls = [
             f"{self.base_url}/models",
-            f"{self.base_url}/v1/models" if not self.base_url.endswith("/v1") else f"{self.base_url}/models"
+            f"{root_url}/v1/models",
+            f"{self.base_url}/videos/generations",
+            f"{root_url}/v1/videos/generations"
         ]
+        # 去重保持顺序
+        seen_t = set()
+        unique_test_urls = []
+        for u in test_urls:
+            if u not in seen_t:
+                seen_t.add(u)
+                unique_test_urls.append(u)
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "User-Agent": "Tiandao-VideoAgent/2.0"
         }
-        for u in test_urls:
+
+        models_list = []
+        for u in unique_test_urls:
             try:
                 req = urllib.request.Request(u, headers=headers, method="GET")
                 with urllib.request.urlopen(req, timeout=12) as resp:
                     if resp.status in (200, 201):
+                        resp_data = {}
+                        try:
+                            resp_data = json.loads(resp.read().decode("utf-8"))
+                        except Exception:
+                            pass
+                        
+                        if "data" in resp_data and isinstance(resp_data["data"], list):
+                            models_list = [str(m.get("id", "")) for m in resp_data["data"] if isinstance(m, dict)]
+                        
+                        has_video_support = any("video" in m.lower() or "cogvideo" in m.lower() or "kling" in m.lower() for m in models_list)
+                        note = ""
+                        if models_list and not has_video_support:
+                            note = " (注意：网关模型列表中未检测到常用视频模型，若此网关为纯文本LLM反代如WorkBuddy2API/Trae2API，将无法用于视频生成)"
+
                         return {
                             "status": "ok",
-                            "message": f"视频通道鉴权成功，网关通信正常 (HTTP {resp.status})",
-                            "model": self.model
+                            "message": f"视频通道鉴权成功，网关通信正常 (HTTP {resp.status}){note}",
+                            "model": self.model,
+                            "models_found": models_list[:10]
                         }
             except urllib.error.HTTPError as he:
                 if he.code in (401, 403):
@@ -82,7 +110,7 @@ class VideoAgent:
             except Exception:
                 continue
 
-        # 若 /models 不支持，使用 HEAD 探测根地址/generations 鉴权
+        # 若 /models 不支持，使用 HEAD/GET 探测根地址/generations 鉴权
         try:
             req = urllib.request.Request(f"{self.base_url}/videos/generations", headers=headers, method="GET")
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -93,7 +121,7 @@ class VideoAgent:
             # 405 Method Not Allowed 或 400 Bad Request 说明网络已通且鉴权通过，只是缺少 POST body
             if he.code in (405, 400):
                 return {"status": "ok", "message": "视频通道网络与鉴权正常", "model": self.model}
-            return {"status": "error", "error": f"网关连通异常: HTTP {he.code}"}
+            return {"status": "error", "error": f"网关连通异常: HTTP {he.code} (若为404则该地址无视频生成接口)"}
         except Exception as e:
             return {"status": "error", "error": f"网络连接超时或无法解析地址: {str(e)}"}
 
@@ -257,14 +285,26 @@ class VideoAgent:
         except Exception as e:
             return {"status": "processing", "task_id": task_id, "message": f"轮询可灵状态中 ({str(e)})"}
 
-    # ================= 通用网关实现 (Si2API / One-API / New-API) =================
+    # ================= 通用网关实现 (Si2API / One-API / New-API / MiniMax / Kling) =================
     def _submit_generic_gateway(self, prompt: str, duration: int = 5) -> Dict[str, Any]:
+        root_url = re.sub(r'/v1/?$', '', self.base_url)
         endpoints = [
             f"{self.base_url}/videos/generations",
+            f"{root_url}/v1/videos/generations",
             f"{self.base_url}/video/generations",
-            f"{self.base_url}/v1/videos/generations" if not self.base_url.endswith("/v1") else f"{self.base_url}/videos/generations"
+            f"{root_url}/v1/video/generations",
+            f"{self.base_url}/video_generation",
+            f"{root_url}/v1/video_generation",
+            f"{self.base_url}/video_generations",
+            f"{root_url}/v1/video_generations",
+            f"{self.base_url}/videos/text2video",
+            f"{root_url}/v1/videos/text2video",
+            f"{self.base_url}/tasks",
+            f"{root_url}/v1/tasks",
+            f"{self.base_url}/images/generations",
+            f"{root_url}/v1/images/generations"
         ]
-        # 去重
+        # 去重并保持探测顺序
         seen = set()
         unique_endpoints = []
         for ep in endpoints:
@@ -274,6 +314,7 @@ class VideoAgent:
 
         payload = {
             "model": self.model,
+            "model_name": self.model,
             "prompt": prompt,
             "size": "720x1280",
             "duration": duration,
@@ -317,32 +358,44 @@ class VideoAgent:
                 try: body = he.read().decode("utf-8")
                 except Exception: pass
                 last_err = f"网关返回 HTTP {he.code}: {body or he.reason}"
-                # 如果是 404 说明路径不对，尝试下一个候选路径
+                # 如果是 404 说明当前端点不存在，继续探测下一个候选端点
                 if he.code == 404:
                     continue
-                # 如果是 401/403/400 则直接报错，告知用户真实问题
+                # 如果是 401/403/400 则直接报错告知真实原因
                 return {"status": "failed", "error": f"视频提交失败: {last_err}"}
             except Exception as e:
                 last_err = str(e)
                 continue
 
-        # 如果所有候选端点均失败，如实返回错误，绝不静默使用模拟数据糊弄用户
-        return {"status": "failed", "error": f"所有视频网关端点连接失败: {last_err} (请在后台检查 VIDEO_BASE_URL 或网关是否支持 /videos/generations)"}
+        # 如果所有候选端点均 404，输出精准分析
+        if "404" in last_err:
+            return {
+                "status": "failed",
+                "error": f"所有视频网关端点连接失败 (网关均返回 HTTP 404)。\n原因分析：当前配置的视频网关地址 [{self.base_url}] 很可能是纯文本对话大语言模型(LLM)网关（如 WorkBuddy2API 或 Trae2API 仅开放 /v1/chat/completions 文本对话，并无视频生成功能）。\n解决方案：\n1. 请在后台【系统配置】设置真正的文生视频 API（如智谱 CogVideoX 官方、可灵 AI 官方、MiniMax 海螺视频官方，或支持生视频的聚合网关）。\n2. 若暂无视频 Key，可在剧本分镜卡片上点击【模拟体验】免Key极速体验短剧 9:16 视频呈现效果。"
+            }
+
+        return {"status": "failed", "error": f"所有视频网关端点连接失败: {last_err} (请在后台检查 VIDEO_BASE_URL 与模型是否支持)"}
 
     def _query_generic_gateway(self, task_id: str) -> Dict[str, Any]:
         """多候选端点智能探查通用网关的视频任务状态"""
+        root_url = re.sub(r'/v1/?$', '', self.base_url)
         candidate_urls = [
             f"{self.base_url}/videos/generations/{task_id}",
-            f"{self.base_url}/v1/videos/generations/{task_id}",
+            f"{root_url}/v1/videos/generations/{task_id}",
+            f"{self.base_url}/video/generations/{task_id}",
+            f"{root_url}/v1/video/generations/{task_id}",
             f"{self.base_url}/tasks/{task_id}",
-            f"{self.base_url}/v1/tasks/{task_id}",
+            f"{root_url}/v1/tasks/{task_id}",
             f"{self.base_url}/task/{task_id}",
+            f"{root_url}/v1/task/{task_id}",
             f"{self.base_url}/query/video_generation?task_id={task_id}",
-            f"{self.base_url}/v1/query/video_generation?task_id={task_id}",
+            f"{root_url}/v1/query/video_generation?task_id={task_id}",
             f"{self.base_url}/async-result/{task_id}",
+            f"{root_url}/v1/async-result/{task_id}",
             f"{self.base_url}/videos/text2video/{task_id}",
+            f"{root_url}/v1/videos/text2video/{task_id}",
             f"{self.base_url}/videos/{task_id}",
-            f"{self.base_url}/v1/videos/{task_id}"
+            f"{root_url}/v1/videos/{task_id}"
         ]
         headers = {"Authorization": f"Bearer {self.api_key}"}
 

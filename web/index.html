@@ -5435,12 +5435,21 @@ function copyTampermonkeyUrl() {
                   </div>
                 </div>
               ` : `
+                ${s.video_status === 'failed' && s.video_error ? `
+                  <div style="margin-top: 6px; padding: 8px 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; font-size: 11px; color: #f87171; line-height: 1.45;">
+                    <div style="font-weight: 600; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
+                      <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      视频生成提示:
+                    </div>
+                    <div style="word-break: break-all; white-space: pre-wrap; font-size: 10.5px; opacity: 0.95;">${escapeHtml(s.video_error)}</div>
+                  </div>
+                ` : ''}
                 <div style="margin-top: 6px; display: flex; gap: 6px;">
                   <button class="btn btn-primary" style="flex: 1; font-size: 11px; padding: 5px 8px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">
-                    <span><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> 生成本镜视频 (9:16)</span>
+                    <span><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> ${s.video_status === 'failed' ? '重新调用视频API' : '生成本镜视频 (9:16)'}</span>
                   </button>
                   <button class="btn btn-secondary" style="font-size: 11px; padding: 5px 8px;" onclick="triggerShotVideoGeneration(${s.shot_num}, true, this)" title="免耗 API Key 构建动态样片">
-                    <span>模拟体验</span>
+                    <span>模拟体验(免Key)</span>
                   </button>
                 </div>
               `)}
