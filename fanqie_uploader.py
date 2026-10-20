@@ -568,3 +568,223 @@ def native_upload_chapter(book_title: str, chapter_title: str, chapter_content: 
         result["message"] = f"《{clean_title}》已本地存盘。直推执行提示: {e_playwright}"
 
     return result
+
+def native_upload_batch(book_title: str, chapters: list, book_id: str = "", mode: str = "drafts", max_count: int = None) -> dict:
+    """
+    单会话全自动批量推送到番茄小说作家后台（高效免重启）：
+    1. 启动单一浏览器实例，避免每章重启造成的资源消耗与风控
+    2. 自动定位作品卡片，进入章节管理
+    3. 循环注入章节、弹窗斩杀、自动点击存草稿并连续新建章节
+    """
+    bid = book_id if str(book_id).startswith("book_") else f"book_{book_id}"
+    book_sync_dir = FANQIE_DIR / bid
+    book_sync_dir.mkdir(parents=True, exist_ok=True)
+
+    if not chapters:
+        return {"status": "error", "message": "小说作品暂无章节可上传"}
+
+    # 1. 批量在本地存盘所有章节（番茄缩进规范）
+    for idx, c in enumerate(chapters, 1):
+        cid = c.get("id", idx)
+        title = c.get("title", f"第{cid}章")
+        clean_title = title.replace("#", "").strip()
+        if not clean_title.startswith("第") and "章" not in clean_title:
+            clean_title = f"第{cid}章 {clean_title}"
+        content = c.get("content", "")
+        clean_body = clean_chapter_for_fanqie(clean_title, content)
+        ch_file = book_sync_dir / f"chapter_{int(cid) if str(cid).isdigit() else idx:03d}.txt"
+        ch_file.write_text(clean_body, encoding="utf-8")
+
+    # 2. 检查凭据与 Playwright
+    if not AUTH_STATE_PATH.exists() or AUTH_STATE_PATH.stat().st_size < 50:
+        return {
+            "status": "local_ready",
+            "total_chapters": len(chapters),
+            "local_count": len(chapters),
+            "success_count": 0,
+            "message": f"《{book_title}》全书共 {len(chapters)} 章已在服务器完成番茄规范排版存盘。\n尚未绑定番茄作家账号，请在【发书总控台】扫码登录或粘贴 Cookie 绑定后即可一键全书直推！"
+        }
+
+    if not is_playwright_available():
+        return {
+            "status": "local_ready",
+            "total_chapters": len(chapters),
+            "local_count": len(chapters),
+            "success_count": 0,
+            "message": f"《{book_title}》全书共 {len(chapters)} 章已完成本地排版存盘。Playwright 驱动未就绪，可使用篡改猴脚本挂机录入或使用【下载番茄规范分章 TXT】批量导入！"
+        }
+
+    # 3. 单一浏览器会话批量连续推送到番茄后台
+    success_count = 0
+    synced_chapters = []
+    target_chapters = chapters[:max_count] if max_count else chapters
+
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = launch_browser(p, headless=True)
+            context = browser.new_context(
+                storage_state=str(AUTH_STATE_PATH),
+                viewport={"width": 1280, "height": 800},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            )
+            page = context.new_page()
+
+            # 进入书籍管理
+            page.goto(BOOK_MANAGE_URL, timeout=45000)
+            page.wait_for_timeout(2500)
+
+            # 定位小说卡片 hover 并点击【章节管理】
+            clean_book_name = book_title.replace("《", "").replace("》", "").strip()
+            book_cards = page.locator('div, li, section, article').filter(has_text=clean_book_name)
+            card_count = book_cards.count()
+            manage_clicked = False
+            for i in range(card_count - 1, -1, -1):
+                card = book_cards.nth(i)
+                try:
+                    if not card.is_visible():
+                        continue
+                    card.hover(timeout=2500)
+                    page.wait_for_timeout(800)
+                    manage_btn = card.get_by_text("章节管理").first
+                    if manage_btn.is_visible():
+                        manage_btn.click()
+                        manage_clicked = True
+                        break
+                except Exception:
+                    continue
+
+            if not manage_clicked:
+                gb = page.get_by_text("章节管理").first
+                if gb.is_visible():
+                    gb.click()
+
+            page.wait_for_timeout(2500)
+            original_pages = len(context.pages)
+            if original_pages > 1 and context.pages[-1] != page:
+                editor_page = context.pages[-1]
+            else:
+                editor_page = page
+
+            history_file = book_sync_dir / "sync_history.json"
+            history = []
+            if history_file.exists():
+                try:
+                    history = json.loads(history_file.read_text(encoding="utf-8"))
+                except Exception:
+                    history = []
+
+            for idx, c in enumerate(target_chapters, 1):
+                cid = c.get("id", idx)
+                title = c.get("title", f"第{cid}章")
+                clean_title = title.replace("#", "").strip()
+                if not clean_title.startswith("第") and "章" not in clean_title:
+                    clean_title = f"第{cid}章 {clean_title}"
+                ch_num_match = re.search(r"第(\d+)章", clean_title)
+                chapter_num = ch_num_match.group(1) if ch_num_match else str(cid)
+                content = c.get("content", "")
+                clean_body = clean_chapter_for_fanqie(clean_title, content)
+
+                try:
+                    # 检查是否已在编辑页或需要点击新建章节
+                    title_input = editor_page.get_by_placeholder("请输入标题", exact=False).first
+                    if not title_input.is_visible():
+                        title_input = editor_page.get_by_placeholder("请输入章节名", exact=False).first
+                    if not title_input.is_visible():
+                        title_input = editor_page.locator('input[type="text"]').last
+
+                    if not title_input.is_visible():
+                        new_btn = editor_page.get_by_role("button", name="新建章节").first
+                        if not new_btn.is_visible():
+                            new_btn = editor_page.get_by_text("新建章节").first
+                        if new_btn.is_visible():
+                            new_btn.click(force=True)
+                            page.wait_for_timeout(2000)
+                            if len(context.pages) > original_pages:
+                                editor_page = context.pages[-1]
+
+                    # 弹窗斩杀
+                    dismiss_popups(editor_page)
+
+                    # 填写序号和标题
+                    num_inputs = editor_page.locator('input[type="text"]').element_handles()
+                    title_input = editor_page.get_by_placeholder("请输入标题", exact=False).first
+                    if not title_input.is_visible():
+                        title_input = editor_page.get_by_placeholder("请输入章节名", exact=False).first
+                    if not title_input.is_visible():
+                        title_input = editor_page.locator('input[type="text"]').last
+
+                    if chapter_num and len(num_inputs) >= 2:
+                        first_input = editor_page.locator('input[type="text"]').first
+                        if first_input.is_visible():
+                            first_input.fill(str(chapter_num), force=True)
+                        sub_title = re.sub(r"^第\d+章[\s_]*", "", clean_title).strip()
+                        if title_input.is_visible():
+                            title_input.fill(sub_title or clean_title, force=True)
+                    else:
+                        if title_input.is_visible():
+                            title_input.fill(clean_title, force=True)
+
+                    # 填写正文
+                    editor = editor_page.locator('.ql-editor, .ProseMirror, [contenteditable="true"]').first
+                    if editor.is_visible():
+                        editor.click(force=True)
+                        editor_page.evaluate("([el, text]) => { el.innerText = text; el.dispatchEvent(new Event('input', {bubbles: true})); }", [editor.element_handle(), clean_body])
+                        editor.click()
+                        editor_page.keyboard.press("End")
+                        editor_page.keyboard.press("Space")
+                        editor_page.wait_for_timeout(200)
+                        editor_page.keyboard.press("Backspace")
+
+                    # 保存草稿
+                    save_btn = editor_page.get_by_text("存草稿", exact=False).first
+                    if not save_btn.is_visible():
+                        save_btn = editor_page.get_by_text("保存草稿", exact=False).first
+                    if not save_btn.is_visible():
+                        save_btn = editor_page.get_by_text("保存", exact=False).first
+
+                    if save_btn.is_visible():
+                        save_btn.click(force=True)
+                        editor_page.wait_for_timeout(2500)
+                        success_count += 1
+                        synced_chapters.append({"chapter_id": cid, "title": clean_title})
+
+                        history.append({
+                            "chapter_id": int(cid) if str(cid).isdigit() else cid,
+                            "chapter_title": clean_title,
+                            "synced_at": time.time(),
+                            "time_str": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "mode": mode,
+                            "status": "ok"
+                        })
+
+                        # 如果还有下一章，点击新建章节进入下一章
+                        if idx < len(target_chapters):
+                            next_create_btn = editor_page.get_by_text("新建章节").first
+                            if not next_create_btn.is_visible():
+                                next_create_btn = editor_page.get_by_text("写新章").first
+                            if next_create_btn.is_visible():
+                                next_create_btn.click(force=True)
+                                editor_page.wait_for_timeout(2000)
+
+                except Exception as e_chap:
+                    print(f"批量上传第 {cid} 章异常: {e_chap}")
+                    continue
+
+            history_file.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
+            browser.close()
+
+            return {
+                "status": "ok" if success_count > 0 else "error",
+                "total_chapters": len(chapters),
+                "success_count": success_count,
+                "synced_chapters": synced_chapters,
+                "message": f"《{book_title}》已成功直接直推 {success_count} / {len(chapters)} 章至番茄小说作家后台！"
+            }
+    except Exception as e_batch:
+        return {
+            "status": "local_ready",
+            "total_chapters": len(chapters),
+            "success_count": success_count,
+            "message": f"批量直推执行提示: {e_batch}。本地存盘已就绪，可通过篡改猴助手挂机录入。"
+        }

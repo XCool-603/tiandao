@@ -3198,29 +3198,15 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             if path == "/api/fanqie/upload_all":
                 bid = req_data.get("book_id", "")
                 target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
-                success_count = 0
-                local_count = 0
-                for c in target_book.chapters:
-                    r = sim_mgr.upload_chapter_fanqie(target_book, c.get("id"))
-                    if r.get("status") == "ok":
-                        success_count += 1
-                    elif r.get("status") == "local_ready":
-                        local_count += 1
-                if success_count > 0:
-                    res = {
-                        "status": "ok",
-                        "total_chapters": len(target_book.chapters),
-                        "success_count": success_count,
-                        "message": f"《{target_book.title}》已成功直接推送 {success_count} 章至番茄小说作家后台！"
-                    }
-                else:
-                    res = {
-                        "status": "local_ready",
-                        "total_chapters": len(target_book.chapters),
-                        "success_count": 0,
-                        "local_count": local_count,
-                        "message": f"《{target_book.title}》全书共 {len(target_book.chapters)} 章已在服务器完成番茄规范排版存盘。\n因服务器端尚未直连番茄作家账号，请在番茄后台使用【批量导入】上传全书文件，或打开番茄后台通过【篡改猴助手】自动挂机录入！"
-                    }
+                res = fanqie_uploader.native_upload_batch(
+                    book_title=target_book.title,
+                    chapters=target_book.chapters,
+                    book_id=target_book.id,
+                    mode="drafts"
+                )
+                if res.get("status") == "ok":
+                    for syn in res.get("synced_chapters", []):
+                        sim_mgr.mark_fanqie_synced(target_book.id, syn.get("chapter_id"), mode="native_batch", remote_id="ok")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()

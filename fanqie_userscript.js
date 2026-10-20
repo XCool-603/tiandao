@@ -353,10 +353,51 @@
         }
     }
 
+    // 弹窗斩杀机制：空间物理坐标过滤（Y > 100）消除新手向导、错别字拦截、风险检测拦截
+    function dismissPopups() {
+        const guideTexts = ["下一步", "完成", "我知道了", "跳过", "知道了", "同意并继续"];
+        const allCandidates = Array.from(document.querySelectorAll('button, div, span, a'));
+        for (const el of allCandidates) {
+            const txt = (el.textContent || "").trim();
+            if (guideTexts.includes(txt) && el.offsetParent !== null) {
+                const rect = el.getBoundingClientRect();
+                if (rect && rect.top > 100) {
+                    try {
+                        el.click();
+                        updateLog(`已穿透新手引导遮罩: [${txt}]`);
+                    } catch(e) {}
+                }
+            }
+        }
+        // 自动穿透错别字弹窗
+        for (const b of document.querySelectorAll('button')) {
+            const txt = (b.textContent || "").trim();
+            if ((txt === '提交' || txt === '确认提交') && b.offsetParent !== null) {
+                const modal = b.closest('.semi-modal, .modal, [class*="modal"], [class*="dialog"]');
+                if (modal && modal.textContent.includes('错别字')) {
+                    b.click();
+                    updateLog('已自动确认错别字修改提示');
+                }
+            }
+        }
+        // 自动取消内容风险检测弹窗以节约额度
+        for (const b of document.querySelectorAll('button')) {
+            const txt = (b.textContent || "").trim();
+            if (txt === '取消' && b.offsetParent !== null) {
+                const modal = b.closest('.semi-modal, .modal, [class*="modal"], [class*="dialog"]');
+                if (modal && modal.textContent.includes('风险检测')) {
+                    b.click();
+                    updateLog('已自动取消内容风险检测弹窗');
+                }
+            }
+        }
+    }
+
     // 自动在番茄页面寻找元素并填入草稿
     async function handleUploadChapter(chapter, forceManual = false) {
         if (!forceManual && isUploading) return;
         isUploading = true;
+        dismissPopups();
         updateLog(`正在填充第 ${chapter.chapter_id} 章《${chapter.chapter_title}》...`);
         updateInfo(`<span style="color:#f59e0b;">正在录入第 ${chapter.chapter_id} 章 (${chapter.word_count} 字)...</span>`);
 
@@ -426,6 +467,7 @@
             }
 
             await new Promise(r => setTimeout(r, 1200));
+            dismissPopups();
 
             // 寻找保存草稿按钮
             let saveBtn = Array.from(document.querySelectorAll('button')).find(el => {
@@ -436,6 +478,7 @@
             if (saveBtn && !saveBtn.disabled) {
                 saveBtn.click();
                 updateLog(`第 ${chapter.chapter_id} 章已自动点击存草稿！`);
+                setTimeout(dismissPopups, 1000);
             } else {
                 updateLog(`第 ${chapter.chapter_id} 章已填入标题和正文，请手动点击保存`);
             }

@@ -266,9 +266,25 @@ def upload_chapter_to_fanqie(context, book_title, chapter_num, chapter_title, co
         return False
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="天道 x 番茄自动发书机器人 (Playwright 强化版)")
+    parser.add_argument("--server", type=str, default=None, help="天道服务地址")
+    parser.add_argument("--login", action="store_true", help="仅执行扫码登录并保存凭据")
+    parser.add_argument("--batch", type=int, default=None, help="本次发布的章节数量")
+    parser.add_argument("--all", action="store_true", help="发布所有待发章节")
+    parser.add_argument("--daemon", action="store_true", help="守护进程模式持续监听新章节")
+    parser.add_argument("--headless", action="store_true", help="无头模式运行")
+    parser.add_argument("--mode", type=str, default="draft", choices=["draft", "publish"], help="发布模式")
+    args = parser.parse_args()
+
+    global SERVER_API
+    if args.server:
+        SERVER_API = args.server.rstrip("/")
+
     print("=" * 60)
     print("天道 x 番茄自动发书机器人 (Playwright 强化版)")
     print(f"连接服务地址: {SERVER_API}")
+    print(f"发布模式: {'存入草稿箱' if args.mode == 'draft' else '直接公开发布'}")
     print("=" * 60)
 
     try:
@@ -280,8 +296,12 @@ def main():
     with sync_playwright() as p:
         ensure_login(p)
 
+        if args.login:
+            print("登录凭据已就绪，退出。")
+            return
+
         # 启动持久化会话浏览器
-        browser = p.chromium.launch(channel="msedge", headless=False)
+        browser = p.chromium.launch(channel="msedge", headless=args.headless)
         context = browser.new_context(
             storage_state=str(AUTH_STATE_PATH),
             viewport={"width": 1280, "height": 800},
@@ -290,11 +310,19 @@ def main():
 
         print("\n正在从天道服务拉取待发布章节...")
         success_total = 0
+        target_limit = args.batch
 
         while True:
+            if target_limit is not None and success_total >= target_limit:
+                print(f"\n已达到设定的发布数量限制 ({success_total} 章)，任务顺利完成！")
+                break
+
             res = fetch_json(f"{SERVER_API}/api/fanqie/pending_chapter")
             if not res or res.get("status") != "ok" or not res.get("has_pending"):
                 print(f"暂无待发章节 (已同步 {res.get('synced_count', 0)} / {res.get('total_chapters', 0)} 章)。")
+                if args.all or target_limit is not None:
+                    print("所有指定章节均已发布完成，退出。")
+                    break
                 print("挂机轮询中，将在天道推演新章节后自动同步...")
                 time.sleep(10)
                 continue
@@ -306,7 +334,7 @@ def main():
             title = chap.get("chapter_title", "")
             content = chap.get("content", "")
 
-            ok = upload_chapter_to_fanqie(context, book_title, cid, title, content, mode="draft")
+            ok = upload_chapter_to_fanqie(context, book_title, cid, title, content, mode=args.mode)
             if ok:
                 success_total += 1
                 fetch_json(f"{SERVER_API}/api/fanqie/confirm_uploaded", {
@@ -314,11 +342,13 @@ def main():
                     "chapter_id": cid,
                     "mode": "playwright_bot_draft"
                 })
-                print(f"已上报同步成功，等待 3 秒继续处理下一章...")
+                print(f"已上报同步成功 (已完成 {success_total} 章)，等待 3 秒继续处理下一章...")
                 time.sleep(3)
             else:
                 print("遇到异常，等待 10 秒后重试...")
                 time.sleep(10)
+
+        browser.close()
 
 if __name__ == "__main__":
     try:
