@@ -2439,6 +2439,29 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             }, ensure_ascii=False).encode("utf-8"))
             return
 
+        if path == "/api/fanqie/book_meta":
+            qs = urllib.parse.parse_qs(parsed.query)
+            query_book_id = qs.get("book_id", [""])[0]
+            target_book = book_mgr.books.get(query_book_id, sim_mgr.active_book) if query_book_id else sim_mgr.active_book
+            clean_title = (target_book.title or "小说作品").replace("《", "").replace("》", "").strip() if target_book else ""
+            tags = get_fanqie_category_tags(target_book.genre) if target_book else []
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "book_id": target_book.id if target_book else "",
+                "title": clean_title,
+                "raw_title": target_book.title if target_book else "",
+                "genre": target_book.genre if target_book else "都市脑洞",
+                "synopsis": target_book.synopsis if target_book else "",
+                "theme_prompt": target_book.theme_prompt if target_book else "",
+                "fanqie_tags": tags,
+                "chapter_count": len(target_book.chapters) if target_book else 0
+            }, ensure_ascii=False).encode("utf-8"))
+            return
+
         if path == "/api/fanqie/script.user.js":
             script_path = BASE_DIR / "fanqie_userscript.js"
             content = script_path.read_text(encoding="utf-8") if script_path.exists() else "// Script file not found"

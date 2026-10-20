@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         天道 · 番茄小说全自动挂机发书助手
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
-// @description  连接天道推演引擎，自动将新推演章节无缝填入番茄作家后台草稿箱，实现写一章传一章全自动挂机！
+// @version      1.4.0
+// @description  连接天道推演引擎，支持一键自动填入新建作品（书名、简介、题材标签），自动将新推演章节无缝填入番茄作家后台草稿箱，实现写一章传一章全自动挂机！
 // @author       Tiandao AI
 // @match        *://fanqienovel.com/*
 // @match        *://*.fanqienovel.com/*
@@ -22,7 +22,6 @@
     // 默认自适应部署域名 (支持 https://book.si2api.top 与本地自适应)
     const EMBEDDED_SERVER = "https://book.si2api.top";
     let stored = localStorage.getItem('tiandao_api_base');
-    // 如果之前误存了不可访问的 localhost，且当前运行环境属于 book.si2api.top，自动纠正
     if (!stored || stored.includes("localhost") || stored.includes("127.0.0.1")) {
         stored = EMBEDDED_SERVER;
         localStorage.setItem('tiandao_api_base', stored);
@@ -52,8 +51,8 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.6);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 13px;
-            min-width: 300px;
-            max-width: 380px;
+            min-width: 310px;
+            max-width: 390px;
             backdrop-filter: blur(8px);
         `;
 
@@ -64,8 +63,9 @@
                     <span id="tiandao-status-dot" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#94a3b8;" title="连接状态"></span>
                 </div>
                 <div style="display: flex; gap: 4px;">
-                    <button id="tiandao-btn-manual" style="background:#0f766e; color:#fff; border:none; padding:3px 8px; border-radius:5px; cursor:pointer; font-size:11px;" title="将当前待同步章节强制填入当前编辑框">手动填入</button>
-                    <button id="tiandao-btn-toggle" style="background:#2563eb; color:#fff; border:none; padding:3px 8px; border-radius:5px; cursor:pointer; font-size:11px;">运行中</button>
+                    <button id="tiandao-btn-fillbook" style="background:#7c3aed; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="在新建作品页一键自动填入书名与简介">建书填入</button>
+                    <button id="tiandao-btn-manual" style="background:#0f766e; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="在章节编辑页强制填入当前章节">填入本章</button>
+                    <button id="tiandao-btn-toggle" style="background:#2563eb; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;">运行中</button>
                 </div>
             </div>
             <div id="tiandao-info-text" style="font-size:11.5px; color:#94a3b8; line-height:1.5;">
@@ -99,6 +99,10 @@
             }
         };
 
+        document.getElementById('tiandao-btn-fillbook').onclick = () => {
+            handleCreateBook();
+        };
+
         document.getElementById('tiandao-btn-manual').onclick = () => {
             if (currentChapter) {
                 handleUploadChapter(currentChapter, true);
@@ -130,7 +134,7 @@
         if (el) el.innerHTML = info;
     }
 
-    // 跨域请求包装 (支持 GM_xmlhttpRequest 绕过浏览器严格跨域限制)
+    // 跨域请求包装
     function httpRequest(url, options = {}) {
         return new Promise((resolve, reject) => {
             if (typeof GM_xmlhttpRequest !== 'undefined') {
@@ -156,9 +160,83 @@
         });
     }
 
-    // 核心：检查待上传章节
+    // 一键在番茄【新建作品】页面自动填入书名与简介
+    async function handleCreateBook() {
+        updateLog("正在从天道拉取小说档案...");
+        try {
+            const res = await httpRequest(`${API_BASE}/api/fanqie/book_meta`);
+            if (!res || res.status !== 'ok') {
+                updateLog("获取小说档案失败，请检查天道连接");
+                return;
+            }
+
+            // 查找书名输入框
+            let titleInput = document.querySelector('input[placeholder*="书名"]') || 
+                             document.querySelector('input[placeholder*="作品名"]') ||
+                             document.querySelector('input[placeholder*="作品名称"]') ||
+                             document.querySelector('.book-title-input input') ||
+                             document.querySelector('.semi-input[placeholder*="书名"]');
+            
+            // 查找简介输入框
+            let synopsisInput = document.querySelector('textarea[placeholder*="简介"]') || 
+                                document.querySelector('textarea[placeholder*="作品简介"]') ||
+                                document.querySelector('.synopsis-textarea') ||
+                                document.querySelector('.semi-input-textarea[placeholder*="简介"]');
+
+            if (!titleInput && !synopsisInput) {
+                let createBookBtn = Array.from(document.querySelectorAll('button, a, span')).find(el => {
+                    const txt = (el.textContent || "").trim();
+                    return txt === '新建作品' || txt === '创建作品';
+                });
+                if (createBookBtn) {
+                    updateLog("检测到【新建作品】按钮，自动点击进入...");
+                    createBookBtn.click();
+                    setTimeout(handleCreateBook, 2000);
+                    return;
+                }
+                updateLog("提示: 请先在番茄页面点击【新建作品】打开建书表单");
+                return;
+            }
+
+            if (titleInput) {
+                titleInput.focus();
+                titleInput.value = res.title;
+                titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+                titleInput.dispatchEvent(new Event('blur', { bubbles: true }));
+            }
+
+            if (synopsisInput) {
+                synopsisInput.focus();
+                synopsisInput.value = res.synopsis || res.theme_prompt || "";
+                synopsisInput.dispatchEvent(new Event('input', { bubbles: true }));
+                synopsisInput.dispatchEvent(new Event('change', { bubbles: true }));
+                synopsisInput.dispatchEvent(new Event('blur', { bubbles: true }));
+            }
+
+            updateLog(`书名《${res.title}》与简介已全部自动填入！`);
+            updateInfo(`推荐分类: <b style="color:#f59e0b;">${res.genre}</b> | 标签: ${res.fanqie_tags ? res.fanqie_tags.join("、") : ""}`);
+        } catch (e) {
+            updateLog(`建书自动填入异常: ${e.message}`);
+        }
+    }
+
+    // 核心：检查待上传章节或新建作品上下文
     async function checkPendingChapter() {
         if (!isRunning || isUploading) return;
+
+        // 如果当前位于新建作品页面
+        const isCreatePage = document.querySelector('input[placeholder*="书名"]') || 
+                             document.querySelector('textarea[placeholder*="简介"]') ||
+                             window.location.href.includes("create") ||
+                             window.location.href.includes("new-book");
+        if (isCreatePage) {
+            const dot = document.getElementById('tiandao-status-dot');
+            if (dot) dot.style.background = '#10b981';
+            updateInfo("检测到【新建作品】页面：点击右上角<b>【建书填入】</b>一键填入书名与简介");
+            return;
+        }
+
         try {
             const res = await httpRequest(`${API_BASE}/api/fanqie/pending_chapter`);
             if (res && res.status === 'ok') {
@@ -177,7 +255,6 @@
                 return;
             }
         } catch (err) {
-            // 候选地址智能探查 (https://book.si2api.top 优先)
             const candidates = [
                 "https://book.si2api.top",
                 "http://book.si2api.top",
@@ -232,7 +309,6 @@
                              document.querySelector('textarea.semi-input-textarea');
 
             if (!titleInput || !bodyEditor) {
-                // 如果当前不在编辑页，尝试寻找“新建章节”按钮
                 let newBtn = Array.from(document.querySelectorAll('button, a, span')).find(el => {
                     const txt = (el.textContent || "").trim();
                     return txt === '新建章节' || txt === '写新章' || txt === '发布章节' || txt === '创建章节';
@@ -276,7 +352,6 @@
                 bodyEditor.dispatchEvent(new Event('change', { bubbles: true }));
             }
 
-            // 等待页面反应
             await new Promise(r => setTimeout(r, 1200));
 
             // 寻找保存草稿按钮
