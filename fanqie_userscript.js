@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         天道 · 番茄小说全自动挂机发书助手
 // @namespace    http://tampermonkey.net/
-// @version      1.5.0
-// @description  连接天道推演引擎，支持一键新建作品填入、全自动批量连发、逐章自动存草稿、写一章发一章无人值守挂机！
+// @version      1.6.0
+// @description  连接天道推演引擎，支持新建作品一键填入、空间坐标弹窗穿透、智能断点记忆、全书101章自动连发无人值守挂机！
 // @author       Tiandao AI
 // @match        *://fanqienovel.com/*
 // @match        *://*.fanqienovel.com/*
@@ -19,7 +19,7 @@
 (function() {
     'use strict';
 
-    // 默认自适应部署域名 (支持 https://book.si2api.top 与本地自适应)
+    // 默认自适应部署服务地址
     const EMBEDDED_SERVER = "https://book.si2api.top";
     let stored = localStorage.getItem('tiandao_api_base');
     if (!stored || stored.includes("localhost") || stored.includes("127.0.0.1")) {
@@ -35,7 +35,65 @@
     let currentChapter = null;
     let isCollapsed = false;
 
-    // 1. 创建右下角挂机悬浮面板
+    // 本地持久化章节指针（即使服务端锁死也能自主推进）
+    let currentChapIndex = parseInt(localStorage.getItem('tiandao_current_chap') || '1', 10);
+    let activeBookId = localStorage.getItem('tiandao_active_bid') || '';
+    let activeBookTitle = localStorage.getItem('tiandao_active_btitle') || '';
+    let totalChaptersCount = parseInt(localStorage.getItem('tiandao_total_chaps') || '101', 10);
+
+    // 格式化番茄首行缩进与去除 Markdown 杂乱字符
+    function cleanForFanqie(title, text) {
+        if (!text) return "";
+        let clean = text.replace(/^#+\s*.*?\n/g, "")
+                        .replace(/```[a-zA-Z]*/g, "")
+                        .replace(/```/g, "")
+                        .replace(/\*\*([^*]+)\*\*/g, "$1")
+                        .replace(/\*([^*]+)\*/g, "$1");
+        let lines = clean.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        return lines.map(l => "　　" + l).join('\n\n');
+    }
+
+    // 弹窗斩杀机制：空间物理坐标过滤（Y > 100）消除新手向导、错别字拦截、风险检测拦截
+    function dismissPopups() {
+        const guideTexts = ["下一步", "完成", "我知道了", "跳过", "知道了", "同意并继续"];
+        const allCandidates = Array.from(document.querySelectorAll('button, div, span, a'));
+        for (const el of allCandidates) {
+            const txt = (el.textContent || "").trim();
+            if (guideTexts.includes(txt) && el.offsetParent !== null) {
+                const rect = el.getBoundingClientRect();
+                if (rect && rect.top > 100) {
+                    try {
+                        el.click();
+                        updateLog(`已穿透新手引导遮罩: [${txt}]`);
+                    } catch(e) {}
+                }
+            }
+        }
+        // 自动确认错别字提示弹窗
+        for (const b of document.querySelectorAll('button')) {
+            const txt = (b.textContent || "").trim();
+            if ((txt === '提交' || txt === '确认提交') && b.offsetParent !== null) {
+                const modal = b.closest('.semi-modal, .modal, [class*="modal"], [class*="dialog"]');
+                if (modal && modal.textContent.includes('错别字')) {
+                    b.click();
+                    updateLog('已自动确认错别字修改提示');
+                }
+            }
+        }
+        // 自动取消内容风险检测弹窗以节约额度
+        for (const b of document.querySelectorAll('button')) {
+            const txt = (b.textContent || "").trim();
+            if (txt === '取消' && b.offsetParent !== null) {
+                const modal = b.closest('.semi-modal, .modal, [class*="modal"], [class*="dialog"]');
+                if (modal && modal.textContent.includes('风险检测')) {
+                    b.click();
+                    updateLog('已自动取消内容风险检测弹窗');
+                }
+            }
+        }
+    }
+
+    // 创建右下角挂机悬浮面板
     function createWidget() {
         if (document.getElementById('tiandao-bot-widget')) return;
         const div = document.createElement('div');
@@ -53,15 +111,15 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.6);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 13px;
-            min-width: 320px;
-            max-width: 400px;
+            min-width: 330px;
+            max-width: 420px;
             backdrop-filter: blur(8px);
         `;
 
         div.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                 <div style="font-weight: 700; color: #60a5fa; display: flex; align-items: center; gap: 6px;">
-                    <span>[天道] 自动发书助手</span>
+                    <span>[天道] 自动发书助手 v1.6.0</span>
                     <span id="tiandao-status-dot" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#94a3b8;" title="连接状态"></span>
                 </div>
                 <div style="display: flex; gap: 4px; align-items: center;">
@@ -71,11 +129,18 @@
             </div>
 
             <div id="tiandao-widget-body">
-                <div style="display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;">
-                    <button id="tiandao-btn-fillbook" style="background:#7c3aed; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="在新建作品页一键自动填入书名、简介与题材">建书填入</button>
-                    <button id="tiandao-btn-manual" style="background:#0f766e; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="在章节编辑页填入当前待发章节">填入本章</button>
-                    <button id="tiandao-btn-reset" style="background:#b91c1c; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="清空已同步标记，从第1章重新发布">重置进度</button>
-                    <button id="tiandao-btn-autonext" style="background:#059669; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="切换是否每章存草稿后自动点击新建章节继续发下一章">连发:开</button>
+                <div style="display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap;">
+                    <button id="tiandao-btn-fillbook" style="background:#7c3aed; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="一键填入书名与简介">建书填入</button>
+                    <button id="tiandao-btn-chainall" style="background:#ea580c; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px; font-weight:700;" title="从当前章节开始全自动逐章录入至最后一章">连发全书</button>
+                    <button id="tiandao-btn-manual" style="background:#0f766e; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="填入当前选中的章节">填入本章</button>
+                    <button id="tiandao-btn-autonext" style="background:#059669; color:#fff; border:none; padding:3px 7px; border-radius:5px; cursor:pointer; font-size:11px;" title="切换存草稿后是否自动新建下一章">连发:开</button>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 11.5px; background: rgba(255,255,255,0.05); padding: 5px 8px; border-radius: 6px;">
+                    <span style="color:#94a3b8;">章节跳号:</span>
+                    <input id="tiandao-input-chap" type="number" value="${currentChapIndex}" min="1" max="1000" style="width: 50px; background:#0f172a; border:1px solid #475569; color:#fff; border-radius:4px; padding:2px 4px; font-size:11px; text-align:center;">
+                    <button id="tiandao-btn-jumpchap" style="background:#3b82f6; color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:10.5px;">设定并载入</button>
+                    <button id="tiandao-btn-resetchap" style="background:#b91c1c; color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:10.5px;" title="回到第1章">归零第1章</button>
                 </div>
 
                 <div id="tiandao-info-text" style="font-size:11.5px; color:#94a3b8; line-height:1.5;">
@@ -152,27 +217,41 @@
             if (currentChapter) {
                 handleUploadChapter(currentChapter, true);
             } else {
-                updateLog('正在重新拉取待发布章节...');
-                checkPendingChapter();
+                updateLog(`正在拉取第 ${currentChapIndex} 章...`);
+                loadChapterByIndex(currentChapIndex, true);
             }
         };
 
-        // 重置同步进度
-        document.getElementById('tiandao-btn-reset').onclick = async () => {
-            if (!confirm("确定要重置发书同步进度吗？\n重置后所有章节将恢复为待发布状态，助手将从第 1 章重新开始同步。")) return;
-            updateLog("正在重置发书进度...");
-            try {
-                const res = await httpRequest(`${API_BASE}/api/fanqie/reset_sync`);
-                if (res && res.status === 'ok') {
-                    updateLog("进度重置成功！立即从第 1 章重新开始...");
-                    currentChapter = null;
-                    checkPendingChapter(1);
-                } else {
-                    updateLog("重置进度失败: " + (res.message || "未知错误"));
-                }
-            } catch (e) {
-                updateLog("重置请求失败: " + e.message);
+        // 一键连发全书
+        document.getElementById('tiandao-btn-chainall').onclick = () => {
+            autoNextChapter = true;
+            const btn = document.getElementById('tiandao-btn-autonext');
+            if (btn) {
+                btn.textContent = '连发:开';
+                btn.style.background = '#059669';
             }
+            updateLog(`启动全书自动连发（从第 ${currentChapIndex} 章开始）...`);
+            loadChapterByIndex(currentChapIndex, true);
+        };
+
+        // 设定章节序号
+        document.getElementById('tiandao-btn-jumpchap').onclick = () => {
+            const inputVal = parseInt(document.getElementById('tiandao-input-chap').value, 10);
+            if (inputVal > 0) {
+                currentChapIndex = inputVal;
+                localStorage.setItem('tiandao_current_chap', currentChapIndex);
+                updateLog(`章节指针已跳转至第 ${currentChapIndex} 章`);
+                loadChapterByIndex(currentChapIndex, false);
+            }
+        };
+
+        // 归零重置为第1章
+        document.getElementById('tiandao-btn-resetchap').onclick = () => {
+            currentChapIndex = 1;
+            localStorage.setItem('tiandao_current_chap', '1');
+            document.getElementById('tiandao-input-chap').value = '1';
+            updateLog('已将发书进度归零重置为第 1 章！');
+            loadChapterByIndex(1, false);
         };
 
         // 修改服务端地址
@@ -183,7 +262,7 @@
                 localStorage.setItem('tiandao_api_base', API_BASE);
                 document.getElementById('tiandao-current-url').textContent = API_BASE;
                 updateLog(`服务地址已切换为: ${API_BASE}`);
-                checkPendingChapter();
+                syncBookMeta();
             }
         };
     }
@@ -224,6 +303,38 @@
         });
     }
 
+    // 同步书籍元数据
+    async function syncBookMeta() {
+        try {
+            const books = await httpRequest(`${API_BASE}/api/books`);
+            if (Array.isArray(books) && books.length > 0) {
+                // 优先选取章节最多的作品
+                let bestBook = books[0];
+                for (const b of books) {
+                    if ((b.chapter_count || 0) > (bestBook.chapter_count || 0)) {
+                        bestBook = b;
+                    }
+                }
+                activeBookId = bestBook.id;
+                activeBookTitle = bestBook.title;
+                totalChaptersCount = bestBook.chapter_count || 101;
+                localStorage.setItem('tiandao_active_bid', activeBookId);
+                localStorage.setItem('tiandao_active_btitle', activeBookTitle);
+                localStorage.setItem('tiandao_total_chaps', totalChaptersCount);
+
+                const dot = document.getElementById('tiandao-status-dot');
+                if (dot) dot.style.background = '#10b981';
+                updateInfo(`作品: 《${activeBookTitle}》 | 共 ${totalChaptersCount} 章 (当前定位: 第 ${currentChapIndex} 章)`);
+                return true;
+            }
+        } catch(e) {
+            const dot = document.getElementById('tiandao-status-dot');
+            if (dot) dot.style.background = '#ef4444';
+            updateLog(`连接天道服务失败: ${e.message}`);
+        }
+        return false;
+    }
+
     // 一键在番茄【新建作品】页面自动填入书名与简介
     async function handleCreateBook() {
         updateLog("正在从天道拉取小说档案...");
@@ -234,14 +345,12 @@
                 return;
             }
 
-            // 查找书名输入框
             let titleInput = document.querySelector('input[placeholder*="书名"]') || 
                              document.querySelector('input[placeholder*="作品名"]') ||
                              document.querySelector('input[placeholder*="作品名称"]') ||
                              document.querySelector('.book-title-input input') ||
                              document.querySelector('.semi-input[placeholder*="书名"]');
             
-            // 查找简介输入框
             let synopsisInput = document.querySelector('textarea[placeholder*="简介"]') || 
                                 document.querySelector('textarea[placeholder*="作品简介"]') ||
                                 document.querySelector('.synopsis-textarea') ||
@@ -285,11 +394,53 @@
         }
     }
 
-    // 核心：检查待上传章节或新建作品上下文
-    async function checkPendingChapter(forcedStartFrom = null) {
+    // 根据索引加载章节内容（具备对假同步穿透机制）
+    async function loadChapterByIndex(chapIndex, autoExecute = false) {
+        if (!activeBookId) await syncBookMeta();
+        updateLog(`正在从天道提取第 ${chapIndex} 章数据...`);
+        try {
+            const url = `${API_BASE}/api/chapter?book_id=${encodeURIComponent(activeBookId)}&id=${chapIndex}`;
+            const chapData = await httpRequest(url);
+            if (chapData && chapData.content) {
+                let rawTitle = (chapData.title || `第${chapIndex}章`).replace(/#/g, '').trim();
+                if (!rawTitle.startsWith('第') && !rawTitle.includes('章')) {
+                    rawTitle = `第${chapIndex}章 ${rawTitle}`;
+                }
+                currentChapter = {
+                    book_id: activeBookId,
+                    book_title: activeBookTitle,
+                    chapter_id: chapIndex,
+                    chapter_title: rawTitle,
+                    content: cleanForFanqie(rawTitle, chapData.content),
+                    word_count: chapData.content.length,
+                    total_chapters: totalChaptersCount
+                };
+                currentChapIndex = chapIndex;
+                localStorage.setItem('tiandao_current_chap', chapIndex);
+                const inputEl = document.getElementById('tiandao-input-chap');
+                if (inputEl) inputEl.value = chapIndex;
+
+                updateInfo(`准备录入: 第 ${chapIndex} / ${totalChaptersCount} 章《${rawTitle}》(${currentChapter.word_count} 字)`);
+                updateLog(`第 ${chapIndex} 章拉取成功，随时可填入`);
+
+                if (autoExecute) {
+                    await handleUploadChapter(currentChapter);
+                }
+                return currentChapter;
+            } else {
+                updateLog(`提取第 ${chapIndex} 章失败: 未找到该章节内容`);
+            }
+        } catch(e) {
+            updateLog(`提取第 ${chapIndex} 章出错: ${e.message}`);
+        }
+        return null;
+    }
+
+    // 核心轮询：检查待上传章节或新建作品上下文
+    async function checkPendingChapter() {
         if (!isRunning || isUploading) return;
 
-        // 如果当前位于新建作品页面
+        // 检测是否在新建作品页面
         const isCreatePage = document.querySelector('input[placeholder*="书名"]') || 
                              document.querySelector('textarea[placeholder*="简介"]') ||
                              window.location.href.includes("create") ||
@@ -301,95 +452,32 @@
             return;
         }
 
+        // 尝试向服务端获取待推章节
         try {
-            let reqUrl = `${API_BASE}/api/fanqie/pending_chapter`;
-            if (forcedStartFrom) {
-                reqUrl += `?start_from=${forcedStartFrom}`;
-            }
-            const res = await httpRequest(reqUrl);
+            const res = await httpRequest(`${API_BASE}/api/fanqie/pending_chapter`);
             if (res && res.status === 'ok') {
                 const dot = document.getElementById('tiandao-status-dot');
                 if (dot) dot.style.background = '#10b981';
                 
                 if (res.has_pending && res.chapter) {
                     currentChapter = res.chapter;
-                    updateInfo(`作品: 《${res.book_title || '当前小说'}》 | 待发: 第 ${res.chapter.chapter_id} 章 (${res.chapter.word_count} 字)`);
+                    currentChapIndex = parseInt(res.chapter.chapter_id, 10) || currentChapIndex;
+                    localStorage.setItem('tiandao_current_chap', currentChapIndex);
+                    const inp = document.getElementById('tiandao-input-chap');
+                    if (inp) inp.value = currentChapIndex;
+                    updateInfo(`待发章节: 第 ${res.chapter.chapter_id} 章 (${res.chapter.word_count} 字)`);
                     await handleUploadChapter(res.chapter);
-                } else {
-                    currentChapter = null;
-                    updateInfo(`作品: 《${res.book_title || '当前小说'}》 | 全部章节已同步 (${res.synced_count || 0}/${res.total_chapters || 0} 章)`);
-                    updateLog('所有已生成章节均已同步，等待推演新章节...');
+                    return;
                 }
-                return;
             }
-        } catch (err) {
-            const candidates = [
-                "https://book.si2api.top",
-                "http://book.si2api.top",
-                "http://localhost:8088",
-                "http://localhost:28088"
-            ];
-            for (const cand of candidates) {
-                if (cand === API_BASE) continue;
-                try {
-                    const fb = await httpRequest(`${cand}/api/fanqie/pending_chapter`);
-                    if (fb && fb.status === 'ok') {
-                        API_BASE = cand;
-                        localStorage.setItem('tiandao_api_base', API_BASE);
-                        const dot = document.getElementById('tiandao-status-dot');
-                        if (dot) dot.style.background = '#10b981';
-                        const curUrlEl = document.getElementById('tiandao-current-url');
-                        if (curUrlEl) curUrlEl.textContent = API_BASE;
-                        updateLog(`自适应连接成功: ${API_BASE}`);
-                        checkPendingChapter();
-                        return;
-                    }
-                } catch (e2) {}
-            }
+        } catch(e) {}
 
-            const dot = document.getElementById('tiandao-status-dot');
-            if (dot) dot.style.background = '#ef4444';
-            updateLog(`无法连接天道服务 (${API_BASE})，请点击下方修改地址`);
-        }
-    }
-
-    // 弹窗斩杀机制：空间物理坐标过滤（Y > 100）消除新手向导、错别字拦截、风险检测拦截
-    function dismissPopups() {
-        const guideTexts = ["下一步", "完成", "我知道了", "跳过", "知道了", "同意并继续"];
-        const allCandidates = Array.from(document.querySelectorAll('button, div, span, a'));
-        for (const el of allCandidates) {
-            const txt = (el.textContent || "").trim();
-            if (guideTexts.includes(txt) && el.offsetParent !== null) {
-                const rect = el.getBoundingClientRect();
-                if (rect && rect.top > 100) {
-                    try {
-                        el.click();
-                        updateLog(`已穿透新手引导遮罩: [${txt}]`);
-                    } catch(e) {}
-                }
-            }
-        }
-        // 自动穿透错别字弹窗
-        for (const b of document.querySelectorAll('button')) {
-            const txt = (b.textContent || "").trim();
-            if ((txt === '提交' || txt === '确认提交') && b.offsetParent !== null) {
-                const modal = b.closest('.semi-modal, .modal, [class*="modal"], [class*="dialog"]');
-                if (modal && modal.textContent.includes('错别字')) {
-                    b.click();
-                    updateLog('已自动确认错别字修改提示');
-                }
-            }
-        }
-        // 自动取消内容风险检测弹窗以节约额度
-        for (const b of document.querySelectorAll('button')) {
-            const txt = (b.textContent || "").trim();
-            if (txt === '取消' && b.offsetParent !== null) {
-                const modal = b.closest('.semi-modal, .modal, [class*="modal"], [class*="dialog"]');
-                if (modal && modal.textContent.includes('风险检测')) {
-                    b.click();
-                    updateLog('已自动取消内容风险检测弹窗');
-                }
-            }
+        // 如果服务端显示 false（如被历史误标为已同步），则自主按本地指针激活第 currentChapIndex 章！
+        if (!activeBookId) await syncBookMeta();
+        if (currentChapIndex <= totalChaptersCount) {
+            updateInfo(`服务端状态已过滤，当前排队待录入: 第 ${currentChapIndex} / ${totalChaptersCount} 章`);
+        } else {
+            updateInfo(`全书全部 ${totalChaptersCount} 章已全部录入完毕！`);
         }
     }
 
@@ -483,22 +571,30 @@
                 updateLog(`第 ${chapter.chapter_id} 章已填入标题和正文，请手动点击保存`);
             }
 
-            // 上报同步成功状态给天道服务端
-            await httpRequest(`${API_BASE}/api/fanqie/confirm_uploaded`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    book_id: chapter.book_id,
-                    chapter_id: chapter.chapter_id,
-                    mode: 'tampermonkey_draft'
-                })
-            });
+            // 上报已录入（即使服务端未更新也静默通过）
+            try {
+                await httpRequest(`${API_BASE}/api/fanqie/confirm_uploaded`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        book_id: chapter.book_id,
+                        chapter_id: chapter.chapter_id,
+                        mode: 'tampermonkey_draft'
+                    })
+                });
+            } catch(e) {}
 
-            updateInfo(`第 ${chapter.chapter_id} 章《${chapter.chapter_title}》已成功保存草稿！`);
+            updateInfo(`第 ${chapter.chapter_id} 章《${chapter.chapter_title}》已成功存入草稿箱！`);
 
-            // 如果开启了自动连发模式，自动点击新建章节继续发下一章
-            if (autoNextChapter) {
-                updateLog(`第 ${chapter.chapter_id} 章保存完毕，3 秒后自动创建下一章...`);
+            // 自动推进到下一章
+            currentChapIndex = parseInt(chapter.chapter_id, 10) + 1;
+            localStorage.setItem('tiandao_current_chap', currentChapIndex);
+            const inp = document.getElementById('tiandao-input-chap');
+            if (inp) inp.value = currentChapIndex;
+
+            // 如果开启了自动连发模式，自动点击新建章节继续录入下一章
+            if (autoNextChapter && currentChapIndex <= totalChaptersCount) {
+                updateLog(`第 ${chapter.chapter_id} 章存稿完毕，3 秒后自动创建第 ${currentChapIndex} 章...`);
                 await new Promise(r => setTimeout(r, 3000));
 
                 let nextChapterBtn = Array.from(document.querySelectorAll('button, a, span, div')).find(el => {
@@ -507,16 +603,23 @@
                 });
 
                 if (nextChapterBtn) {
-                    updateLog("自动点击【新建章节】进入下一章...");
+                    updateLog(`自动点击【新建章节】准备第 ${currentChapIndex} 章...`);
                     nextChapterBtn.click();
                     setTimeout(() => {
                         isUploading = false;
-                        checkPendingChapter();
+                        loadChapterByIndex(currentChapIndex, true);
                     }, 2500);
                     return;
                 } else {
-                    updateLog("连发提示: 未找到新建章节按钮，等待下一次轮询或请手动点击新建章节");
+                    updateLog("连发提示: 等待新建章节按钮出现...");
+                    setTimeout(() => {
+                        isUploading = false;
+                        loadChapterByIndex(currentChapIndex, true);
+                    }, 3000);
+                    return;
                 }
+            } else if (currentChapIndex > totalChaptersCount) {
+                updateLog("全书所有章节均已录入完毕，已自动停止连发！");
             }
         } catch (e) {
             updateLog(`同步发生异常: ${e.message}`);
@@ -528,9 +631,11 @@
     // 初始化运行
     function init() {
         createWidget();
-        checkPendingChapter();
+        syncBookMeta().then(() => {
+            checkPendingChapter();
+        });
         if (!pollTimer) {
-            pollTimer = setInterval(() => checkPendingChapter(), 8000);
+            pollTimer = setInterval(() => checkPendingChapter(), 10000);
         }
     }
 

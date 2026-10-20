@@ -3288,14 +3288,42 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/system/update":
-                # 支持一键从 GitHub 拉取最新版本代码与升级依赖
+                # 支持一键从 GitHub 拉取最新版本代码与升级依赖（兼顾 Git 与 Docker 极简纯 Python 无 Git 环境）
                 try:
-                    import subprocess
-                    fetch_res = subprocess.run(["git", "fetch", "--all"], capture_output=True, text=True, timeout=30)
-                    pull_res = subprocess.run(["git", "pull", "origin", "main"], capture_output=True, text=True, timeout=60)
-                    pip_res = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"], capture_output=True, text=True, timeout=60)
-                    ok = (pull_res.returncode == 0)
-                    out_msg = pull_res.stdout.strip() or pull_res.stderr.strip() or fetch_res.stderr.strip() or "已是最新版本"
+                    import subprocess, shutil, zipfile
+                    ok = False
+                    out_msg = ""
+                    try:
+                        fetch_res = subprocess.run(["git", "fetch", "--all"], capture_output=True, text=True, timeout=20)
+                        pull_res = subprocess.run(["git", "pull", "origin", "main"], capture_output=True, text=True, timeout=40)
+                        ok = (pull_res.returncode == 0)
+                        out_msg = pull_res.stdout.strip() or pull_res.stderr.strip() or fetch_res.stderr.strip() or "已是最新版本"
+                    except (FileNotFoundError, Exception):
+                        # 无 git 命令环境（如极简 Docker 容器），直接通过 Python 原生下载 GitHub 最新主分支 Zip 包并解压覆盖
+                        zip_url = "https://github.com/XCool-603/tiandao/archive/refs/heads/main.zip"
+                        zip_dest = BASE_DIR / "update_main.zip"
+                        urllib.request.urlretrieve(zip_url, str(zip_dest))
+                        with zipfile.ZipFile(str(zip_dest), "r") as zf:
+                            for member in zf.namelist():
+                                parts = member.split("/", 1)
+                                if len(parts) > 1 and parts[1]:
+                                    target_path = BASE_DIR / parts[1]
+                                    if member.endswith("/"):
+                                        target_path.mkdir(parents=True, exist_ok=True)
+                                    else:
+                                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                                        with zf.open(member) as source, open(target_path, "wb") as target:
+                                            shutil.copyfileobj(source, target)
+                        if zip_dest.exists():
+                            zip_dest.unlink()
+                        ok = True
+                        out_msg = "已通过 Python 原生免 Git 通道成功热更新至 GitHub 最新版本！"
+
+                    try:
+                        subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"], capture_output=True, text=True, timeout=60)
+                    except Exception:
+                        pass
+
                     res = {
                         "status": "ok" if ok else "error",
                         "message": "代码已成功从 GitHub 更新至最新版本！请重启控制台生效。" if ok else f"更新异常: {out_msg}",

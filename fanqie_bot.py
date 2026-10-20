@@ -271,6 +271,7 @@ def main():
     parser.add_argument("--server", type=str, default=None, help="天道服务地址")
     parser.add_argument("--login", action="store_true", help="仅执行扫码登录并保存凭据")
     parser.add_argument("--batch", type=int, default=None, help="本次发布的章节数量")
+    parser.add_argument("--start", type=int, default=1, help="起始章节序号（默认为 1）")
     parser.add_argument("--all", action="store_true", help="发布所有待发章节")
     parser.add_argument("--daemon", action="store_true", help="守护进程模式持续监听新章节")
     parser.add_argument("--headless", action="store_true", help="无头模式运行")
@@ -319,7 +320,35 @@ def main():
 
             res = fetch_json(f"{SERVER_API}/api/fanqie/pending_chapter")
             if not res or res.get("status") != "ok" or not res.get("has_pending"):
-                print(f"暂无待发章节 (已同步 {res.get('synced_count', 0)} / {res.get('total_chapters', 0)} 章)。")
+                print(f"服务端 pending_chapter 提示: 已同步 {res.get('synced_count', 0)} / {res.get('total_chapters', 0)} 章。")
+                # 检查是否存在小说作品直接按章节序号推进
+                books_data = fetch_json(f"{SERVER_API}/api/books")
+                if isinstance(books_data, list) and books_data:
+                    active_b = max(books_data, key=lambda b: b.get("chapter_count", 0))
+                    total_ch = active_b.get("chapter_count", 0)
+                    b_id = active_b.get("id")
+                    b_title = active_b.get("title")
+                    if total_ch > 0:
+                        print(f"[*] 启动全书章节自主推进模式: 《{b_title}》共 {total_ch} 章，从第 {args.start} 章开始录入...")
+                        for cid in range(args.start, total_ch + 1):
+                            if target_limit is not None and success_total >= target_limit:
+                                break
+                            c_data = fetch_json(f"{SERVER_API}/api/chapter?book_id={b_id}&id={cid}")
+                            if c_data and c_data.get("content"):
+                                c_title = c_data.get("title", f"第{cid}章")
+                                ok = upload_chapter_to_fanqie(context, b_title, cid, c_title, c_data.get("content", ""), mode=args.mode)
+                                if ok:
+                                    success_total += 1
+                                    fetch_json(f"{SERVER_API}/api/fanqie/confirm_uploaded", {
+                                        "book_id": b_id,
+                                        "chapter_id": cid,
+                                        "mode": "playwright_bot_draft"
+                                    })
+                                    print(f"已录入第 {cid} / {total_ch} 章，等待 3 秒继续下一章...")
+                                    time.sleep(3)
+                        print(f"\n自主推进完成，本次共处理 {success_total} 章。")
+                        break
+
                 if args.all or target_limit is not None:
                     print("所有指定章节均已发布完成，退出。")
                     break
