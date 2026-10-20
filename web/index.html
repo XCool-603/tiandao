@@ -2426,9 +2426,10 @@
                 </div>
               </div>
               <div style="display: flex; gap: 6px;">
-                <a href="/api/fanqie/script.user.js" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; text-decoration: none; flex: 1; text-align: center;">
-                  <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 安装油猴脚本</span>
+                <a href="/api/fanqie/script.user.js" target="_blank" class="btn btn-primary" style="font-size: 11px; padding: 4px 10px; text-decoration: none; flex: 1; text-align: center;">
+                  <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 一键安装脚本</span>
                 </a>
+                <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px;" onclick="openTampermonkeyHelp()">使用指南</button>
                 <button class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px;" onclick="copyTampermonkeyUrl()">复制直链</button>
               </div>
             </div>
@@ -4671,7 +4672,62 @@
       }
     }
 
-    function copyTampermonkeyUrl() {
+        function openTampermonkeyHelp() {
+      const modal = document.createElement("div");
+      modal.id = "tampermonkeyHelpModal";
+      modal.className = "modal active";
+      modal.style.cssText = "display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 20px;";
+      modal.innerHTML = `
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 12px; max-width: 580px; width: 100%; padding: 22px; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
+            <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;">篡改猴 (Tampermonkey) 发书挂机使用指南</h3>
+            <button class="btn btn-ghost" style="padding: 2px 8px; font-size: 14px;" onclick="document.getElementById('tampermonkeyHelpModal').remove()">✕</button>
+          </div>
+          <div style="font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); max-height: 70vh; overflow-y: auto;">
+            <div style="background: rgba(59,130,246,0.08); border-left: 3px solid var(--accent-blue); padding: 8px 12px; margin-bottom: 12px; border-radius: 4px;">
+              <b>安装了篡改猴扩展后，还必须把天道脚本导入篡改猴中：</b>
+            </div>
+            <ol style="padding-left: 18px; margin: 0 0 14px 0;">
+              <li style="margin-bottom: 10px;">
+                <b>第 1 步：安装脚本到篡改猴</b><br>
+                • 点击下方【一键安装脚本】，篡改猴会弹出脚本安装确认页，点击<b>【安装】</b>即可。<br>
+                • 若浏览器未弹出篡改猴确认页，请点击【复制脚本代码】，在篡改猴扩展管理面板点击【添加新脚本】，粘贴进去按 Ctrl+S 保存。
+              </li>
+              <li style="margin-bottom: 10px;">
+                <b>第 2 步：打开番茄作家专区后台</b><br>
+                • 在同一浏览器中打开：<a href="https://fanqienovel.com/main/writer/book" target="_blank" style="color:var(--accent-blue); text-decoration:underline;">https://fanqienovel.com/main/writer/book</a> 并登录。<br>
+                • 进入您要更新的小说，点击<b>【新建章节】</b>或进入章节编辑页。
+              </li>
+              <li style="margin-bottom: 10px;">
+                <b>第 3 步：确认右下角发书悬浮窗</b><br>
+                • 番茄页面右下角将出现<b>【[天道] 自动发书助手】</b>悬浮窗。<br>
+                • 绿灯表示已连通本地天道引擎；若为红灯，点击悬浮窗【修改地址】确保地址为 <code>${window.location.origin}</code>。<br>
+                • 首次请求时若篡改猴提示“是否允许连接本地服务器”，必须勾选<b>【总是允许】</b>。<br>
+                • 也可直接点击悬浮窗上的<b>【手动填入】</b>将待发章节一键灌入当前输入框！
+              </li>
+            </ol>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
+              <button class="btn btn-secondary" onclick="copyTampermonkeyScriptCode()">复制脚本代码</button>
+              <a href="/api/fanqie/script.user.js" target="_blank" class="btn btn-primary" style="text-decoration: none;">一键安装脚本</a>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    async function copyTampermonkeyScriptCode() {
+      try {
+        const res = await fetch("/api/fanqie/script.user.js");
+        const code = await res.text();
+        await navigator.clipboard.writeText(code);
+        showToast("已成功复制脚本完整代码，可在篡改猴新建脚本中直接粘贴！", "success");
+      } catch (e) {
+        showToast("读取脚本代码失败: " + e.message, "error");
+      }
+    }
+
+function copyTampermonkeyUrl() {
       const url = window.location.origin + "/api/fanqie/script.user.js";
       navigator.clipboard.writeText(url).then(() => {
         showToast("已复制油猴脚本直链: " + url, "success");

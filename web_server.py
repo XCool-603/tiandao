@@ -2442,6 +2442,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
         if path == "/api/fanqie/script.user.js":
             script_path = BASE_DIR / "fanqie_userscript.js"
             content = script_path.read_text(encoding="utf-8") if script_path.exists() else "// Script file not found"
+            # 动态适配当前实际访问的主机和端口
+            req_host = self.headers.get("Host", "localhost:8088")
+            content = content.replace("http://localhost:8088", f"http://{req_host}")
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")
