@@ -2442,9 +2442,13 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
         if path == "/api/fanqie/script.user.js":
             script_path = BASE_DIR / "fanqie_userscript.js"
             content = script_path.read_text(encoding="utf-8") if script_path.exists() else "// Script file not found"
-            # 动态适配当前实际访问的主机和端口
-            req_host = self.headers.get("Host", "localhost:8088")
-            content = content.replace("http://localhost:8088", f"http://{req_host}")
+            # 动态适配当前实际访问的主机和协议 (支持远程域名如 book.si2api.top 及 HTTPS 探测)
+            req_host = self.headers.get("Host", "book.si2api.top")
+            f_proto = self.headers.get("X-Forwarded-Proto", "").lower()
+            proto = f_proto if f_proto in ("http", "https") else ("https" if "si2api.top" in req_host or "https" in self.headers.get("Referer", "") else "http")
+            server_origin = f"{proto}://{req_host}"
+            content = content.replace("https://book.si2api.top", server_origin)
+            content = content.replace("http://localhost:8088", server_origin)
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")

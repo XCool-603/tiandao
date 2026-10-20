@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         天道 · 番茄小说全自动挂机发书助手
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
-// @description  连接天道本地推演引擎，自动将新推演章节无缝填入番茄作家后台草稿箱，实现写一章传一章全自动挂机！
+// @version      1.3.0
+// @description  连接天道推演引擎，自动将新推演章节无缝填入番茄作家后台草稿箱，实现写一章传一章全自动挂机！
 // @author       Tiandao AI
 // @match        *://fanqienovel.com/*
 // @match        *://*.fanqienovel.com/*
 // @match        *://novel.snssdk.com/*
 // @grant        GM_xmlhttpRequest
+// @connect      book.si2api.top
+// @connect      *.si2api.top
 // @connect      localhost
 // @connect      127.0.0.1
 // @connect      *
@@ -17,8 +19,16 @@
 (function() {
     'use strict';
 
-    // 默认自适应当前服务端端口 (8088 / 28088 自动识别)
-    let API_BASE = localStorage.getItem('tiandao_api_base') || "http://localhost:8088";
+    // 默认自适应部署域名 (支持 https://book.si2api.top 与本地自适应)
+    const EMBEDDED_SERVER = "https://book.si2api.top";
+    let stored = localStorage.getItem('tiandao_api_base');
+    // 如果之前误存了不可访问的 localhost，且当前运行环境属于 book.si2api.top，自动纠正
+    if (!stored || stored.includes("localhost") || stored.includes("127.0.0.1")) {
+        stored = EMBEDDED_SERVER;
+        localStorage.setItem('tiandao_api_base', stored);
+    }
+    let API_BASE = stored;
+
     let isRunning = true;
     let pollTimer = null;
     let isUploading = false;
@@ -99,7 +109,7 @@
         };
 
         document.getElementById('tiandao-btn-seturl').onclick = () => {
-            const newUrl = prompt("请输入天道服务访问地址（如 http://localhost:8088 或 http://127.0.0.1:8088）：", API_BASE);
+            const newUrl = prompt("请输入天道服务访问地址（如 https://book.si2api.top 或 http://localhost:8088）：", API_BASE);
             if (newUrl && newUrl.trim()) {
                 API_BASE = newUrl.trim().replace(/\/$/, "");
                 localStorage.setItem('tiandao_api_base', API_BASE);
@@ -167,26 +177,34 @@
                 return;
             }
         } catch (err) {
-            // 端口自适应：如果在 8088 失败，尝试 28088；反之亦然
-            const candidate = API_BASE.includes("8088") && !API_BASE.includes("28088") ? "http://localhost:28088" : "http://localhost:8088";
-            try {
-                const fb = await httpRequest(`${candidate}/api/fanqie/pending_chapter`);
-                if (fb && fb.status === 'ok') {
-                    API_BASE = candidate;
-                    localStorage.setItem('tiandao_api_base', API_BASE);
-                    const dot = document.getElementById('tiandao-status-dot');
-                    if (dot) dot.style.background = '#10b981';
-                    const curUrlEl = document.getElementById('tiandao-current-url');
-                    if (curUrlEl) curUrlEl.textContent = API_BASE;
-                    updateLog(`自适应连接成功: ${API_BASE}`);
-                    checkPendingChapter();
-                    return;
-                }
-            } catch (e2) {}
+            // 候选地址智能探查 (https://book.si2api.top 优先)
+            const candidates = [
+                "https://book.si2api.top",
+                "http://book.si2api.top",
+                "http://localhost:8088",
+                "http://localhost:28088"
+            ];
+            for (const cand of candidates) {
+                if (cand === API_BASE) continue;
+                try {
+                    const fb = await httpRequest(`${cand}/api/fanqie/pending_chapter`);
+                    if (fb && fb.status === 'ok') {
+                        API_BASE = cand;
+                        localStorage.setItem('tiandao_api_base', API_BASE);
+                        const dot = document.getElementById('tiandao-status-dot');
+                        if (dot) dot.style.background = '#10b981';
+                        const curUrlEl = document.getElementById('tiandao-current-url');
+                        if (curUrlEl) curUrlEl.textContent = API_BASE;
+                        updateLog(`自适应连接成功: ${API_BASE}`);
+                        checkPendingChapter();
+                        return;
+                    }
+                } catch (e2) {}
+            }
 
             const dot = document.getElementById('tiandao-status-dot');
             if (dot) dot.style.background = '#ef4444';
-            updateLog(`无法连接天道 (${API_BASE})，请确认控制台服务已启动`);
+            updateLog(`无法连接天道服务 (${API_BASE})，请点击下方修改地址`);
         }
     }
 
@@ -246,9 +264,7 @@
                 bodyEditor.dispatchEvent(new Event('blur', { bubbles: true }));
             } else {
                 bodyEditor.focus();
-                // 兼容富文本 ProseMirror
                 if (bodyEditor.classList.contains('ProseMirror')) {
-                    // 构造段落 HTML
                     const paragraphs = chapter.content.split('\n').filter(p => p.trim());
                     const html = paragraphs.map(p => `<p>${p.trim()}</p>`).join('');
                     document.execCommand('selectAll', false, null);
