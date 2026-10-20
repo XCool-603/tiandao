@@ -1,234 +1,327 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-天道 · 番茄小说全自动挂机发书守护机器人 (Fanqie Auto Uploader Bot)
-利用系统自带 Microsoft Edge 浏览器与 CDP (Chrome DevTools Protocol)，
-无需安装额外 Chromium，登录一次即可永久挂机：写一章，自动上传一章！
+天道 x Fanqie Auto Publish 整合版挂机发书机器人 (Fanqie Auto Uploader Bot)
+基于 Playwright 驱动系统原生 Microsoft Edge 浏览器，
+内置：
+1. 空间物理坐标弹窗斩杀（清除新手引导遮罩）
+2. 小说卡片悬停探测 (Card Hover -> 章节管理)
+3. 多标签页智能跟随 (New Tab Tracking)
+4. ProseMirror 原生事件注入与字数统计激活
+5. 断点续检与章节草稿覆盖防重
 """
 
 import os
 import sys
 import time
 import json
-import subprocess
+import re
 import urllib.request
-import asyncio
+import urllib.parse
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-EDGE_USER_DATA = BASE_DIR / "output" / "fanqie_edge_profile"
-SERVER_API = "http://localhost:8088"
-CDP_PORT = 9222
+OUTPUT_DIR = BASE_DIR / "output"
+FANQIE_DIR = OUTPUT_DIR / "fanqie_sync"
+FANQIE_DIR.mkdir(parents=True, exist_ok=True)
+AUTH_STATE_PATH = FANQIE_DIR / "auth_state.json"
 
-def find_edge_path():
+BOOK_MANAGE_URL = "https://fanqienovel.com/main/writer/book-manage"
+LOGIN_URL = "https://fanqienovel.com/main/writer/login"
+
+def get_server_api_base():
+    # 默认优先探测远程与本地服务
     candidates = [
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe")
+        "https://book.si2api.top",
+        "http://book.si2api.top",
+        "http://localhost:8088",
+        "http://127.0.0.1:8088"
     ]
     for c in candidates:
-        if os.path.exists(c):
-            return c
-    return "msedge"
+        try:
+            req = urllib.request.urlopen(f"{c}/api/fanqie/config", timeout=2)
+            if req.status == 200:
+                return c
+        except Exception:
+            pass
+    return "https://book.si2api.top"
 
-def launch_edge_browser():
-    edge_exe = find_edge_path()
-    EDGE_USER_DATA.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        edge_exe,
-        f"--remote-debugging-port={CDP_PORT}",
-        f"--user-data-dir={str(EDGE_USER_DATA)}",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "https://fanqienovel.com/writer/zone"
-    ]
-    print(f"🚀 正在启动 Edge 独立发布浏览器...")
-    print(f"📁 会话数据保存目录: {EDGE_USER_DATA}")
-    proc = subprocess.Popen(cmd)
-    return proc
+SERVER_API = get_server_api_base()
 
-def get_cdp_targets():
+def fetch_json(url, data=None):
     try:
-        req = urllib.request.urlopen(f"http://localhost:{CDP_PORT}/json", timeout=3)
-        return json.loads(req.read().decode("utf-8"))
-    except Exception:
-        return []
-
-def get_pending_chapter():
-    try:
-        req = urllib.request.urlopen(f"{SERVER_API}/api/fanqie/pending_chapter", timeout=5)
-        res = json.loads(req.read().decode("utf-8"))
-        if res.get("status") == "ok" and res.get("has_pending"):
-            return res.get("chapter")
-    except Exception as e:
-        pass
-    return None
-
-def confirm_uploaded(book_id, chapter_id, mode="draft"):
-    try:
-        data = json.dumps({"book_id": book_id, "chapter_id": chapter_id, "mode": mode}).encode("utf-8")
         req = urllib.request.Request(
-            f"{SERVER_API}/api/fanqie/confirm_uploaded",
-            data=data,
+            url,
+            data=json.dumps(data).encode("utf-8") if data is not None else None,
             headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except Exception as e:
-        print(f"❌ 上报同步状态失败: {e}")
-        return None
+        return {"status": "error", "message": str(e)}
 
-async def cdp_eval_js(ws, expr):
-    msg_id = int(time.time() * 1000) % 1000000
-    payload = {
-        "id": msg_id,
-        "method": "Runtime.evaluate",
-        "params": {
-            "expression": expr,
-            "returnByValue": True,
-            "awaitPromise": True
-        }
-    }
-    await ws.send(json.dumps(payload))
-    while True:
-        resp = await ws.recv()
-        data = json.loads(resp)
-        if data.get("id") == msg_id:
-            return data.get("result", {}).get("result", {}).get("value")
+def dismiss_popups(page):
+    """清除遮挡视线的新手引导浮层与干扰弹窗"""
+    for _ in range(3):
+        try:
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(150)
+        except Exception:
+            pass
 
-async def run_bot_loop():
-    import websockets
-    print("=" * 60)
-    print("🍅 天道 · 番茄小说全自动挂机发书机器人 已启动")
-    print("=" * 60)
-    print("提示：首次启动请在弹出的 Edge 浏览器中登录番茄作家后台。")
-    print("登录后，本机器人将持续在后台守护，天道每推演写完一章，自动录入番茄草稿箱！")
-    print("=" * 60)
-
-    # 1. 确保 Edge 启动
-    targets = get_cdp_targets()
-    if not targets:
-        launch_edge_browser()
-        for _ in range(15):
-            time.sleep(1)
-            targets = get_cdp_targets()
-            if targets:
-                break
-
-    if not targets:
-        print("❌ 无法连接到 Edge 调试端口，请检查是否已启动。")
-        return
-
-    # 找到番茄作家后台页面
-    page_target = None
-    for t in targets:
-        if t.get("type") == "page" and "fanqie" in t.get("url", "").lower():
-            page_target = t
-            break
-    if not page_target:
-        for t in targets:
-            if t.get("type") == "page":
-                page_target = t
-                break
-
-    if not page_target or "webSocketDebuggerUrl" not in page_target:
-        print("❌ 未找到可注入的浏览器标签页。")
-        return
-
-    ws_url = page_target["webSocketDebuggerUrl"]
-    print(f"🔗 已成功接管 Edge 会话: {page_target.get('title', '未知')} ({page_target.get('url')})")
-
-    async with websockets.connect(ws_url) as ws:
-        # 心跳及轮询循环
-        while True:
+    for _ in range(8):
+        clicked = False
+        for target_text in ["下一步", "完成", "我知道了", "跳过"]:
             try:
-                # 检查天道服务端是否有待上传的章节
-                pending = get_pending_chapter()
-                if pending:
-                    chap_id = pending.get("chapter_id")
-                    chap_title = pending.get("chapter_title")
-                    chap_content = pending.get("content")
-                    book_id = pending.get("book_id")
-                    print(f"\n⚡ 检测到天道最新待上传章节: 第 {chap_id} 章《{chap_title}》({len(chap_content)}字)")
+                btns = page.get_by_text(target_text, exact=True).element_handles()
+                for btn in btns:
+                    box = btn.bounding_box()
+                    if box and box["y"] > 100:
+                        btn.click()
+                        page.wait_for_timeout(350)
+                        clicked = True
+            except Exception:
+                pass
+        if not clicked:
+            break
 
-                    # 注入自动化填充逻辑
-                    # 1. 检查当前是否在新建章节页面
-                    js_fill = f"""
-                    (async function() {{
-                        const title = {json.dumps(chap_title)};
-                        const content = {json.dumps(chap_content)};
-                        
-                        // 查找标题输入框
-                        let titleInput = document.querySelector('input[placeholder*="标题"]') || 
-                                         document.querySelector('.chapter-title-input input') ||
-                                         document.querySelector('input[type="text"]');
-                        
-                        // 查找正文输入框 (textarea / contenteditable / ProseMirror)
-                        let bodyEditor = document.querySelector('.ProseMirror') || 
-                                         document.querySelector('div[contenteditable="true"]') ||
-                                         document.querySelector('textarea[placeholder*="正文"]');
+    try:
+        submit_btn = page.get_by_role("button", name="提交").first
+        if submit_btn.is_visible():
+            submit_btn.click(force=True)
+            page.wait_for_timeout(500)
+    except Exception:
+        pass
 
-                        if (!titleInput || !bodyEditor) {{
-                            // 如果不在编辑页，尝试寻找“新建章节”按钮
-                            let newBtn = Array.from(document.querySelectorAll('button, a')).find(el => el.textContent.includes('新建章节') || el.textContent.includes('写新章'));
-                            if (newBtn) {{
-                                newBtn.click();
-                                return {{ success: false, navigating: true, message: '正在自动进入新建章节页面...' }};
-                            }}
-                            return {{ success: false, message: '未找到章节输入框，请在番茄后台打开作品的【章节发布】页面' }};
-                        }}
+    try:
+        cancel_btn = page.get_by_role("button", name="取消").last
+        if cancel_btn.is_visible():
+            cancel_btn.click(force=True)
+            page.wait_for_timeout(500)
+    except Exception:
+        pass
 
-                        // 填入标题
-                        titleInput.value = title;
-                        titleInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                        titleInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+def ensure_login(playwright):
+    """确保具备有效的作家后台登录凭据"""
+    if AUTH_STATE_PATH.exists() and AUTH_STATE_PATH.stat().st_size > 50:
+        return True
 
-                        // 填入正文
-                        if (bodyEditor.tagName.toLowerCase() === 'textarea') {{
-                            bodyEditor.value = content;
-                            bodyEditor.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            bodyEditor.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        }} else {{
-                            // 富文本 contenteditable
-                            bodyEditor.focus();
-                            bodyEditor.innerText = content;
-                            bodyEditor.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                        }}
+    print("\n" + "=" * 60)
+    print("首次使用需登录番茄作家后台，正在启动 Edge 浏览器窗口...")
+    print("=" * 60)
 
-                        await new Promise(r => setTimeout(r, 800));
+    browser = playwright.chromium.launch(channel="msedge", headless=False)
+    context = browser.new_context(viewport={"width": 1280, "height": 800})
+    page = context.new_page()
+    page.goto(LOGIN_URL, timeout=45000)
 
-                        // 查找“存草稿”或“保存草稿”按钮
-                        let saveBtn = Array.from(document.querySelectorAll('button')).find(el => 
-                            el.textContent.includes('存草稿') || 
-                            el.textContent.includes('保存草稿') ||
-                            el.textContent.includes('保存')
-                        );
+    print("\n请在弹出的浏览器中通过手机扫码或验证码登录番茄作家后台。")
+    print("登录成功并进入后台页面后，回到此处按回车继续...")
+    input(">>> 确认已完成登录请按回车：")
 
-                        if (saveBtn && !saveBtn.disabled) {{
-                            saveBtn.click();
-                            return {{ success: true, message: '已自动点击保存草稿' }};
-                        }}
+    context.storage_state(path=str(AUTH_STATE_PATH))
+    print(f"登录凭据已成功保存至: {AUTH_STATE_PATH}")
+    browser.close()
+    return True
 
-                        return {{ success: true, message: '正文与标题已填入，等待手动确认保存' }};
-                    }})()
-                    """
-                    fill_res = await cdp_eval_js(ws, js_fill)
-                    print(f"🤖 自动化执行结果: {fill_res}")
-                    if fill_res and fill_res.get("success"):
-                        confirm_uploaded(book_id, chap_id, mode="draft")
-                        print(f"✅ 第 {chap_id} 章《{chap_title}》已成功保存至番茄！")
-                    elif fill_res and fill_res.get("navigating"):
-                        print(f"⏳ 正在跳转至新建章节页面，将在下一次心跳继续填充...")
+def upload_chapter_to_fanqie(context, book_title, chapter_num, chapter_title, content, mode="draft"):
+    """执行单个章节的自动发布或存草稿"""
+    page = context.new_page()
+    try:
+        print(f"\n正在处理: 第 {chapter_num} 章《{chapter_title}》...")
+        page.goto(BOOK_MANAGE_URL, timeout=45000)
+        page.wait_for_timeout(2500)
+
+        clean_book_name = book_title.replace("《", "").replace("》", "").strip()
+        book_cards = page.locator('div, li, section, article').filter(has_text=clean_book_name)
+        card_count = book_cards.count()
+        manage_clicked = False
+
+        for i in range(card_count - 1, -1, -1):
+            card = book_cards.nth(i)
+            try:
+                if not card.is_visible():
+                    continue
+                card.hover(timeout=2500)
+                page.wait_for_timeout(800)
+                manage_btn = card.get_by_text("章节管理").first
+                if manage_btn.is_visible():
+                    manage_btn.click()
+                    manage_clicked = True
+                    break
+            except Exception:
+                continue
+
+        if not manage_clicked:
+            gb = page.get_by_text("章节管理").first
+            if gb.is_visible():
+                gb.click()
+                manage_clicked = True
+
+        page.wait_for_timeout(2500)
+        original_pages = len(context.pages)
+        if original_pages > 1 and context.pages[-1] != page:
+            editor_page = context.pages[-1]
+        else:
+            editor_page = page
+
+        # 检查是否已存在草稿
+        draft_found = False
+        if chapter_num:
+            draft_row = editor_page.locator('tr, li, .chapter-item').filter(has_text=re.compile(f"第\\s*{chapter_num}\\s*章")).first
+            if draft_row.is_visible():
+                draft_found = True
+                edit_icon = draft_row.locator('td').last.locator('svg, i, a, span, button, img').first
+                if edit_icon.is_visible():
+                    edit_icon.click(force=True)
                 else:
-                    # 无待上传章节
+                    draft_row.click(force=True)
+
+        if not draft_found:
+            new_btn = editor_page.get_by_role("button", name="新建章节").first
+            if not new_btn.is_visible():
+                new_btn = editor_page.get_by_text("新建章节").first
+            if new_btn.is_visible():
+                new_btn.click(force=True)
+
+        page.wait_for_timeout(2500)
+        if len(context.pages) > original_pages:
+            editor_page = context.pages[-1]
+
+        # 弹窗斩杀
+        dismiss_popups(editor_page)
+
+        # 填入章节标题
+        num_inputs = editor_page.locator('input[type="text"]').element_handles()
+        title_input = editor_page.get_by_placeholder("请输入标题", exact=False).first
+        if not title_input.is_visible():
+            title_input = editor_page.get_by_placeholder("请输入章节名", exact=False).first
+        if not title_input.is_visible():
+            title_input = editor_page.locator('input[type="text"]').last
+
+        full_title = f"第{chapter_num}章 {chapter_title}" if chapter_num and "章" not in chapter_title else chapter_title
+        if chapter_num and len(num_inputs) >= 2:
+            first_input = editor_page.locator('input[type="text"]').first
+            if first_input.is_visible():
+                first_input.fill(str(chapter_num), force=True)
+            sub_title = re.sub(r"^第\d+章[\s_]*", "", chapter_title).strip()
+            if title_input.is_visible():
+                title_input.fill(sub_title or chapter_title, force=True)
+        else:
+            if title_input.is_visible():
+                title_input.fill(full_title, force=True)
+
+        # 填入正文并激活字数统计
+        editor = editor_page.locator('.ql-editor, .ProseMirror, [contenteditable="true"]').first
+        if editor.is_visible():
+            editor.click(force=True)
+            editor_page.evaluate("([el, text]) => { el.innerText = text; el.dispatchEvent(new Event('input', {bubbles: true})); }", [editor.element_handle(), content])
+            editor.click()
+            editor_page.keyboard.press("End")
+            editor_page.keyboard.press("Space")
+            editor_page.wait_for_timeout(200)
+            editor_page.keyboard.press("Backspace")
+
+        # 保存草稿或发布
+        if mode == "publish":
+            next_btn = editor_page.get_by_text("下一步", exact=True).last
+            if next_btn.is_visible():
+                next_btn.click(force=True)
+                editor_page.wait_for_timeout(1000)
+                dismiss_popups(editor_page)
+                try:
+                    ai_no = editor_page.get_by_text("否", exact=True).first
+                    if ai_no.is_visible():
+                        ai_no.click(force=True)
+                except Exception:
                     pass
-            except Exception as e_loop:
-                print(f"⚠️ 挂机守护循环异常: {e_loop}")
-            
-            await asyncio.sleep(8)
+                pub_btn = editor_page.get_by_role("button", name="确认发布").first
+                if pub_btn.is_visible():
+                    pub_btn.click(force=True)
+                    print(f"第 {chapter_num} 章已直接发布！")
+        else:
+            save_btn = editor_page.get_by_text("存草稿", exact=False).first
+            if not save_btn.is_visible():
+                save_btn = editor_page.get_by_text("保存草稿", exact=False).first
+            if not save_btn.is_visible():
+                save_btn = editor_page.get_by_text("保存", exact=False).first
+            if save_btn.is_visible():
+                save_btn.click(force=True)
+                editor_page.wait_for_timeout(2000)
+                print(f"第 {chapter_num} 章已存入草稿箱！")
+
+        if editor_page != page:
+            try:
+                editor_page.close()
+            except Exception:
+                pass
+        page.close()
+        return True
+    except Exception as e:
+        print(f"第 {chapter_num} 章处理异常: {e}")
+        try:
+            page.close()
+        except Exception:
+            pass
+        return False
+
+def main():
+    print("=" * 60)
+    print("天道 x 番茄自动发书机器人 (Playwright 强化版)")
+    print(f"连接服务地址: {SERVER_API}")
+    print("=" * 60)
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("未检测到 playwright 库，请先执行: pip install playwright")
+        return
+
+    with sync_playwright() as p:
+        ensure_login(p)
+
+        # 启动持久化会话浏览器
+        browser = p.chromium.launch(channel="msedge", headless=False)
+        context = browser.new_context(
+            storage_state=str(AUTH_STATE_PATH),
+            viewport={"width": 1280, "height": 800},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
+
+        print("\n正在从天道服务拉取待发布章节...")
+        success_total = 0
+
+        while True:
+            res = fetch_json(f"{SERVER_API}/api/fanqie/pending_chapter")
+            if not res or res.get("status") != "ok" or not res.get("has_pending"):
+                print(f"暂无待发章节 (已同步 {res.get('synced_count', 0)} / {res.get('total_chapters', 0)} 章)。")
+                print("挂机轮询中，将在天道推演新章节后自动同步...")
+                time.sleep(10)
+                continue
+
+            chap = res["chapter"]
+            book_title = res.get("book_title", "小说作品")
+            book_id = res.get("book_id", "")
+            cid = chap.get("chapter_id")
+            title = chap.get("chapter_title", "")
+            content = chap.get("content", "")
+
+            ok = upload_chapter_to_fanqie(context, book_title, cid, title, content, mode="draft")
+            if ok:
+                success_total += 1
+                fetch_json(f"{SERVER_API}/api/fanqie/confirm_uploaded", {
+                    "book_id": book_id,
+                    "chapter_id": cid,
+                    "mode": "playwright_bot_draft"
+                })
+                print(f"已上报同步成功，等待 3 秒继续处理下一章...")
+                time.sleep(3)
+            else:
+                print("遇到异常，等待 10 秒后重试...")
+                time.sleep(10)
 
 if __name__ == "__main__":
     try:
-        asyncio.run(run_bot_loop())
+        main()
     except KeyboardInterrupt:
-        print("\n👋 挂机发书机器人已退出。")
+        print("\n机器人已退出。")

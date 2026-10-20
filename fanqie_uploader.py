@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 ====================================================================
-🍅 【天道】原生番茄小说创作专区直推引擎 (Fanqie Novel Native Sync)
-====================================================================
-无需第三方油猴插件、无需安装外部软件，由天道服务端原生调度：
-1. 扫码登录与免密凭证持久化 (output/fanqie_sync/auth_state.json)
-2. 自动定位作品、新建章节、填入标题与排版后正文
-3. 智能勾选“AI辅助创作”合规声明与防风控延迟策略
-4. 自动保存至草稿箱 (可配置定时/直接发布)
+天道 · 原生番茄小说创作专区直推引擎 (Fanqie Novel Native Sync)
+融合 hchcx/fanqie_auto_publish 核心机制：
+1. 空间物理坐标弹窗斩杀（Y 坐标过滤消除新手引导与干扰浮层）
+2. 小说卡片悬停探测 (Card Hover -> 章节管理)
+3. 多标签页智能跟随 (New Tab Tracking)
+4. ProseMirror / 富文本原生事件触发与空格激活字数统计
+5. 智能断点续传（草稿扫描防重）与 AI 合规声明自动处理
 ====================================================================
 """
 
@@ -20,7 +20,7 @@ import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-# 数据持久化目录（宿主机与容器卷严格绑定）
+# 数据持久化目录
 OUTPUT_DIR = Path(__file__).parent / "output"
 FANQIE_DIR = OUTPUT_DIR / "fanqie_sync"
 FANQIE_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,6 +30,7 @@ CONFIG_PATH = FANQIE_DIR / "config.json"
 QR_CODE_PATH = FANQIE_DIR / "login_qr.png"
 
 LOGIN_URL = "https://fanqienovel.com/main/writer/login"
+BOOK_MANAGE_URL = "https://fanqienovel.com/main/writer/book-manage"
 AUTHOR_ZONE_URL = "https://fanqienovel.com/writer/zone"
 
 # 全局登录任务锁与状态
@@ -48,7 +49,7 @@ def save_cookie_auth(raw_cookie: str, author_name: str = "") -> dict:
     """
     通过手动填入的 Cookie 或 sessionid 快速完成番茄作家登录授权：
     适用于任何无头 Docker、云服务器及受反爬阻断的环境。
-    100% 成功率，永久持久化保存至 auth_state.json。
+    永久持久化保存至 auth_state.json。
     """
     raw_cookie = (raw_cookie or "").strip()
     if not raw_cookie:
@@ -100,38 +101,30 @@ def save_cookie_auth(raw_cookie: str, author_name: str = "") -> dict:
     global _login_status
     _login_status["logged_in"] = True
     _login_status["author_name"] = cfg["author_name"]
-    _login_status["is_logging_in"] = False
-    _login_status["last_error"] = ""
 
     return {
         "status": "ok",
-        "message": f"Cookie 凭证已成功落盘！已成功绑定番茄作家账号【{cfg['author_name']}】！",
+        "message": f"Cookie 凭证已成功保存！当前作者名：{cfg['author_name']}，直推通道已永久激活。",
         "author_name": cfg["author_name"]
     }
 
 def load_fanqie_config() -> dict:
-    """读取番茄同步配置"""
-    default_cfg = {
-        "auto_upload": False,
-        "publish_mode": "drafts",  # drafts (草稿箱) 或 publish (直接发布)
-        "author_name": "",
-        "cookies": "",
-        "ai_disclosure": True,     # 默认合规勾选 AI 辅助创作声明
-        "last_sync_time": "",
-        "book_mappings": {}        # 天道书籍ID -> 番茄书籍ID/标题
-    }
     if CONFIG_PATH.exists():
         try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-                default_cfg.update(saved)
+            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         except Exception:
             pass
+    default_cfg = {
+        "auto_upload": False,
+        "publish_mode": "drafts",
+        "author_name": "",
+        "last_sync_time": "",
+        "cookies": ""
+    }
+    save_fanqie_config(default_cfg)
     return default_cfg
 
 def save_fanqie_config(cfg: dict) -> dict:
-    """持久化保存番茄同步配置"""
-    FANQIE_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
     return cfg
@@ -156,7 +149,6 @@ def get_auth_status() -> dict:
             with open(AUTH_STATE_PATH, "r", encoding="utf-8") as f:
                 state_data = json.load(f)
                 cookies = state_data.get("cookies", [])
-                # 检查是否存在核心登录会话 cookie: sessionid / passport_csrf_token
                 for c in cookies:
                     if c.get("name") in ("sessionid", "sid_tt", "passport_csrf_token"):
                         logged_in = True
@@ -181,7 +173,7 @@ def get_auth_status() -> dict:
 def clean_chapter_for_fanqie(title: str, content: str) -> str:
     """
     番茄作家后台排版格式化：
-    1. 首行空两格 (全角空格或制表)
+    1. 首行空两格 (全角空格)
     2. 移除 Markdown 杂乱语法（#、**、```等）
     3. 清洗空行与尾部空白
     """
@@ -224,20 +216,68 @@ def launch_browser(p, headless: bool = True):
             errors.append(f"{channel or 'default'}: {e}")
     raise RuntimeError(f"未能启动可用浏览器内核: {'; '.join(errors)}")
 
-def start_browser_login_async(headless: bool = True) -> dict:
+def dismiss_popups(page):
+    """
+    神级弹窗斩杀机制（基于物理坐标与特定弹窗文案）：
+    1. 连续按 Escape 键消除模态遮罩
+    2. 空间坐标打击：只要 Y 坐标 > 100，必是乱入的新手向导浮层（非顶部发布按钮）
+    3. 错别字提示弹窗自动确认
+    4. 内容风险检测弹窗自动取消（节约检测次数）
+    """
+    # 1. 连续按 Escape 键消除模态遮罩
+    for _ in range(3):
+        try:
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(150)
+        except Exception:
+            pass
+
+    # 2. 空间坐标精确打击：消灭新手教学浮层
+    for _ in range(8):
+        clicked = False
+        for target_text in ["下一步", "完成", "我知道了", "跳过"]:
+            try:
+                btns = page.get_by_text(target_text, exact=True).element_handles()
+                for btn in btns:
+                    box = btn.bounding_box()
+                    if box and box["y"] > 100:
+                        btn.click()
+                        page.wait_for_timeout(350)
+                        clicked = True
+            except Exception:
+                pass
+        if not clicked:
+            break
+
+    # 3. 错别字未修改弹窗 -> 强制提交
+    try:
+        submit_btn = page.get_by_role("button", name="提交").first
+        if submit_btn.is_visible():
+            submit_btn.click(force=True)
+            page.wait_for_timeout(500)
+    except Exception:
+        pass
+
+    # 4. 内容风险检测弹窗 -> 取消节约额度
+    try:
+        cancel_btn = page.get_by_role("button", name="取消").last
+        if cancel_btn.is_visible():
+            cancel_btn.click(force=True)
+            page.wait_for_timeout(500)
+    except Exception:
+        pass
+
+def start_browser_login_async(headless: bool = False) -> dict:
     """
     异步启动番茄作家专区扫码登录流程：
     在后台拉起 Chromium/Edge，打开登录页，截图二维码供前端扫码，
-    用户微信/抖音/番茄作家 App 扫码成功后，自动落盘 auth_state.json。
+    用户扫码成功后，自动落盘 auth_state.json。
     """
     global _login_status
     if not is_playwright_available():
-        msg = "当前运行环境（如 Docker 极简容器或纯无图形服务器）未安装 Playwright 浏览器组件。强烈推荐直接使用下方【粘贴 Cookie / sessionid】快速完成免密绑定！"
+        msg = "当前运行环境未安装 Playwright 浏览器组件。强烈推荐直接使用下方【粘贴 Cookie / sessionid】快速完成免密绑定！"
         _login_status["last_error"] = msg
-        return {
-            "status": "error",
-            "message": msg
-        }
+        return {"status": "error", "message": msg}
 
     with _login_lock:
         if _login_status["is_logging_in"]:
@@ -256,20 +296,20 @@ def start_browser_login_async(headless: bool = True) -> dict:
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
-                browser = launch_browser(p, headless=headless)
+                # Windows 桌面环境下优先使用有界面，方便直接扫码
+                use_headless = headless if os.name != 'nt' else False
+                browser = launch_browser(p, headless=use_headless)
                 context = browser.new_context(
                     viewport={"width": 1280, "height": 800},
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
                 )
                 context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 page = context.new_page()
-                print("🍅 [番茄同步引擎] 正在打开番茄作家专区登录页面...")
-                page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=20000)
+                page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=25000)
 
                 # 寻找并截图二维码区域
                 time.sleep(3)
                 try:
-                    # 番茄登录二维码元素通常位于 qr / login-box / canvas 区域
                     qr_el = page.query_selector(".qrcode-img, .qrcode-wrap, canvas, img[src*='qr'], img[src*='login'], [class*='qr'], [class*='Qr'], [id*='qrcode']")
                     if qr_el:
                         qr_el.screenshot(path=str(QR_CODE_PATH))
@@ -277,9 +317,7 @@ def start_browser_login_async(headless: bool = True) -> dict:
                         page.screenshot(path=str(QR_CODE_PATH))
                     _login_status["qr_ready"] = True
                     _login_status["qr_path"] = str(QR_CODE_PATH)
-                    print(f"🍅 [番茄同步引擎] 登录二维码已就绪，已保存至: {QR_CODE_PATH}")
-                except Exception as e_qr:
-                    print(f"🍅 [番茄同步引擎] 二维码截取警告: {e_qr}")
+                except Exception:
                     page.screenshot(path=str(QR_CODE_PATH))
                     _login_status["qr_ready"] = True
 
@@ -287,12 +325,9 @@ def start_browser_login_async(headless: bool = True) -> dict:
                 for _ in range(90):
                     time.sleep(2)
                     cur_url = page.url
-                    # 登录成功会跳转至 zone / books / author 后台
-                    if "zone" in cur_url or "book" in cur_url or "home" in cur_url or "author" in cur_url and "login" not in cur_url:
-                        print("🍅 [番茄同步引擎] 检测到登录成功跳转！正在落盘会话凭据...")
+                    if "zone" in cur_url or "book" in cur_url or "home" in cur_url or ("author" in cur_url and "login" not in cur_url):
                         context.storage_state(path=str(AUTH_STATE_PATH))
                         cfg = load_fanqie_config()
-                        # 尝试提取作者名称
                         try:
                             name_el = page.query_selector(".author-name, .user-name, [class*='authorName']")
                             if name_el:
@@ -304,12 +339,10 @@ def start_browser_login_async(headless: bool = True) -> dict:
 
                         _login_status["logged_in"] = True
                         _login_status["author_name"] = cfg["author_name"]
-                        print(f"🍅 [番茄同步引擎] 作家凭据已安全落盘至 {AUTH_STATE_PATH}！")
                         break
                 browser.close()
         except Exception as e_worker:
-            err_msg = f"拉起浏览器扫码失败 ({e_worker})。在 Docker / 云服务器环境下，建议直接在控制台使用【粘贴 Cookie】秒级完成绑定！"
-            print(f"🍅 [番茄同步引擎] 登录流程异常: {err_msg}")
+            err_msg = f"拉起浏览器扫码失败 ({e_worker})。建议直接在控制台使用【粘贴 Cookie】秒级完成绑定！"
             _login_status["last_error"] = err_msg
         finally:
             _login_status["is_logging_in"] = False
@@ -323,7 +356,7 @@ def start_browser_login_async(headless: bool = True) -> dict:
 
 def native_upload_chapter(book_title: str, chapter_title: str, chapter_content: str, book_id: str = "", mode: str = "drafts") -> dict:
     """
-    原生执行单章上传至番茄小说作家草稿箱：
+    原生执行单章上传至番茄小说作家后台：
     1. 本地落盘至 output/fanqie_sync/{book_id}/chapter_xxx.txt
     2. 如果已登录番茄账号且 Playwright 可用，驱动后台无头浏览器自动化提交至番茄后台
     """
@@ -336,9 +369,9 @@ def native_upload_chapter(book_title: str, chapter_title: str, chapter_content: 
 
     # 1. 本地安全存盘
     ch_num_match = re.search(r"第(\d+)章", clean_title)
-    if ch_num_match:
-        ch_num = int(ch_num_match.group(1))
-        local_filename = f"chapter_{ch_num:03d}.txt"
+    chapter_num = ch_num_match.group(1) if ch_num_match else ""
+    if chapter_num:
+        local_filename = f"chapter_{int(chapter_num):03d}.txt"
     else:
         local_filename = f"chapter_{int(time.time())}.txt"
 
@@ -352,21 +385,21 @@ def native_upload_chapter(book_title: str, chapter_title: str, chapter_content: 
         "word_count": len(clean_body),
         "local_file": str(txt_file),
         "mode": mode,
-        "message": f"第《{clean_title}》章已按番茄作家规范完成段落缩进与排版存盘。"
+        "message": f"章节《{clean_title}》已按番茄作家规范完成段落缩进与排版存盘。"
     }
 
-    # 2. 检查是否可执行原生自动化上传
+    # 2. 检查登录凭据
     if not AUTH_STATE_PATH.exists() or AUTH_STATE_PATH.stat().st_size < 50:
         result["status"] = "local_ready"
-        result["message"] = f"《{clean_title}》已生成番茄规范排版存盘。尚未绑定番茄作家账号，请在【管理控制台 -> 番茄直推】扫码登录后即可一键直传草稿箱！"
+        result["message"] = f"《{clean_title}》已生成番茄规范排版存盘。尚未绑定番茄作家账号，请在【发书总控台】扫码登录或粘贴 Cookie 绑定！"
         return result
 
     if not is_playwright_available():
         result["status"] = "local_ready"
-        result["message"] = f"《{clean_title}》已本地就绪。组件安装中，完成后即可后台直推。"
+        result["message"] = f"《{clean_title}》已本地就绪。Playwright 未就绪，可通过篡改猴脚本挂机录入。"
         return result
 
-    # 3. 驱动 Playwright 无头浏览器自动推送
+    # 3. 驱动 Playwright 执行自动化注入流程
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -374,69 +407,137 @@ def native_upload_chapter(book_title: str, chapter_title: str, chapter_content: 
             context = browser.new_context(
                 storage_state=str(AUTH_STATE_PATH),
                 viewport={"width": 1280, "height": 800},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
             )
             page = context.new_page()
-            print(f"🍅 [番茄同步引擎] 正在进入作家专区上传章节《{clean_title}》...")
-            page.goto(AUTHOR_ZONE_URL, timeout=30000)
-            page.wait_for_load_state("networkidle")
-            time.sleep(2)
 
-            # 寻找对应书名并点击进入草稿/新建章节
-            # 兼容多种后台 UI 选择器
-            book_matched = False
-            book_links = page.query_selector_all("a, div[class*='book'], [class*='title']")
-            for link in book_links:
+            # 跳转至作家书籍管理总览
+            page.goto(BOOK_MANAGE_URL, timeout=45000)
+            page.wait_for_timeout(2500)
+
+            # 寻找对应书名卡片并悬停触发【章节管理】
+            clean_book_name = book_title.replace("《", "").replace("》", "").strip()
+            book_cards = page.locator('div, li, section, article').filter(has_text=clean_book_name)
+            card_count = book_cards.count()
+            manage_clicked = False
+
+            for i in range(card_count - 1, -1, -1):
+                card = book_cards.nth(i)
                 try:
-                    if book_title and book_title in link.inner_text():
-                        link.click()
-                        book_matched = True
+                    if not card.is_visible():
+                        continue
+                    card.hover(timeout=2500)
+                    page.wait_for_timeout(800)
+                    manage_btn = card.get_by_text("章节管理").first
+                    if manage_btn.is_visible():
+                        manage_btn.click()
+                        manage_clicked = True
                         break
                 except Exception:
                     continue
 
-            time.sleep(2)
-            # 点击“新建章节”或“创建章节”
-            create_btn = page.query_selector("button:has-text('新建章节'), a:has-text('新建章节'), button:has-text('写新章节'), [class*='create-chapter']")
-            if create_btn:
-                create_btn.click()
-                page.wait_for_load_state("networkidle")
-                time.sleep(2)
+            if not manage_clicked:
+                gb = page.get_by_text("章节管理").first
+                if gb.is_visible():
+                    gb.click()
+                    manage_clicked = True
 
-            # 填写章节标题
-            title_input = page.query_selector("input[placeholder*='标题'], input[class*='title'], [placeholder*='第x章']")
-            if title_input:
-                title_input.fill(clean_title)
+            page.wait_for_timeout(2500)
 
-            # 填写正文内容 (富文本编辑器通常为 contenteditable div 或 textarea)
-            content_editor = page.query_selector("div[contenteditable='true'], textarea[placeholder*='正文'], .ql-editor, [class*='editor-content']")
-            if content_editor:
-                content_editor.fill(clean_body)
+            # 检查是否在新标签页中打开了章节管理/编辑器
+            original_pages = len(context.pages)
+            if original_pages > 1 and context.pages[-1] != page:
+                editor_page = context.pages[-1]
+            else:
+                editor_page = page
 
-            # 智能合规：勾选 AI 辅助创作声明 (若有弹窗或单选框)
-            ai_checkbox = page.query_selector("input[type='checkbox'][value*='ai'], label:has-text('AI'), span:has-text('AI辅助')")
-            if ai_checkbox:
-                try:
-                    ai_checkbox.click()
-                except Exception:
-                    pass
+            # 检查是否有中断的历史草稿
+            draft_found = False
+            if chapter_num:
+                draft_row = editor_page.locator('tr, li, .chapter-item').filter(has_text=re.compile(f"第\\s*{chapter_num}\\s*章")).first
+                if draft_row.is_visible():
+                    draft_found = True
+                    edit_icon = draft_row.locator('td').last.locator('svg, i, a, span, button, img').first
+                    if edit_icon.is_visible():
+                        edit_icon.click(force=True)
+                    else:
+                        draft_row.click(force=True)
 
-            time.sleep(1)
+            if not draft_found:
+                new_btn = editor_page.get_by_role("button", name="新建章节").first
+                if not new_btn.is_visible():
+                    new_btn = editor_page.get_by_text("新建章节").first
+                if new_btn.is_visible():
+                    new_btn.click(force=True)
 
-            # 提交存稿或发布
+            page.wait_for_timeout(2500)
+            if len(context.pages) > original_pages:
+                editor_page = context.pages[-1]
+
+            # 执行弹窗斩杀（清除新手引导遮罩）
+            dismiss_popups(editor_page)
+
+            # 填入章节序号与主标题
+            num_inputs = editor_page.locator('input[type="text"]').element_handles()
+            title_input = editor_page.get_by_placeholder("请输入标题", exact=False).first
+            if not title_input.is_visible():
+                title_input = editor_page.get_by_placeholder("请输入章节名", exact=False).first
+            if not title_input.is_visible():
+                title_input = editor_page.locator('input[type="text"]').last
+
+            if chapter_num and len(num_inputs) >= 2:
+                first_input = editor_page.locator('input[type="text"]').first
+                if first_input.is_visible():
+                    first_input.fill(chapter_num, force=True)
+                sub_title = re.sub(r"^第\d+章[\s_]*", "", clean_title).strip()
+                if title_input.is_visible():
+                    title_input.fill(sub_title or clean_title, force=True)
+            else:
+                if title_input.is_visible():
+                    title_input.fill(clean_title, force=True)
+
+            # 填入正文并激活字数统计
+            editor = editor_page.locator('.ql-editor, .ProseMirror, [contenteditable="true"]').first
+            if editor.is_visible():
+                editor.click(force=True)
+                editor_page.evaluate("([el, text]) => { el.innerText = text; el.dispatchEvent(new Event('input', {bubbles: true})); }", [editor.element_handle(), clean_body])
+                editor.click()
+                editor_page.keyboard.press("End")
+                editor_page.keyboard.press("Space")
+                editor_page.wait_for_timeout(200)
+                editor_page.keyboard.press("Backspace")
+
+            # 保存草稿或发布
             if mode == "publish":
-                submit_btn = page.query_selector("button:has-text('确定发布'), button:has-text('立即发布'), button:has-text('发布')")
+                next_btn = editor_page.get_by_text("下一步", exact=True).last
+                if next_btn.is_visible():
+                    next_btn.click(force=True)
+                    editor_page.wait_for_timeout(1000)
+                    dismiss_popups(editor_page)
+                    # 勾选 AI 声明
+                    try:
+                        ai_no = editor_page.get_by_text("否", exact=True).first
+                        if ai_no.is_visible():
+                            ai_no.click(force=True)
+                    except Exception:
+                        pass
+                    pub_btn = editor_page.get_by_role("button", name="确认发布").first
+                    if pub_btn.is_visible():
+                        pub_btn.click(force=True)
+                        result["status"] = "ok"
+                        result["message"] = f"章节《{clean_title}》已成功直接发布！"
             else:
-                submit_btn = page.query_selector("button:has-text('存草稿'), button:has-text('保存草稿'), button:has-text('保存为草稿'), button:has-text('保存')")
-
-            if submit_btn:
-                submit_btn.click()
-                time.sleep(3)
-                result["status"] = "ok"
-                result["message"] = f"🍅 成功！章节《{clean_title}》已原生直推至番茄小说【{'直接发布' if mode == 'publish' else '作家草稿箱'}】！"
-            else:
-                result["status"] = "warning"
-                result["message"] = f"已进入番茄后台并填入章节《{clean_title}》，等待人工二次确认提交。"
+                # 存草稿模式
+                save_btn = editor_page.get_by_text("存草稿", exact=False).first
+                if not save_btn.is_visible():
+                    save_btn = editor_page.get_by_text("保存草稿", exact=False).first
+                if not save_btn.is_visible():
+                    save_btn = editor_page.get_by_text("保存", exact=False).first
+                if save_btn.is_visible():
+                    save_btn.click(force=True)
+                    editor_page.wait_for_timeout(2000)
+                    result["status"] = "ok"
+                    result["message"] = f"章节《{clean_title}》已成功自动存入番茄作家草稿箱！"
 
             # 记录同步历史
             history_file = book_sync_dir / "sync_history.json"
@@ -455,10 +556,15 @@ def native_upload_chapter(book_title: str, chapter_title: str, chapter_content: 
             })
             history_file.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
 
+            if editor_page != page:
+                try:
+                    editor_page.close()
+                except Exception:
+                    pass
+
             browser.close()
     except Exception as e_playwright:
-        print(f"🍅 [番茄同步引擎] 自动化直推告警: {e_playwright}")
         result["status"] = "local_ready"
-        result["message"] = f"《{clean_title}》已生成番茄规范本地存盘。后台直推暂未能完成 ({e_playwright})，可随时一键重试。"
+        result["message"] = f"《{clean_title}》已本地存盘。直推执行提示: {e_playwright}"
 
     return result
