@@ -2359,8 +2359,9 @@
                 </div>
               </div>
             </div>
-            <div id="botProgressInfo" style="font-size: 12px; color: var(--accent-gold); font-weight: 600;">
-              已自动同步: <span id="syncedChapCount">0</span> 章
+            <div id="botProgressInfo" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--accent-gold); font-weight: 600;">
+              <span>已自动同步: <span id="syncedChapCount">0</span> 章</span>
+              <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 8px; color: #ef4444; border: 1px solid rgba(239,68,68,0.4);" onclick="resetFanqieSyncProgress()" title="清空同步记录，允许从第1章重新发布">重置进度</button>
             </div>
           </div>
 
@@ -2466,6 +2467,9 @@
                 全书按番茄标准序号独立排版 txt，附带 00_签约大纲与作品信息，作家后台一键识别过审入库！
               </div>
             </div>
+            <a id="btnDownloadFanqieTxt" href="/api/export/fanqie_txt" download class="btn btn-primary" style="padding: 6px 14px; font-weight: 700;">
+              <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载番茄规范分章 TXT (全书一键导入)</span>
+            </a>
             <a id="btnDownloadFanqieZip" href="/api/export/fanqie_zip" download class="btn btn-gold" style="padding: 6px 14px;">
               <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载官方 ZIP 导入包</span>
             </a>
@@ -4616,7 +4620,22 @@
     }
 
     // 打开番茄小说总控台弹窗
+    async function resetFanqieSyncProgress() {
+      const bid = globalState ? globalState.book_id : "";
+      if (!confirm("确定要重置当前作品的发书同步记录吗？\n重置后所有章节将恢复为待上传状态，篡改猴助手将从第 1 章重新挂机录入。")) return;
+      try {
+        const res = await fetch(`/api/fanqie/reset_sync?book_id=${encodeURIComponent(bid)}`, { method: "POST" });
+        const d = await res.json();
+        showToast(d.message || "同步进度已重置为0", "success");
+        openPublishModal(bid);
+      } catch (e) {
+        showToast("重置失败: " + e.message, "error");
+      }
+    }
+
     async function openPublishModal(bookId) {
+      const txtBtn = document.getElementById("btnDownloadFanqieTxt");
+      if (txtBtn) txtBtn.href = `/api/export/fanqie_txt?book_id=${encodeURIComponent(bookId || (globalState ? globalState.book_id : ""))}`;
       const bid = bookId || (globalState ? globalState.book_id : "");
       const modal = document.getElementById("publishModal");
       if (!modal) return;

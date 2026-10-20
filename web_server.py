@@ -286,6 +286,20 @@ class SimulationManager:
                 return []
         return []
 
+    def reset_fanqie_sync(self, book_id=None):
+        book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
+        if not book:
+            return {"status": "error", "message": "未找到小说作品"}
+        bid = book.id if str(book.id).startswith("book_") else f"book_{book.id}"
+        fanqie_dir = OUTPUT_DIR / "fanqie_sync" / bid
+        sync_file = fanqie_dir / "sync_history.json"
+        if sync_file.exists():
+            try:
+                sync_file.unlink()
+            except Exception:
+                sync_file.write_text("[]", encoding="utf-8")
+        return {"status": "ok", "message": f"《{book.title}》发书同步记录已重置，全部章节已恢复为待发布状态", "book_id": book.id}
+
     def mark_fanqie_synced(self, book_id, chapter_id, mode="draft", remote_id=""):
         book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
         if not book:
@@ -309,14 +323,57 @@ class SimulationManager:
         sync_file.write_text(json.dumps(synced, ensure_ascii=False, indent=2), encoding="utf-8")
         return synced
 
-    def get_pending_fanqie_chapter(self, book_id=None):
+    def get_pending_fanqie_chapter(self, book_id=None, force_chapter_id=None, start_from=None):
         book = book_mgr.books.get(book_id, self.active_book) if book_id else self.active_book
         if not book or not book.chapters:
             return None
+
+        # 若指定了特定章节直接提取
+        if force_chapter_id is not None and str(force_chapter_id).strip():
+            target_chap = next((c for c in book.chapters if str(c.get("id")) == str(force_chapter_id).strip()), None)
+            if target_chap:
+                cid = str(target_chap.get("id"))
+                title = target_chap.get("title", f"第{cid}章")
+                content = target_chap.get("content", "")
+                clean_title = title.replace("#", "").strip()
+                if not clean_title.startswith("第") and "章" not in clean_title:
+                    clean_title = f"第{cid}章 {clean_title}"
+                clean_body = clean_fanqie_content(clean_title, content)
+                return {
+                    "book_id": book.id,
+                    "book_title": book.title,
+                    "chapter_id": int(cid) if cid.isdigit() else cid,
+                    "chapter_title": clean_title,
+                    "content": clean_body,
+                    "word_count": len(clean_body),
+                    "total_chapters": len(book.chapters)
+                }
+
         synced = self.get_fanqie_sync_state(book.id)
-        synced_ids = {str(s.get("chapter_id")) for s in synced}
+        # 仅当记录中具有有效 remote_id 或由油猴/手动确认模式同步过才算已同步，避免本地格式化生成的假记录阻挡发书
+        synced_ids = set()
+        for s in synced:
+            cid = str(s.get("chapter_id"))
+            m = str(s.get("mode", ""))
+            rid = str(s.get("remote_id", ""))
+            if rid or "tampermonkey" in m or m == "manual_confirmed":
+                synced_ids.add(cid)
+
+        start_num = 1
+        if start_from is not None:
+            try:
+                start_num = int(start_from)
+            except Exception:
+                start_num = 1
+
         for chap in book.chapters:
             cid = str(chap.get("id"))
+            try:
+                cid_num = int(cid)
+            except Exception:
+                cid_num = 1
+            if cid_num < start_num:
+                continue
             if cid not in synced_ids:
                 title = chap.get("title", f"第{cid}章")
                 content = chap.get("content", "")
@@ -2406,9 +2463,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
         if path == "/api/fanqie/pending_chapter":
             qs = urllib.parse.parse_qs(parsed.query)
             query_book_id = qs.get("book_id", [""])[0]
+            force_cid = qs.get("chapter_id", [None])[0] or qs.get("force_chapter_id", [None])[0]
+            start_from = qs.get("start_from", [None])[0]
             target_book = book_mgr.books.get(query_book_id, sim_mgr.active_book) if query_book_id else sim_mgr.active_book
-            pending = sim_mgr.get_pending_fanqie_chapter(target_book.id if target_book else None)
+            pending = sim_mgr.get_pending_fanqie_chapter(target_book.id if target_book else None, force_chapter_id=force_cid, start_from=start_from)
             synced = sim_mgr.get_fanqie_sync_state(target_book.id if target_book else None)
+            real_synced_count = sum(1 for s in synced if s.get("remote_id") or "tampermonkey" in str(s.get("mode", "")) or s.get("mode") == "manual_confirmed")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -2419,9 +2479,20 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 "chapter": pending,
                 "book_id": target_book.id if target_book else "",
                 "book_title": target_book.title if target_book else "",
-                "synced_count": len(synced),
+                "synced_count": real_synced_count,
                 "total_chapters": len(target_book.chapters) if target_book else 0
             }, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/fanqie/reset_sync":
+            qs = urllib.parse.parse_qs(parsed.query)
+            query_book_id = qs.get("book_id", [""])[0]
+            res = sim_mgr.reset_fanqie_sync(query_book_id)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
             return
 
         if path == "/api/fanqie/sync_status":
@@ -3156,10 +3227,20 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
                 return
 
+            if path == "/api/fanqie/reset_sync":
+                bid = req_data.get("book_id", "")
+                res = sim_mgr.reset_fanqie_sync(bid)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+                return
+
             if path == "/api/fanqie/confirm_uploaded":
                 bid = req_data.get("book_id", "")
                 cid = req_data.get("chapter_id", None)
-                mode = req_data.get("mode", "draft")
+                mode = req_data.get("mode", "tampermonkey_draft")
                 remote_id = req_data.get("remote_id", "")
                 synced = sim_mgr.mark_fanqie_synced(bid, cid, mode=mode, remote_id=remote_id)
                 self.send_response(200)
