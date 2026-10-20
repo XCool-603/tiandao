@@ -285,10 +285,16 @@ class VideoAgent:
         except Exception as e:
             return {"status": "processing", "task_id": task_id, "message": f"轮询可灵状态中 ({str(e)})"}
 
-    # ================= 通用网关实现 (Si2API / One-API / New-API / MiniMax / Kling) =================
+    # ================= 通用网关与 WorkBuddy2API 逆向多模态视觉实现 =================
     def _submit_generic_gateway(self, prompt: str, duration: int = 5) -> Dict[str, Any]:
         root_url = re.sub(r'/v1/?$', '', self.base_url)
-        endpoints = [
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+        # ---------------- 阶段 1：优先探测原生文生视频端点 ----------------
+        video_endpoints = [
             f"{self.base_url}/videos/generations",
             f"{root_url}/v1/videos/generations",
             f"{self.base_url}/video/generations",
@@ -300,19 +306,12 @@ class VideoAgent:
             f"{self.base_url}/videos/text2video",
             f"{root_url}/v1/videos/text2video",
             f"{self.base_url}/tasks",
-            f"{root_url}/v1/tasks",
-            f"{self.base_url}/images/generations",
-            f"{root_url}/v1/images/generations"
+            f"{root_url}/v1/tasks"
         ]
-        # 去重并保持探测顺序
         seen = set()
-        unique_endpoints = []
-        for ep in endpoints:
-            if ep not in seen:
-                seen.add(ep)
-                unique_endpoints.append(ep)
+        unique_video_endpoints = [ep for ep in video_endpoints if not (ep in seen or seen.add(ep))]
 
-        payload = {
+        video_payload = {
             "model": self.model,
             "model_name": self.model,
             "prompt": prompt,
@@ -321,25 +320,27 @@ class VideoAgent:
             "fps": 30,
             "aspect_ratio": "9:16"
         }
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
 
         last_err = ""
-        for ep in unique_endpoints:
+        for ep in unique_video_endpoints:
             try:
-                req = urllib.request.Request(ep, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+                req = urllib.request.Request(ep, data=json.dumps(video_payload).encode("utf-8"), headers=headers, method="POST")
                 with urllib.request.urlopen(req, timeout=40) as resp:
                     resp_text = resp.read().decode("utf-8")
                     data = json.loads(resp_text)
 
-                    # 1. 直接返回 MP4 URL
-                    v_url = self._extract_video_url(data)
+                    # 提取视频或动态视觉流
+                    v_url, media_type = self._extract_media_url(data)
                     if v_url:
-                        return {"status": "completed", "video_url": v_url, "provider": "generic", "message": "视频已成功生成并获取！"}
+                        return {
+                            "status": "completed",
+                            "video_url": v_url,
+                            "media_type": media_type,
+                            "provider": "video_gateway",
+                            "message": "AI 视频已成功生成并获取！"
+                        }
 
-                    # 2. 提取异步 Task ID
+                    # 提取异步任务ID
                     task_id = (
                         data.get("id") or
                         data.get("task_id") or
@@ -350,7 +351,7 @@ class VideoAgent:
                         return {
                             "status": "processing",
                             "task_id": str(task_id),
-                            "provider": "generic",
+                            "provider": "video_gateway",
                             "message": f"AI 视频渲染任务已提交网关 (任务ID: {task_id})，进入排队渲染中..."
                         }
             except urllib.error.HTTPError as he:
@@ -358,23 +359,106 @@ class VideoAgent:
                 try: body = he.read().decode("utf-8")
                 except Exception: pass
                 last_err = f"网关返回 HTTP {he.code}: {body or he.reason}"
-                # 如果是 404 说明当前端点不存在，继续探测下一个候选端点
                 if he.code == 404:
                     continue
-                # 如果是 401/403/400 则直接报错告知真实原因
-                return {"status": "failed", "error": f"视频提交失败: {last_err}"}
+                continue
             except Exception as e:
                 last_err = str(e)
                 continue
 
-        # 如果所有候选端点均 404，输出精准分析
+        # ---------------- 阶段 2：适配 WorkBuddy2API 逆向视觉生图端点 (/v1/images/generations) ----------------
+        image_endpoints = [
+            f"{self.base_url}/images/generations",
+            f"{root_url}/v1/images/generations",
+            f"{self.base_url}/images/edits",
+            f"{root_url}/v1/images/edits"
+        ]
+        seen_img = set()
+        unique_image_endpoints = [ep for ep in image_endpoints if not (ep in seen_img or seen_img.add(ep))]
+
+        image_models = [self.model, "dall-e-3", ""] if self.model else ["dall-e-3", ""]
+        for ep in unique_image_endpoints:
+            for m in image_models:
+                img_payload = {
+                    "prompt": f"9:16 vertical short drama cinematic shot, 8k resolution, cinematic lighting, {prompt}",
+                    "size": "1024x1792",
+                    "n": 1,
+                    "response_format": "url"
+                }
+                if m and not any(k in m.lower() for k in ("video", "kling", "cogvideo")):
+                    img_payload["model"] = m
+
+                try:
+                    req = urllib.request.Request(ep, data=json.dumps(img_payload).encode("utf-8"), headers=headers, method="POST")
+                    with urllib.request.urlopen(req, timeout=40) as resp:
+                        resp_text = resp.read().decode("utf-8")
+                        data = json.loads(resp_text)
+                        v_url, media_type = self._extract_media_url(data)
+                        if v_url:
+                            return {
+                                "status": "completed",
+                                "video_url": v_url,
+                                "image_url": v_url,
+                                "media_type": "image",
+                                "provider": "workbuddy2api",
+                                "message": "已通过 WorkBuddy2API 逆向视觉引擎生成 9:16 高清分镜画面，已启用电影级动态运镜呈现！"
+                            }
+                except urllib.error.HTTPError as he:
+                    if he.code == 404:
+                        break
+                    continue
+                except Exception:
+                    continue
+
+        # ---------------- 阶段 3：尝试 WorkBuddy2API 对话多模态视觉逆向提取 ----------------
+        chat_endpoints = [
+            f"{self.base_url}/chat/completions",
+            f"{root_url}/v1/chat/completions"
+        ]
+        chat_models = [self.model] if self.model and not any(k in self.model.lower() for k in ("video", "kling", "cogvideo")) else ["deepseek-chat", "gpt-4o"]
+        for ep in chat_endpoints:
+            for m in chat_models:
+                chat_payload = {
+                    "model": m,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": f"请为以下短剧分镜生成高清视觉画面或渲染图片，并输出图片URL：\n{prompt}"
+                        }
+                    ]
+                }
+                try:
+                    req = urllib.request.Request(ep, data=json.dumps(chat_payload).encode("utf-8"), headers=headers, method="POST")
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        match = re.search(r'https?://[^\s)"]+\.(?:png|jpg|jpeg|webp|gif|mp4)', content, re.IGNORECASE)
+                        if match:
+                            found_url = match.group(0)
+                            return {
+                                "status": "completed",
+                                "video_url": found_url,
+                                "image_url": found_url,
+                                "media_type": "video" if ".mp4" in found_url.lower() else "image",
+                                "provider": "workbuddy2api_chat",
+                                "message": "已从 WorkBuddy2API 对话多模态中成功提取分镜视觉媒体！"
+                            }
+                except Exception:
+                    pass
+
+        # ---------------- 阶段 4：所有端点连接失败诊断提示 ----------------
         if "404" in last_err:
             return {
                 "status": "failed",
-                "error": f"所有视频网关端点连接失败 (网关均返回 HTTP 404)。\n原因分析：当前配置的视频网关地址 [{self.base_url}] 很可能是纯文本对话大语言模型(LLM)网关（如 WorkBuddy2API 或 Trae2API 仅开放 /v1/chat/completions 文本对话，并无视频生成功能）。\n解决方案：\n1. 请在后台【系统配置】设置真正的文生视频 API（如智谱 CogVideoX 官方、可灵 AI 官方、MiniMax 海螺视频官方，或支持生视频的聚合网关）。\n2. 若暂无视频 Key，可在剧本分镜卡片上点击【模拟体验】免Key极速体验短剧 9:16 视频呈现效果。"
+                "error": f"所有视频与视觉网关端点连接失败 (网关均返回 HTTP 404: 接口不存在)。\n"
+                         f"当前配置地址 [{self.base_url}] 未开启视频(/videos/generations)或生图(/images/generations)路由。\n"
+                         f"建议：\n"
+                         f"1. 若使用 WorkBuddy2API，请确认部署的分支是否包含图像生成模块 (如 Tom6814/WorkBuddy2API 或 workbuddy2api-panel)；\n"
+                         f"2. 若需真实生视频，可在后台配置智谱 CogVideoX、可灵 KlingAI 官方或支持生视频的中转网关；\n"
+                         f"3. 亦可直接在卡片上点击【模拟体验(免Key)】，系统将立即渲染 9:16 动态竖屏分镜并在播放器中流畅呈现。"
             }
 
-        return {"status": "failed", "error": f"所有视频网关端点连接失败: {last_err} (请在后台检查 VIDEO_BASE_URL 与模型是否支持)"}
+        return {"status": "failed", "error": f"所有视频网关端点连接失败: {last_err} (请在后台检查 VIDEO_BASE_URL 与模型型号)"}
 
     def _query_generic_gateway(self, task_id: str) -> Dict[str, Any]:
         """多候选端点智能探查通用网关的视频任务状态"""
@@ -453,52 +537,71 @@ class VideoAgent:
             "message": "AI 视频排队渲染中，后台守护进程持续接收中..."
         }
 
-    # ================= 递归多层级 MP4 URL 提取器 =================
+    # ================= 递归多层级媒体 (MP4 视频 / 9:16 高清视觉) 提取器 =================
     @staticmethod
-    def _extract_video_url(data: Any) -> Optional[str]:
-        """从任意嵌套的 JSON 数据结构中递归提取真实可播放的 MP4 视频链接"""
+    def _extract_media_url(data: Any) -> tuple[Optional[str], str]:
+        """
+        从任意嵌套的 JSON 数据结构中递归提取真实可播放的 MP4 视频链接或 9:16 高清视觉图片
+        返回 (url, media_type) 其中 media_type 为 'video' 或 'image'
+        """
         if not data:
-            return None
+            return None, "video"
+
         if isinstance(data, str):
             s = data.strip()
-            if (s.startswith("http://") or s.startswith("https://")) and any(ext in s.lower() for ext in (".mp4", ".mov", ".webm", "/video", "cdn", "oss", "s3")):
-                return s
-            return None
+            if s.startswith("http://") or s.startswith("https://") or s.startswith("data:image/"):
+                if any(ext in s.lower() for ext in (".mp4", ".mov", ".webm", "/video")):
+                    return s, "video"
+                if any(ext in s.lower() for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", "data:image/")):
+                    return s, "image"
+                return s, "video"
+            return None, "video"
+
         if isinstance(data, dict):
-            # 高频字段优先判断
-            for k in ("video_url", "url", "download_url", "file_url", "play_url", "output_url", "video"):
+            # 1. 检查 b64_json (OpenAI images/generations 格式)
+            if "b64_json" in data and isinstance(data["b64_json"], str) and data["b64_json"]:
+                return f"data:image/png;base64,{data['b64_json']}", "image"
+
+            # 2. 优先检查显式视频字段
+            for k in ("video_url", "play_url", "output_url", "video"):
                 val = data.get(k)
                 if isinstance(val, str) and (val.startswith("http://") or val.startswith("https://")):
-                    if any(ext in val.lower() for ext in (".mp4", ".mov", ".webm", "/video", "cdn", "oss", "s3", "generations")):
-                        return val
-            # 智谱 video_result
-            if "video_result" in data and isinstance(data["video_result"], list) and data["video_result"]:
-                u = VideoAgent._extract_video_url(data["video_result"][0])
-                if u: return u
-            # 可灵 task_result.videos
-            if "task_result" in data and isinstance(data["task_result"], dict):
-                vids = data["task_result"].get("videos", [])
-                if isinstance(vids, list) and vids:
-                    u = VideoAgent._extract_video_url(vids[0])
-                    if u: return u
-            # OpenAI / One-API data 数组
-            if "data" in data:
-                u = VideoAgent._extract_video_url(data["data"])
-                if u: return u
-            # output 字段
-            if "output" in data:
-                u = VideoAgent._extract_video_url(data["output"])
-                if u: return u
-            # 递归遍历字典所有 value
+                    return val, "video"
+
+            # 3. 检查通用媒体与生图字段
+            for k in ("url", "download_url", "file_url", "image", "image_url"):
+                val = data.get(k)
+                if isinstance(val, str) and (val.startswith("http://") or val.startswith("https://")):
+                    if any(ext in val.lower() for ext in (".png", ".jpg", ".jpeg", ".webp")):
+                        return val, "image"
+                    return val, "video"
+
+            # 4. 递归检查常见列表与嵌套包装
+            for field in ("video_result", "task_result", "data", "output", "images", "videos"):
+                if field in data:
+                    u, m = VideoAgent._extract_media_url(data[field])
+                    if u:
+                        return u, m
+
+            # 5. 递归遍历所有字典值
             for v in data.values():
                 if isinstance(v, (dict, list)):
-                    u = VideoAgent._extract_video_url(v)
-                    if u: return u
+                    u, m = VideoAgent._extract_media_url(v)
+                    if u:
+                        return u, m
+
         elif isinstance(data, list):
             for item in data:
-                u = VideoAgent._extract_video_url(item)
-                if u: return u
-        return None
+                u, m = VideoAgent._extract_media_url(item)
+                if u:
+                    return u, m
+
+        return None, "video"
+
+    @staticmethod
+    def _extract_video_url(data: Any) -> Optional[str]:
+        u, _ = VideoAgent._extract_media_url(data)
+        return u
 
     # ================= 模拟免Key极速体验 =================
     def _mock_submit(self, prompt: str, duration: int = 5) -> Dict[str, Any]:

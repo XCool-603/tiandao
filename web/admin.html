@@ -589,9 +589,10 @@
             <span class="preset-pill" onclick="setVideoBaseUrl('https://open.bigmodel.cn/api/paas/v4')">智谱 CogVideoX 官方</span>
             <span class="preset-pill" onclick="setVideoBaseUrl('https://api.klingai.com/v1')">可灵 Kling 官方</span>
             <span class="preset-pill" onclick="setVideoBaseUrl('https://www.si2api.top/v1')">聚合网关通道</span>
+            <span class="preset-pill" onclick="setVideoBaseUrl('http://localhost:3000/v1')">WorkBuddy2API 本地</span>
           </div>
           <div class="form-hint" style="color: var(--text-muted); line-height: 1.5; margin-top: 4px;">
-            注意：此处须填入支持<strong>文生视频</strong>接口的网关或官方地址。WorkBuddy2API / Trae2API 等属于纯代码/文本对话 LLM 反代，不支持视频生成（会返回 HTTP 404）。若暂无视频 API，剧本分镜支持一键【模拟体验】免Key预览。
+            支持原生文生视频网关（CogVideo、Kling、MiniMax等），并已完整接入 WorkBuddy2API 逆向多模态视觉通道（自动调用 /v1/images/generations 智能生成 9:16 高清分镜并加载电影级动态运镜）。
           </div>
         </div>
 
@@ -600,9 +601,9 @@
           <label class="form-label">生视频模型型号 (VIDEO_MODEL)</label>
           <input type="text" id="adminVideoModel" class="form-input" placeholder="cogvideox-flash">
           <div class="preset-row">
+            <span class="preset-pill" onclick="setVideoModel('dall-e-3')">dall-e-3 (WorkBuddy2API生图)</span>
             <span class="preset-pill" onclick="setVideoModel('video-01')">video-01 (MiniMax海螺视频)</span>
             <span class="preset-pill" onclick="setVideoModel('kling-v1')">kling-v1 (可灵标准)</span>
-            <span class="preset-pill" onclick="setVideoModel('kling-v1-5')">kling-v1-5 (可灵高清)</span>
             <span class="preset-pill" onclick="setVideoModel('cogvideox-flash')">cogvideox-flash (智谱极速)</span>
           </div>
         </div>

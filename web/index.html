@@ -1652,6 +1652,38 @@
       background: var(--bg-card-hover);
       color: var(--text-primary);
     }
+    /* 9:16 短剧动态运镜电影动效 (适配 WorkBuddy 逆向视觉) */
+    @keyframes kenburns-zoom-in {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.14); }
+      100% { transform: scale(1); }
+    }
+    @keyframes kenburns-pan-left {
+      0% { transform: scale(1.08) translateX(2.5%); }
+      50% { transform: scale(1.08) translateX(-2.5%); }
+      100% { transform: scale(1.08) translateX(2.5%); }
+    }
+    @keyframes kenburns-jitter {
+      0% { transform: scale(1.04) translate(0, 0); }
+      25% { transform: scale(1.04) translate(-1.5px, 2px); }
+      50% { transform: scale(1.04) translate(2px, -1.5px); }
+      75% { transform: scale(1.04) translate(-2px, -1px); }
+      100% { transform: scale(1.04) translate(0, 0); }
+    }
+    .drama-cinema-img {
+      transition: transform 0.5s ease;
+      animation-timing-function: ease-in-out;
+      animation-iteration-count: infinite;
+    }
+    .camera-motion-zoom {
+      animation-name: kenburns-zoom-in;
+    }
+    .camera-motion-pan {
+      animation-name: kenburns-pan-left;
+    }
+    .camera-motion-jitter {
+      animation-name: kenburns-jitter;
+    }
   </style>
 </head>
 <body>
@@ -5409,23 +5441,54 @@ function copyTampermonkeyUrl() {
               <div class="shot-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <span style="display: flex; align-items: center; gap: 4px;">
                   <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                  9:16 真实视频镜头
+                  9:16 短剧镜头画面
                 </span>
-                ${s.video_url ? `<span class="pill pill-green" style="font-size: 10px; padding: 2px 6px;">已生成</span>` : ''}
+                ${(s.video_url || s.image_url) ? `<span class="pill pill-green" style="font-size: 10px; padding: 2px 6px;">${s.media_type === 'image' ? '动态分镜' : '已生成'}</span>` : ''}
               </div>
 
-              ${s.video_url ? `
-                <div style="margin-top: 6px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-subtle);">
-                  <video src="${escapeHtml(s.video_url)}" controls playsinline preload="metadata" style="width: 100%; aspect-ratio: 9/16; max-height: 250px; object-fit: contain; display: block;"></video>
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.6); font-size: 11px;">
-                    <span style="color: var(--accent-green); display: flex; align-items: center; gap: 4px;"><svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> 视频就绪 (${s.duration_sec || 5}s)</span>
-                    <div style="display: flex; gap: 6px;">
-                      <a href="${escapeHtml(s.video_url)}" target="_blank" download="shot_${s.shot_num}.mp4" class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;">下载</a>
-                      <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">重新生成</button>
+              ${(s.video_url || s.image_url) ? (() => {
+                const mediaSrc = s.video_url || s.image_url || '';
+                const isImageMedia = s.media_type === 'image' || /\.(png|jpe?g|webp|gif)($|\?)/i.test(mediaSrc) || mediaSrc.startsWith('data:image/');
+                let motionClass = 'camera-motion-zoom';
+                const cm = (s.camera_movement || '').toLowerCase();
+                if (cm.includes('切') || cm.includes('摇') || cm.includes('移') || cm.includes('横')) {
+                  motionClass = 'camera-motion-pan';
+                } else if (cm.includes('晃') || cm.includes('手持') || cm.includes('抖')) {
+                  motionClass = 'camera-motion-jitter';
+                }
+
+                if (isImageMedia) {
+                  return `
+                    <div style="position: relative; margin-top: 6px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-subtle); aspect-ratio: 9/16; max-height: 260px; display: flex; align-items: center; justify-content: center;">
+                      <img src="${escapeHtml(mediaSrc)}" alt="Shot #${s.shot_num}" class="drama-cinema-img ${motionClass}" style="width: 100%; height: 100%; object-fit: cover; animation-duration: ${s.duration_sec || 6}s;" />
+                      <div style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.72); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 4px; font-size: 10.5px; color: #10b981; display: flex; align-items: center; gap: 4px; border: 1px solid rgba(16,185,129,0.3);">
+                        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+                        ${s.provider === 'workbuddy2api' ? 'WorkBuddy 逆向视觉' : '动态分镜'} · ${escapeHtml(s.camera_movement || '动态运镜')} (${s.duration_sec || 5}s)
+                      </div>
+                      <div style="position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.75); font-size: 11px;">
+                        <span style="color: var(--accent-green); display: flex; align-items: center; gap: 4px;"><svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> 画面就绪</span>
+                        <div style="display: flex; gap: 6px;">
+                          <a href="${escapeHtml(mediaSrc)}" target="_blank" download="shot_${s.shot_num}.png" class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;">下载分镜</a>
+                          <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">重新生成</button>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }
+
+                return `
+                  <div style="margin-top: 6px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-subtle);">
+                    <video src="${escapeHtml(s.video_url)}" controls playsinline preload="metadata" style="width: 100%; aspect-ratio: 9/16; max-height: 250px; object-fit: contain; display: block;"></video>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.6); font-size: 11px;">
+                      <span style="color: var(--accent-green); display: flex; align-items: center; gap: 4px;"><svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> 视频就绪 (${s.duration_sec || 5}s)</span>
+                      <div style="display: flex; gap: 6px;">
+                        <a href="${escapeHtml(s.video_url)}" target="_blank" download="shot_${s.shot_num}.mp4" class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;">下载</a>
+                        <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">重新生成</button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ` : (s.video_status === 'processing' ? `
+                `;
+              })() : (s.video_status === 'processing' ? `
                 <div id="shotPollingCard_${s.shot_num}" style="margin-top: 6px; padding: 14px; text-align: center; background: rgba(59,130,246,0.06); border: 1px dashed var(--accent-blue); border-radius: 8px;">
                   <svg class="icon spin" viewBox="0 0 24 24" style="color: var(--accent-blue); margin-bottom: 6px;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
                   <div style="font-size: 12px; color: #fff; font-weight: 600;">AI 视频排队渲染中...</div>

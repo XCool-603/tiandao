@@ -2842,6 +2842,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
                 if v_res.get("status") == "completed":
                     target_shot["video_url"] = v_res.get("video_url", "")
+                    if v_res.get("image_url"):
+                        target_shot["image_url"] = v_res.get("image_url", "")
+                    if v_res.get("media_type"):
+                        target_shot["media_type"] = v_res.get("media_type", "video")
+                    if v_res.get("provider"):
+                        target_shot["provider"] = v_res.get("provider", "")
                     target_shot["video_status"] = "completed"
                     target_shot.pop("video_error", None)
                 elif v_res.get("status") == "processing":
@@ -2885,6 +2891,12 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 if target_shot:
                     if v_res.get("status") == "completed":
                         target_shot["video_url"] = v_res.get("video_url", "")
+                        if v_res.get("image_url"):
+                            target_shot["image_url"] = v_res.get("image_url", "")
+                        if v_res.get("media_type"):
+                            target_shot["media_type"] = v_res.get("media_type", "video")
+                        if v_res.get("provider"):
+                            target_shot["provider"] = v_res.get("provider", "")
                         target_shot["video_status"] = "completed"
                         target_shot.pop("video_error", None)
                         target_book.save()
