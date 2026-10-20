@@ -4492,7 +4492,11 @@
           body: JSON.stringify({ book_id: bid })
         });
         const data = await res.json();
-        alert(`${data.message}\n成功同步：${data.success_count} / ${data.total_chapters} 章！`);
+        if (data.status === "ok" && data.success_count > 0) {
+          alert(`${data.message}\n已成功直推 ${data.success_count} / ${data.total_chapters} 章至番茄作家草稿箱！`);
+        } else {
+          alert(`${data.message}`);
+        }
       } catch (e) {
         alert("批量上传异常: " + e.message);
       }
