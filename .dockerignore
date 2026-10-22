@@ -1,6 +1,12 @@
 .git
 .github
 .env
+# ⚠️ 不能只排 .env：config.py 在找不到 .env 时会回落读 .env.example，
+# 而它的加载是 override=True，于是 compose / -e 注入的 OPENAI_API_KEY
+# 会被覆盖成 your_api_key_here、ADMIN_KEY 被覆盖成 admin888。
+# 示例文件只是给人看的，绝不能进镜像。
+.env.example
+.agents/
 __pycache__
 *.pyc
 *.pyo

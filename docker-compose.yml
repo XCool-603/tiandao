@@ -3,6 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # 构建期可调项，默认值已写在 Dockerfile 里，这里让它们"摸得到"：
+      #   APT_MIRROR   apt 源，默认 mirrors.aliyun.com（境外构建可传 deb.debian.org）
+      #   PIP_INDEX_URL pip 源，默认留空走官方 PyPI（国内慢就传清华源）
+      args:
+        APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     image: xcool/tiandao:latest
     container_name: tiandao
     restart: unless-stopped

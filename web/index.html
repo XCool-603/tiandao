@@ -4531,7 +4531,9 @@
         if (data.status === "ok" && data.success_count > 0) {
           alert(`${data.message}\n已成功直推 ${data.success_count} / ${data.total_chapters} 章至番茄作家草稿箱！`);
         } else {
-          alert(`${data.message}`);
+          // 云服务器无Cookie或无界面时，自动直接下载番茄官方批量导入包
+          window.location.href = `/api/export/fanqie_zip?book_id=${encodeURIComponent(bid)}`;
+          alert(`${data.message}\n\n已为您自动下载【番茄小说官方·批量导入专用 ZIP 包】！\n使用方法：\n1. 打开番茄作家后台（fanqienovel.com/main/writer）进入作品【章节管理】\n2. 点击【批量导入】，将解压出的章节 txt 拖入即可秒级全书入库！`);
         }
       } catch (e) {
         alert("批量上传异常: " + e.message);
@@ -5486,6 +5488,11 @@ function copyTampermonkeyUrl() {
                         <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">重新生成</button>
                       </div>
                     </div>
+                    ${s.video_notice ? `
+                      <div style="padding: 4px 10px; background: rgba(59,130,246,0.08); border-top: 1px solid rgba(59,130,246,0.15); font-size: 10.5px; color: #60a5fa;">
+                        ${escapeHtml(s.video_notice)}
+                      </div>
+                    ` : ''}
                   </div>
                 `;
               })() : (s.video_status === 'processing' ? `
