@@ -1520,6 +1520,82 @@
       grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
       gap: 14px;
     }
+    /* 角色定妆照与首尾帧视效控制台样式 */
+    .drama-character-section {
+      background: linear-gradient(135deg, rgba(20, 30, 48, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%);
+      border: 1px solid var(--border-medium);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .drama-char-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .drama-char-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 0.2s;
+    }
+    .drama-char-card:hover {
+      border-color: var(--accent-blue);
+    }
+    .drama-char-poster {
+      width: 100%;
+      aspect-ratio: 9/16;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #0b0f19;
+      border: 1px solid var(--border-subtle);
+      display: block;
+    }
+    .frame-control-slot {
+      background: rgba(10, 15, 29, 0.8);
+      border: 1px dashed var(--border-subtle);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+    }
+    .frame-control-slot.active {
+      border-color: var(--accent-blue);
+      border-style: solid;
+    }
+    .frame-thumb {
+      width: 100%;
+      aspect-ratio: 9/16;
+      max-height: 180px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #000;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: block;
+    }
+    .frame-empty-placeholder {
+      width: 100%;
+      aspect-ratio: 9/16;
+      max-height: 180px;
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-align: center;
+      padding: 8px;
+    }
     .shot-card {
       background: var(--bg-card);
       border: 1px solid var(--border-subtle);
@@ -5382,6 +5458,34 @@ function copyTampermonkeyUrl() {
           </div>
         </div>
 
+        <!-- 主角定妆照总控专区 (Character Concept Art Gallery) -->
+        <div class="drama-character-section">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                主角与核心登场角色定妆照 (9:16 Concept Art)
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                定妆照锁定主角面容、五官特征与服饰，生成分镜首尾帧时自动注入，保证全片人物视觉前后高度一致！
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" style="font-size: 11.5px; padding: 4px 10px;" onclick="batchGenerateCharacterPortraits(true, this)" title="免Key模拟生成主角定妆照">
+                模拟生成定妆照
+              </button>
+              <button class="btn btn-primary" style="font-size: 11.5px; padding: 4px 12px;" onclick="batchGenerateCharacterPortraits(false, this)">
+                <span><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> AI 批量生成角色定妆照</span>
+              </button>
+            </div>
+          </div>
+          <div id="dramaCharacterGallery" class="drama-char-grid">
+            <div style="grid-column: 1 / -1; text-align: center; padding: 20px; font-size: 12px; color: var(--text-muted);">
+              正在加载登场角色定妆档案...
+            </div>
+          </div>
+        </div>
+
         <!-- 逐镜头分镜列表 -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
           <div style="font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
@@ -5438,65 +5542,97 @@ function copyTampermonkeyUrl() {
               </div>
             </div>
 
-            <!-- 9:16 竖屏视频渲染预览区 -->
+            <!-- 9:16 首尾帧与视频渲染控镜区 -->
             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-subtle);">
-              <div class="shot-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div class="shot-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span style="display: flex; align-items: center; gap: 4px;">
                   <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                  9:16 短剧镜头画面
+                  镜头控镜 (首帧 · 尾帧 · 9:16 成片)
                 </span>
-                ${(s.video_url || s.image_url) ? `<span class="pill pill-green" style="font-size: 10px; padding: 2px 6px;">${s.media_type === 'image' ? '动态分镜' : '已生成'}</span>` : ''}
+                ${(s.video_url || s.image_url) ? `<span class="pill pill-green" style="font-size: 10px; padding: 2px 6px;">${s.video_url ? '视频就绪' : '动态分镜'}</span>` : ''}
               </div>
 
-              ${(s.video_url || s.image_url) ? (() => {
-                const mediaSrc = s.video_url || s.image_url || '';
-                const isImageMedia = s.media_type === 'image' || /\.(png|jpe?g|webp|gif)($|\?)/i.test(mediaSrc) || mediaSrc.startsWith('data:image/');
-                let motionClass = 'camera-motion-zoom';
-                const cm = (s.camera_movement || '').toLowerCase();
-                if (cm.includes('切') || cm.includes('摇') || cm.includes('移') || cm.includes('横')) {
-                  motionClass = 'camera-motion-pan';
-                } else if (cm.includes('晃') || cm.includes('手持') || cm.includes('抖')) {
-                  motionClass = 'camera-motion-jitter';
-                }
-
-                if (isImageMedia) {
-                  return `
-                    <div style="position: relative; margin-top: 6px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-subtle); aspect-ratio: 9/16; max-height: 260px; display: flex; align-items: center; justify-content: center;">
-                      <img src="${escapeHtml(mediaSrc)}" alt="Shot #${s.shot_num}" class="drama-cinema-img ${motionClass}" style="width: 100%; height: 100%; object-fit: cover; animation-duration: ${s.duration_sec || 6}s;" />
-                      <div style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.72); backdrop-filter: blur(4px); padding: 3px 8px; border-radius: 4px; font-size: 10.5px; color: #10b981; display: flex; align-items: center; gap: 4px; border: 1px solid rgba(16,185,129,0.3);">
-                        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
-                        ${s.provider === 'workbuddy2api' ? 'WorkBuddy 逆向视觉' : '动态分镜'} · ${escapeHtml(s.camera_movement || '动态运镜')} (${s.duration_sec || 5}s)
-                      </div>
-                      <div style="position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.75); font-size: 11px;">
-                        <span style="color: var(--accent-green); display: flex; align-items: center; gap: 4px;"><svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> 画面就绪</span>
-                        <div style="display: flex; gap: 6px;">
-                          <a href="${escapeHtml(mediaSrc)}" target="_blank" download="shot_${s.shot_num}.png" class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;">下载分镜</a>
-                          <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">重新生成</button>
-                        </div>
-                      </div>
-                    </div>
-                  `;
-                }
-
-                return `
-                  <div style="margin-top: 6px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-subtle);">
-                    <video src="${escapeHtml(s.video_url)}" controls playsinline preload="metadata" style="width: 100%; aspect-ratio: 9/16; max-height: 250px; object-fit: contain; display: block;"></video>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.6); font-size: 11px;">
-                      <span style="color: var(--accent-green); display: flex; align-items: center; gap: 4px;"><svg class="icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> 视频就绪 (${s.duration_sec || 5}s)</span>
-                      <div style="display: flex; gap: 6px;">
-                        <a href="${escapeHtml(s.video_url)}" target="_blank" download="shot_${s.shot_num}.mp4" class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;">下载</a>
-                        <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 6px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">重新生成</button>
-                      </div>
-                    </div>
-                    ${s.video_notice ? `
-                      <div style="padding: 4px 10px; background: rgba(59,130,246,0.08); border-top: 1px solid rgba(59,130,246,0.15); font-size: 10.5px; color: #60a5fa;">
-                        ${escapeHtml(s.video_notice)}
-                      </div>
-                    ` : ''}
+              <!-- 三联卡位：首帧 / 尾帧 / 视频 -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; margin-bottom: 10px;">
+                <!-- 槽位1: 首帧起势 -->
+                <div class="frame-control-slot ${s.first_frame_url ? 'active' : ''}">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 10.5px; font-weight: 700; color: #60a5fa;">首帧起势</span>
+                    ${s.first_frame_url ? `<span class="pill pill-blue" style="font-size: 9px; padding: 1px 4px;">已定帧</span>` : ''}
                   </div>
-                `;
-              })() : (s.video_status === 'processing' ? `
-                <div id="shotPollingCard_${s.shot_num}" style="margin-top: 6px; padding: 14px; text-align: center; background: rgba(59,130,246,0.06); border: 1px dashed var(--accent-blue); border-radius: 8px;">
+                  ${s.first_frame_url ? `
+                    <img src="${escapeHtml(s.first_frame_url)}" class="frame-thumb" alt="首帧" />
+                  ` : `
+                    <div class="frame-empty-placeholder">
+                      <svg class="icon-sm" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      <div style="margin-top: 4px;">未锁定首帧</div>
+                    </div>
+                  `}
+                  <div style="display: flex; gap: 4px; margin-top: auto;">
+                    <button class="btn btn-secondary" style="flex: 1; font-size: 10px; padding: 3px 2px;" onclick="triggerGenerateShotFrame(${s.shot_num}, 'first', false, this)" title="基于视觉Prompt与登场主角定妆照生成首帧">
+                      ${s.first_frame_url ? '重绘首帧' : 'AI 生成首帧'}
+                    </button>
+                    <button class="btn btn-ghost" style="font-size: 10px; padding: 3px 4px;" onclick="triggerGenerateShotFrame(${s.shot_num}, 'first', true, this)" title="模拟免Key体验">
+                      模拟
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 槽位2: 尾帧落点 -->
+                <div class="frame-control-slot ${s.last_frame_url ? 'active' : ''}">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 10.5px; font-weight: 700; color: #a78bfa;">尾帧落点</span>
+                    ${s.last_frame_url ? `<span class="pill pill-gold" style="font-size: 9px; padding: 1px 4px;">已定帧</span>` : ''}
+                  </div>
+                  ${s.last_frame_url ? `
+                    <img src="${escapeHtml(s.last_frame_url)}" class="frame-thumb" alt="尾帧" />
+                  ` : `
+                    <div class="frame-empty-placeholder">
+                      <svg class="icon-sm" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      <div style="margin-top: 4px;">可选尾帧</div>
+                    </div>
+                  `}
+                  <div style="display: flex; gap: 4px; margin-top: auto;">
+                    <button class="btn btn-secondary" style="flex: 1; font-size: 10px; padding: 3px 2px;" onclick="triggerGenerateShotFrame(${s.shot_num}, 'last', false, this)" title="为镜头运镜收尾定格画面">
+                      ${s.last_frame_url ? '重绘尾帧' : 'AI 生成尾帧'}
+                    </button>
+                    <button class="btn btn-ghost" style="font-size: 10px; padding: 3px 4px;" onclick="triggerGenerateShotFrame(${s.shot_num}, 'last', true, this)" title="模拟免Key体验">
+                      模拟
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 槽位3: 9:16 成片/预览播放 -->
+                <div class="frame-control-slot ${s.video_url ? 'active' : ''}">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 10.5px; font-weight: 700; color: #34d399;">9:16 成片</span>
+                    ${s.video_url ? `<span class="pill pill-green" style="font-size: 9px; padding: 1px 4px;">${s.duration_sec || 5}s</span>` : ''}
+                  </div>
+                  ${s.video_url ? `
+                    <video src="${escapeHtml(s.video_url)}" controls playsinline preload="metadata" class="frame-thumb" style="object-fit: contain;"></video>
+                  ` : (s.image_url ? `
+                    <img src="${escapeHtml(s.image_url)}" class="frame-thumb" alt="动态分镜" />
+                  ` : `
+                    <div class="frame-empty-placeholder">
+                      <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                      <div style="margin-top: 4px;">待生视频</div>
+                    </div>
+                  `)}
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
+                    ${s.video_url ? `
+                      <a href="${escapeHtml(s.video_url)}" target="_blank" download="shot_${s.shot_num}.mp4" class="btn btn-ghost" style="font-size: 10px; padding: 3px 6px; width: 100%; text-align: center;">下载视频</a>
+                    ` : (s.image_url ? `
+                      <a href="${escapeHtml(s.image_url)}" target="_blank" download="shot_${s.shot_num}.png" class="btn btn-ghost" style="font-size: 10px; padding: 3px 6px; width: 100%; text-align: center;">下载分镜</a>
+                    ` : `
+                      <span style="font-size: 10px; color: var(--text-muted); text-align: center; width: 100%;">未渲染</span>
+                    `)}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 视频状态提示 (报错或排队) -->
+              ${s.video_status === 'processing' ? `
+                <div id="shotPollingCard_${s.shot_num}" style="margin-top: 6px; padding: 12px; text-align: center; background: rgba(59,130,246,0.06); border: 1px dashed var(--accent-blue); border-radius: 8px;">
                   <svg class="icon spin" viewBox="0 0 24 24" style="color: var(--accent-blue); margin-bottom: 6px;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
                   <div style="font-size: 12px; color: #fff; font-weight: 600;">AI 视频排队渲染中...</div>
                   <div id="shotPollTimerText_${s.shot_num}" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">全自动轮询守护中 · 渲染完毕自动呈现</div>
@@ -5504,25 +5640,30 @@ function copyTampermonkeyUrl() {
                     <button class="btn btn-ghost" style="font-size: 10.5px; padding: 2px 8px;" onclick="checkShotVideoStatus(${s.shot_num}, '${s.video_task_id || ''}', this)">立即刷新</button>
                   </div>
                 </div>
-              ` : `
-                ${s.video_status === 'failed' && s.video_error ? `
-                  <div style="margin-top: 6px; padding: 8px 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; font-size: 11px; color: #f87171; line-height: 1.45;">
-                    <div style="font-weight: 600; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
-                      <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                      视频生成提示:
-                    </div>
-                    <div style="word-break: break-all; white-space: pre-wrap; font-size: 10.5px; opacity: 0.95;">${escapeHtml(s.video_error)}</div>
+              ` : ''}
+
+              ${s.video_status === 'failed' && s.video_error ? `
+                <div style="margin-top: 6px; padding: 8px 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; font-size: 11px; color: #f87171; line-height: 1.45;">
+                  <div style="font-weight: 600; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
+                    <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    视频生成提示:
                   </div>
-                ` : ''}
-                <div style="margin-top: 6px; display: flex; gap: 6px;">
-                  <button class="btn btn-primary" style="flex: 1; font-size: 11px; padding: 5px 8px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">
-                    <span><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> ${s.video_status === 'failed' ? '重新调用视频API' : '生成本镜视频 (9:16)'}</span>
-                  </button>
-                  <button class="btn btn-secondary" style="font-size: 11px; padding: 5px 8px;" onclick="triggerShotVideoGeneration(${s.shot_num}, true, this)" title="免耗 API Key 构建动态样片">
-                    <span>模拟体验(免Key)</span>
-                  </button>
+                  <div style="word-break: break-all; white-space: pre-wrap; font-size: 10.5px; opacity: 0.95;">${escapeHtml(s.video_error)}</div>
                 </div>
-              `)}
+              ` : ''}
+
+              <!-- 智能视频生成按钮组 -->
+              <div style="margin-top: 8px; display: flex; gap: 6px;">
+                <button class="btn btn-primary" style="flex: 1; font-size: 11px; padding: 6px 8px;" onclick="triggerShotVideoGeneration(${s.shot_num}, false, this)">
+                  <span>
+                    <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    ${s.first_frame_url && s.last_frame_url ? '基于首尾双帧控镜生视频' : (s.first_frame_url ? '基于首帧图生视频 (I2V)' : 'AI 文生视频 (9:16)')}
+                  </span>
+                </button>
+                <button class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;" onclick="triggerShotVideoGeneration(${s.shot_num}, true, this)" title="免耗 API Key 构建动态样片">
+                  <span>模拟样片</span>
+                </button>
+              </div>
             </div>
           </div>
         `;
@@ -5530,6 +5671,9 @@ function copyTampermonkeyUrl() {
 
       html += `</div>`;
       container.innerHTML = html;
+
+      // 自动加载登场角色定妆照画廊
+      loadDramaCharacters();
 
       // 自动唤醒并接管所有正在排队中的分镜视频自动轮询
       autoResumePendingVideoPollers(d);
@@ -5695,6 +5839,210 @@ function copyTampermonkeyUrl() {
       if (menu) menu.style.display = "none";
 
       window.location.href = `/api/drama/export?book_id=${encodeURIComponent(bid)}&episode_num=${currentDramaEpisode}&format=${encodeURIComponent(format)}`;
+    }
+
+    // ==========================================
+    // 角色定妆照与首尾帧控制系统
+    // ==========================================
+    let cachedDramaCharacters = [];
+
+    async function loadDramaCharacters() {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) return;
+      const gallery = document.getElementById("dramaCharacterGallery");
+      if (!gallery) return;
+
+      try {
+        const res = await fetch(`/api/drama/character/list?book_id=${encodeURIComponent(bid)}`);
+        const data = await res.json();
+        if (data.status === "ok" && data.characters) {
+          cachedDramaCharacters = data.characters;
+          renderDramaCharacterGallery(data.characters);
+        } else {
+          gallery.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 14px;">暂未提取到世界观角色</div>`;
+        }
+      } catch (err) {
+        gallery.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 14px;">加载角色档案失败: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderDramaCharacterGallery(chars) {
+      const gallery = document.getElementById("dramaCharacterGallery");
+      if (!gallery) return;
+
+      if (!chars || chars.length === 0) {
+        gallery.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
+            当前小说世界观暂无独立角色卡，可点击【批量生成】让 AI 自动萃取主角并定妆！
+          </div>
+        `;
+        return;
+      }
+
+      gallery.innerHTML = chars.map(c => `
+        <div class="drama-char-card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 12.5px; font-weight: 700; color: #fff;">${escapeHtml(c.name || '主角')}</div>
+            <span class="pill pill-gold" style="font-size: 9.5px; padding: 1px 5px;">${escapeHtml(c.role_title || '关键角色')}</span>
+          </div>
+          ${c.portrait_url ? `
+            <div style="position: relative;">
+              <img src="${escapeHtml(c.portrait_url)}" alt="${escapeHtml(c.name)}" class="drama-char-poster" />
+              <div style="position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 2px 6px; border-radius: 4px; font-size: 9.5px; color: #34d399;">
+                9:16 定妆照
+              </div>
+            </div>
+          ` : `
+            <div class="frame-empty-placeholder" style="aspect-ratio: 9/16; max-height: 220px;">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div style="margin-top: 6px; font-weight: 600;">未生成定妆照</div>
+              <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;">点击下方按钮生成</div>
+            </div>
+          `}
+          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; max-height: 38px; overflow: hidden; text-overflow: ellipsis;">
+            <b>外貌服饰:</b> ${escapeHtml(c.costume || c.personality || '标准竖屏短剧主角服装')}
+          </div>
+          <div style="display: flex; gap: 4px; margin-top: auto;">
+            <button class="btn btn-primary" style="flex: 1; font-size: 10px; padding: 4px 6px;" onclick="triggerGenerateCharacterPortrait('${escapeHtml(c.name)}', '${escapeHtml(c.id || '')}', false, this)">
+              ${c.portrait_url ? '重绘定妆' : 'AI 生成定妆'}
+            </button>
+            <button class="btn btn-secondary" style="font-size: 10px; padding: 4px 6px;" onclick="triggerGenerateCharacterPortrait('${escapeHtml(c.name)}', '${escapeHtml(c.id || '')}', true, this)" title="免Key模拟定妆照">
+              模拟
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function triggerGenerateCharacterPortrait(charName, charId = "", isMock = false, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("请先选择作品！");
+        return;
+      }
+      let origHtml = "";
+      if (btn) {
+        btn.disabled = true;
+        origHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 生成中...`;
+      }
+      showToast(isMock ? `正在为【${charName}】模拟生成 9:16 定妆照...` : `AI 视觉引擎正在为【${charName}】生成 9:16 主角定妆照...`);
+
+      try {
+        const res = await fetch("/api/drama/character/generate_portrait", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book_id: bid,
+            character_name: charName,
+            character_id: charId,
+            mock: isMock
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast(`【${charName}】9:16 定妆照生成完毕！已锁入视觉一致性特征库`);
+          loadDramaCharacters();
+        } else {
+          alert("定妆照生成失败: " + (data.message || data.error || "未知异常"));
+        }
+      } catch (err) {
+        alert("请求异常: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
+    }
+
+    async function batchGenerateCharacterPortraits(isMock = false, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("请先选择作品！");
+        return;
+      }
+      if (!cachedDramaCharacters || cachedDramaCharacters.length === 0) {
+        alert("当前暂无可定妆的角色，请先确认小说世界观中有角色！");
+        return;
+      }
+      let origHtml = "";
+      if (btn) {
+        btn.disabled = true;
+        origHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 批量生成中...`;
+      }
+      showToast(`正在逐个为小说主要登场角色生成 9:16 定妆照...`, 6000);
+
+      try {
+        for (const c of cachedDramaCharacters) {
+          await fetch("/api/drama/character/generate_portrait", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              book_id: bid,
+              character_name: c.name,
+              character_id: c.id || "",
+              mock: isMock
+            })
+          });
+        }
+        showToast("登场角色定妆照已全部完成生成与入库！");
+        loadDramaCharacters();
+      } catch (err) {
+        alert("批量定妆中断: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
+    }
+
+    async function triggerGenerateShotFrame(shotNum, frameType = "first", isMock = false, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("书库为空，请先选择作品！");
+        return;
+      }
+      let origHtml = "";
+      if (btn) {
+        btn.disabled = true;
+        origHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 生成中...`;
+      }
+      const frameLabel = frameType === "first" ? "首帧起势" : "尾帧落点";
+      showToast(isMock ? `正在为镜号 #${shotNum} 模拟生成${frameLabel}...` : `AI 视觉引擎正在为镜号 #${shotNum} 生成${frameLabel}（融合登场主角定妆特征）...`);
+
+      try {
+        const res = await fetch("/api/drama/shot/generate_frame", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book_id: bid,
+            episode_num: currentDramaEpisode,
+            shot_num: shotNum,
+            frame_type: frameType,
+            mock: isMock
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok" && data.drama) {
+          const idx = currentDramas.findIndex(x => x.episode_num === currentDramaEpisode);
+          if (idx !== -1) currentDramas[idx] = data.drama;
+          renderSelectedDramaEpisode(currentDramaEpisode);
+          showToast(`镜号 #${shotNum} ${frameLabel}已定格！`);
+        } else {
+          alert(`${frameLabel}生成失败: ` + (data.message || data.error || "未知异常"));
+        }
+      } catch (err) {
+        alert("请求异常: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
     }
 
     // ==========================================

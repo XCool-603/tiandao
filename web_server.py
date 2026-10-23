@@ -2330,6 +2330,31 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "dramas": dramas}, ensure_ascii=False).encode("utf-8"))
             return
 
+        if path == "/api/drama/character/list":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [None])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            chars = []
+            if target_book and hasattr(target_book, "world") and target_book.world:
+                for cid, c in target_book.world.characters.items():
+                    chars.append({
+                        "id": cid,
+                        "name": c.get("name", "无名"),
+                        "title": c.get("title", "主角"),
+                        "camp": c.get("camp", "主角阵营"),
+                        "cultivation_level": c.get("cultivation_level", ""),
+                        "public_profile": c.get("public_profile", ""),
+                        "portrait_url": c.get("portrait_url", ""),
+                        "portrait_status": c.get("portrait_status", "none"),
+                        "portrait_prompt": c.get("portrait_prompt", ""),
+                        "costume": c.get("costume", "")
+                    })
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "characters": chars}, ensure_ascii=False).encode("utf-8"))
+            return
+
         if path == "/api/drama/export":
             parsed_qs = urllib.parse.parse_qs(parsed.query)
             bid = parsed_qs.get("book_id", [None])[0]
@@ -2836,9 +2861,18 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
                 prompt = target_shot.get("ai_prompt") or target_shot.get("visual") or "9:16 vertical cinematic short drama shot"
                 duration = target_shot.get("duration_sec", 5)
+                first_frame = req_data.get("first_frame_url", "") or target_shot.get("first_frame_url", "")
+                last_frame = req_data.get("last_frame_url", "") or target_shot.get("last_frame_url", "")
 
                 v_agent = VideoAgent()
-                v_res = v_agent.submit_video_task(prompt, aspect_ratio="9:16", duration=duration, force_mock=use_mock)
+                v_res = v_agent.submit_video_task(
+                    prompt,
+                    aspect_ratio="9:16",
+                    duration=duration,
+                    first_frame_url=first_frame,
+                    last_frame_url=last_frame,
+                    force_mock=use_mock
+                )
 
                 if v_res.get("status") == "completed":
                     target_shot["video_url"] = v_res.get("video_url", "")
@@ -2857,7 +2891,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     video_task_mgr.register_task(target_book.id, ep_num, shot_num, v_res.get("task_id", ""), v_agent)
                 else:
                     # 外部网关未就绪或返回 404 时，自动无缝启动 9:16 动态分镜样片保底，确保播放器绝对可用！
-                    fallback_mock = v_agent._mock_submit(prompt, duration)
+                    fallback_mock = v_agent._mock_submit(prompt, duration, first_frame_url=first_frame, last_frame_url=last_frame)
                     target_shot["video_url"] = fallback_mock.get("video_url", "")
                     target_shot["video_status"] = "completed"
                     target_shot["media_type"] = "video"
@@ -2883,6 +2917,166 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     "result": v_res,
                     "message": v_res.get("message", f"镜号 #{shot_num} 视频已处理")
                 }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/shot/generate_frame":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                ep_num = req_data.get("episode_num")
+                shot_num = req_data.get("shot_num")
+                frame_type = req_data.get("frame_type", "first")
+                use_mock = req_data.get("mock", False)
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if not target_book:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": "作品不存在"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                target_drama = next((d for d in getattr(target_book, "dramas", []) if d.get("episode_num") == ep_num), None)
+                target_shot = next((s for s in (target_drama.get("shots", []) if target_drama else []) if s.get("shot_num") == shot_num), None)
+                if not target_shot:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": f"未找到镜号 #{shot_num}"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                # 收集本镜出场角色的定妆人设特质，注入分镜以维持人物面容一致性
+                char_traits = []
+                if hasattr(target_book, "world") and target_book.world:
+                    for c in target_book.world.characters.values():
+                        c_name = c.get("name", "")
+                        if c_name and (c_name in target_shot.get("visual", "") or c_name in target_shot.get("dialogue", "")):
+                            char_traits.append(f"{c_name} wearing {c.get('costume', 'distinctive outfit')}, {c.get('public_profile', '')}")
+                traits_str = "; ".join(char_traits)
+
+                v_agent = VideoAgent()
+                f_res = v_agent.generate_frame_image(
+                    shot_visual=target_shot.get("visual") or target_shot.get("ai_prompt", ""),
+                    shot_type=target_shot.get("shot_type", "特写"),
+                    camera_movement=target_shot.get("camera_movement", "缓缓推近"),
+                    character_traits=traits_str,
+                    frame_type=frame_type,
+                    force_mock=use_mock
+                )
+
+                if frame_type == "last":
+                    target_shot["last_frame_url"] = f_res.get("image_url", "")
+                    target_shot["last_frame_status"] = "completed"
+                else:
+                    target_shot["first_frame_url"] = f_res.get("image_url", "")
+                    target_shot["first_frame_status"] = "completed"
+
+                target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "shot": target_shot,
+                    "frame_res": f_res,
+                    "message": f"镜号 #{shot_num} {'首帧' if frame_type == 'first' else '尾帧'}关键画面已就绪！"
+                }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/character/generate_portrait":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                c_name = req_data.get("character_name", "")
+                c_id = req_data.get("character_id", "")
+                custom_desc = req_data.get("custom_desc", "")
+                use_mock = req_data.get("mock", False)
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if not target_book:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": "作品不存在"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                target_char = None
+                target_cid = None
+                if hasattr(target_book, "world") and target_book.world:
+                    if c_id and c_id in target_book.world.characters:
+                        target_char = target_book.world.characters[c_id]
+                        target_cid = c_id
+                    elif c_name:
+                        for cid, c in target_book.world.characters.items():
+                            if c.get("name") == c_name:
+                                target_char = c
+                                target_cid = cid
+                                break
+
+                if not target_char:
+                    target_cid = f"char_drama_{int(time.time()*1000)}"
+                    target_char = {
+                        "name": c_name or "主角",
+                        "title": "主角",
+                        "camp": "主角阵营",
+                        "cultivation_level": "巅峰",
+                        "public_profile": custom_desc or "冷静深沉，眼神如刀，气场全开。"
+                    }
+                    if not hasattr(target_book, "world") or not target_book.world:
+                        from world_state import WorldState
+                        target_book.world = WorldState()
+                    target_book.world.characters[target_cid] = target_char
+
+                v_agent = VideoAgent()
+                p_res = v_agent.generate_character_portrait(
+                    name=target_char.get("name", "主角"),
+                    role_title=target_char.get("title", "主角"),
+                    visual_desc=custom_desc or target_char.get("public_profile", ""),
+                    genre=target_book.genre or "短剧",
+                    force_mock=use_mock
+                )
+
+                target_char["portrait_url"] = p_res.get("portrait_url", "")
+                target_char["portrait_prompt"] = p_res.get("portrait_prompt", "")
+                target_char["costume"] = p_res.get("costume", "")
+                target_char["portrait_status"] = "ready"
+                target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "character": target_char,
+                    "character_id": target_cid,
+                    "message": p_res.get("message", "主角定妆照已成功就绪！")
+                }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/character/update_portrait":
+                bid = req_data.get("book_id", "")
+                c_id = req_data.get("character_id", "")
+                portrait_url = req_data.get("portrait_url", "").strip()
+                costume = req_data.get("costume", "").strip()
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if target_book and hasattr(target_book, "world") and target_book.world:
+                    if c_id in target_book.world.characters:
+                        if portrait_url:
+                            target_book.world.characters[c_id]["portrait_url"] = portrait_url
+                            target_book.world.characters[c_id]["portrait_status"] = "ready"
+                        if costume:
+                            target_book.world.characters[c_id]["costume"] = costume
+                        target_book.save()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"status": "ok", "character": target_book.world.characters[c_id]}, ensure_ascii=False).encode("utf-8"))
+                        return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": "角色未找到"}, ensure_ascii=False).encode("utf-8"))
                 return
 
             if path == "/api/drama/shot/check_video_status":
