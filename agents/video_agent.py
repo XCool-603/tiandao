@@ -773,12 +773,18 @@ class VideoAgent:
         return mock_res
 
     def _generate_image_asset(self, prompt: str, mode: str = "image") -> Dict[str, Any]:
-        """调用 WorkBuddy2API 或 OpenAI 规范生图接口 (/v1/images/generations)"""
-        root_url = re.sub(r'/v1/?$', '', self.base_url)
+        """
+        专门调用正规生图接口 (Text-to-Image / /v1/images/generations)，绝不走视频接口
+        优先使用针对生图配置的 IMAGE_BASE_URL 与 IMAGE_API_KEY，其次回退自通用/短剧配置
+        """
+        img_api_key = os.getenv("IMAGE_API_KEY", "") or self.api_key
+        img_base_url = (os.getenv("IMAGE_BASE_URL", "") or self.base_url).rstrip("/")
+        root_url = re.sub(r'/v1/?$', '', img_base_url)
+
         candidate_eps = [
-            f"{self.base_url}/images/generations",
+            f"{img_base_url}/images/generations",
             f"{root_url}/v1/images/generations",
-            f"{self.base_url}/images/edits",
+            f"{img_base_url}/images/edits",
             f"{root_url}/v1/images/edits"
         ]
         seen = set()
@@ -786,15 +792,19 @@ class VideoAgent:
 
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
+            "Authorization": f"Bearer {img_api_key}"
         }
 
+        # 纯生图模型候选池（严禁混入视频模型名）
         model_candidates = [
-            getattr(self, "image_model", "dall-e-3"),
+            getattr(self, "image_model", "") or os.getenv("IMAGE_MODEL", ""),
             "dall-e-3",
             "flux-schnell",
+            "flux",
+            "stable-diffusion-xl",
             ""
         ]
+        model_candidates = [m for m in dict.fromkeys(model_candidates) if not any(k in m.lower() for k in ("video", "kling", "cogvideo"))]
 
         last_err = ""
         for ep in unique_eps:
@@ -817,8 +827,8 @@ class VideoAgent:
                             return {
                                 "status": "completed",
                                 "image_url": img_url,
-                                "provider": "workbuddy2api_image",
-                                "message": "画面生成成功"
+                                "provider": "ai_image_generation",
+                                "message": "纯生图模型渲染定妆照成功！"
                             }
                 except urllib.error.HTTPError as he:
                     body = ""
@@ -835,12 +845,13 @@ class VideoAgent:
         return {"status": "failed", "error": f"生图接口未就绪: {last_err}"}
 
     def _mock_character_portrait(self, name: str, role_title: str, visual_desc: str, prompt: str, gender: str = "male") -> Dict[str, Any]:
-        """模拟主角定妆照精选高清图库（严格按性别与东亚人像分流）"""
+        """模拟主角定妆照精选高清图库（纯静态 9:16 东亚超清人像，严格按性别与东亚人像分流）"""
         # 东亚男性主角定妆图库（中国青年武侠/都市/短剧主角男神质感）
         mock_portraits_male = [
+            "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=720&h=1280&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=720&h=1280&fit=crop&q=80",
             "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&h=1280&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&h=1280&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&h=1280&fit=crop&q=80"
+            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&h=1280&fit=crop&q=80"
         ]
         # 东亚女性主角定妆图库（中国仙侠女修/都市女主/绝美女主清丽容貌）
         mock_portraits_female = [
@@ -868,7 +879,7 @@ class VideoAgent:
             "portrait_prompt": prompt,
             "costume": visual_desc or default_costume,
             "provider": "mock_portrait",
-            "message": f"角色【{name}】({'女' if gender == 'female' else '男'})定妆照已就绪！"
+            "message": f"角色【{name}】({'女' if gender == 'female' else '男'})定妆照图片已就绪！"
         }
 
     def _mock_frame_image(self, shot_visual: str, frame_type: str, prompt: str) -> Dict[str, Any]:
