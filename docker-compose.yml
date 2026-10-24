@@ -31,6 +31,10 @@ services:
       - DRAMA_MODEL=${DRAMA_MODEL:-}
       - DRAMA_API_KEY=${DRAMA_API_KEY:-}
       - DRAMA_BASE_URL=${DRAMA_BASE_URL:-}
+      - VIDEO_API_KEY=${VIDEO_API_KEY:-}
+      - VIDEO_BASE_URL=${VIDEO_BASE_URL:-}
+      - VIDEO_MODEL=${VIDEO_MODEL:-}
+      - IMAGE_MODEL=${IMAGE_MODEL:-}
       - ADMIN_KEY=${ADMIN_KEY:-admin888}
       - TZ=Asia/Shanghai
     volumes:
