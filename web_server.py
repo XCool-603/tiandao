@@ -2619,6 +2619,10 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             has_video_key = bool(raw_video_key and raw_video_key != "your_api_key_here")
             masked_video_key = f"{raw_video_key[:3]}****{raw_video_key[-4:]}" if len(raw_video_key) > 8 else ("已独立配置" if has_video_key else "")
 
+            raw_image_key = os.getenv("IMAGE_API_KEY", "")
+            has_image_key = bool(raw_image_key and raw_image_key != "your_api_key_here")
+            masked_image_key = f"{raw_image_key[:3]}****{raw_image_key[-4:]}" if len(raw_image_key) > 8 else ("已独立配置" if has_image_key else "")
+
             cfg = {
                 "has_api_key": bool(real_key and real_key != "your_api_key_here"),
                 "api_key_masked": masked,
@@ -2634,6 +2638,10 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 "video_base_url": os.getenv("VIDEO_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
                 "has_video_key": has_video_key,
                 "video_api_key_masked": masked_video_key,
+                "image_model": os.getenv("IMAGE_MODEL", "dall-e-3"),
+                "image_base_url": os.getenv("IMAGE_BASE_URL", ""),
+                "has_image_key": has_image_key,
+                "image_api_key_masked": masked_image_key,
                 "http_port": int(os.getenv("TIANDAO_PORT", "8088")),
                 "ws_port": int(os.getenv("TIANDAO_WS_PORT", "8089"))
             }
@@ -3619,6 +3627,44 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     return
 
                 target = req_data.get("target", "novel")
+                if target == "image":
+                    test_key = req_data.get("image_api_key", "").strip()
+                    if not test_key or test_key.startswith("•") or "****" in test_key:
+                        test_key = os.getenv("IMAGE_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
+                    test_base = req_data.get("image_base_url", "").strip() or os.getenv("IMAGE_BASE_URL", "") or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+                    test_model = req_data.get("image_model", "").strip() or os.getenv("IMAGE_MODEL", "dall-e-3")
+                    t_start = time.time()
+                    try:
+                        v_agent = VideoAgent(api_key=test_key, base_url=test_base)
+                        v_agent.image_model = test_model
+                        # 探测生图连通性
+                        probe_res = v_agent._generate_image_asset("Test probe Chinese ancient immortal portrait, 8k", mode="test")
+                        latency = round((time.time() - t_start) * 1000)
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            "status": "ok" if probe_res.get("status") == "completed" else "error",
+                            "latency_ms": latency,
+                            "model": test_model,
+                            "reply": probe_res.get("message", "生图通道已成功连通并生成画面！"),
+                            "error": probe_res.get("error", ""),
+                            "target": target,
+                            "result": probe_res
+                        }, ensure_ascii=False).encode("utf-8"))
+                    except Exception as e_test:
+                        latency = round((time.time() - t_start) * 1000)
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json; charset=utf-8")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            "status": "error",
+                            "latency_ms": latency,
+                            "error": str(e_test),
+                            "target": target
+                        }, ensure_ascii=False).encode("utf-8"))
+                    return
+
                 if target == "video":
                     test_key = req_data.get("video_api_key", "").strip()
                     if not test_key or test_key.startswith("•") or "****" in test_key:
@@ -3748,6 +3794,18 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 new_video_base = req_data.get("video_base_url", "").strip() if req_data.get("video_base_url") is not None else os.getenv("VIDEO_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
                 new_video_model = req_data.get("video_model", "").strip() if req_data.get("video_model") is not None else os.getenv("VIDEO_MODEL", "cogvideox-flash")
 
+                # 生图专用配置持久化
+                input_image_key = req_data.get("image_api_key", "").strip()
+                if input_image_key and not input_image_key.startswith("•") and not "****" in input_image_key:
+                    new_image_key = input_image_key
+                elif "image_api_key" in req_data and input_image_key == "":
+                    new_image_key = ""
+                else:
+                    new_image_key = os.getenv("IMAGE_API_KEY", "")
+
+                new_image_base = req_data.get("image_base_url", "").strip() if req_data.get("image_base_url") is not None else os.getenv("IMAGE_BASE_URL", "")
+                new_image_model = req_data.get("image_model", "").strip() if req_data.get("image_model") is not None else os.getenv("IMAGE_MODEL", "dall-e-3")
+
                 new_admin_pwd = req_data.get("admin_key_new", "").strip() or os.getenv("ADMIN_KEY", "admin888")
                 new_port = req_data.get("http_port", os.getenv("TIANDAO_PORT", "8088"))
                 new_ws = req_data.get("ws_port", os.getenv("TIANDAO_WS_PORT", "8089"))
@@ -3765,6 +3823,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     "video_model": new_video_model,
                     "video_api_key": new_video_key,
                     "video_base_url": new_video_base,
+                    "image_model": new_image_model,
+                    "image_api_key": new_image_key,
+                    "image_base_url": new_image_base,
                     "admin_key": new_admin_pwd,
                     "http_port": str(new_port),
                     "ws_port": str(new_ws)

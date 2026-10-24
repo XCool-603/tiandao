@@ -715,7 +715,10 @@ class VideoAgent:
             f"costume and visual features: {visual_desc or 'distinctive iconic short drama outfit, highly detailed texture'}. "
             f"Strictly Chinese East Asian face, not Caucasian, not Western. {demo['zh_desc']}。"
         )
-        if force_mock or not self.api_key or self.api_key == "your_api_key_here":
+        img_key = os.getenv("IMAGE_API_KEY", "") or self.api_key
+        has_real_img_key = bool(img_key and img_key != "your_api_key_here")
+
+        if force_mock or not has_real_img_key:
             return self._mock_character_portrait(name, role_title, visual_desc, prompt, demo["gender"])
 
         res = self._generate_image_asset(prompt, mode="character_portrait")
@@ -728,11 +731,12 @@ class VideoAgent:
                 "portrait_url": res.get("image_url", ""),
                 "portrait_prompt": prompt,
                 "costume": visual_desc or "标志性东方短剧战袍",
-                "message": f"角色【{name}】主角定妆照已成功生成！"
+                "provider": res.get("provider", "real_ai_image"),
+                "message": f"角色【{name}】AI 真实生图原画已成功生成！"
             }
         # 回退到模拟
         mock_res = self._mock_character_portrait(name, role_title, visual_desc, prompt, demo["gender"])
-        mock_res["notice"] = res.get("error", "网关生图不可用，已自动加载高匹配度东方定妆样照")
+        mock_res["notice"] = res.get("error", "网关生图接口调用异常，已自动加载高匹配度东方定妆样照")
         return mock_res
 
     def generate_frame_image(

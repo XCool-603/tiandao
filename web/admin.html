@@ -608,6 +608,61 @@
           </div>
         </div>
 
+        <!-- 角色定妆照与首尾帧专属生图模型配置区 (TEXT-TO-IMAGE) -->
+        <div style="margin-top: 18px; margin-bottom: 18px; padding: 14px 16px; background: rgba(59, 130, 246, 0.04); border: 1px dashed rgba(59, 130, 246, 0.35); border-radius: 8px;">
+          <div style="font-weight: 700; color: #60a5fa; font-size: 13.5px; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <svg class="icon" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+              主角定妆照专属 AI 生图配置 (IMAGE_API)
+            </span>
+            <span class="pill pill-blue" style="font-size: 10px;">方案 A 真实生图原画</span>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">
+            用于生成高保真 9:16 主角定妆照、分镜首尾起终关键帧。支持各大主流文生图接口（FLUX、DALL-E 3、通义万相、Midjourney Proxy 等），精准呈现国风修仙美学与东方男女主角容颜。
+          </div>
+
+          <!-- 生图 API KEY -->
+          <div class="form-group full">
+            <label class="form-label">
+              <span>生图专用 API Key (IMAGE_API_KEY)</span>
+              <span class="pill pill-gold">留空则自动继承小说或视频Key</span>
+            </label>
+            <input type="password" id="adminImageApiKey" class="form-input" placeholder="输入真实生图接口 API Key (留空继承主Key)">
+          </div>
+
+          <!-- 生图 BASE URL -->
+          <div class="form-group">
+            <label class="form-label">生图 API Base URL (IMAGE_BASE_URL)</label>
+            <input type="text" id="adminImageBaseUrl" class="form-input" placeholder="留空默认使用通用网关地址">
+            <div class="preset-row">
+              <span class="preset-pill" onclick="setImageBaseUrl('https://api.openai.com/v1')">OpenAI 官方 (DALL-E 3)</span>
+              <span class="preset-pill" onclick="setImageBaseUrl('https://dashscope.aliyuncs.com/compatible-mode/v1')">阿里通义万相</span>
+              <span class="preset-pill" onclick="setImageBaseUrl('https://www.si2api.top/v1')">聚合网关生图</span>
+              <span class="preset-pill" onclick="setImageBaseUrl('http://localhost:3000/v1')">WorkBuddy2API 本地</span>
+            </div>
+          </div>
+
+          <!-- 生图 MODEL -->
+          <div class="form-group">
+            <label class="form-label">生图模型型号 (IMAGE_MODEL)</label>
+            <input type="text" id="adminImageModel" class="form-input" placeholder="dall-e-3">
+            <div class="preset-row">
+              <span class="preset-pill" onclick="setImageModel('dall-e-3')">dall-e-3 (OpenAI 官方)</span>
+              <span class="preset-pill" onclick="setImageModel('flux-schnell')">flux-schnell (极速FLUX)</span>
+              <span class="preset-pill" onclick="setImageModel('flux')">flux (高清FLUX)</span>
+              <span class="preset-pill" onclick="setImageModel('wanx-v1')">wanx-v1 (通义万相)</span>
+            </div>
+          </div>
+
+          <!-- 生图连通性测试按钮 -->
+          <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
+            <button type="button" class="btn btn-secondary" style="font-size: 11.5px; padding: 4px 10px;" id="btnPingImageDiagnostic" onclick="testTargetDiagnostic('image')">
+              测试生图接口连通性
+            </button>
+            <span id="diagnosticImageResult" style="font-size: 11.5px; color: var(--text-muted);"></span>
+          </div>
+        </div>
+
         <!-- 修改管理端密码 -->
         <div class="form-group">
           <label class="form-label">修改管理端管理员口令 (ADMIN_KEY)</label>
@@ -901,6 +956,19 @@
             document.getElementById("adminVideoModel").value = cfg.video_model || "";
           }
 
+          // 生图配置项回显
+          const imageKeyInput = document.getElementById("adminImageApiKey");
+          if (imageKeyInput) {
+            imageKeyInput.value = "";
+            imageKeyInput.placeholder = cfg.has_image_key ? `•••••••• (${cfg.image_api_key_masked} · 独立配置，留空保持)` : "留空则自动继承主Key或免Key体验";
+          }
+          if (document.getElementById("adminImageBaseUrl")) {
+            document.getElementById("adminImageBaseUrl").value = cfg.image_base_url || "";
+          }
+          if (document.getElementById("adminImageModel")) {
+            document.getElementById("adminImageModel").value = cfg.image_model || "dall-e-3";
+          }
+
           document.getElementById("adminKeyNew").value = "";
           if (document.getElementById("adminHttpPort")) {
             document.getElementById("adminHttpPort").value = cfg.http_port || 8088;
@@ -938,6 +1006,10 @@
       const videoBaseUrl = document.getElementById("adminVideoBaseUrl") ? document.getElementById("adminVideoBaseUrl").value.trim() : "";
       const videoModel = document.getElementById("adminVideoModel") ? document.getElementById("adminVideoModel").value.trim() : "";
 
+      const imageApiKey = document.getElementById("adminImageApiKey") ? document.getElementById("adminImageApiKey").value.trim() : "";
+      const imageBaseUrl = document.getElementById("adminImageBaseUrl") ? document.getElementById("adminImageBaseUrl").value.trim() : "";
+      const imageModel = document.getElementById("adminImageModel") ? document.getElementById("adminImageModel").value.trim() : "";
+
       const adminKeyNew = document.getElementById("adminKeyNew").value.trim();
       const httpPort = document.getElementById("adminHttpPort") ? document.getElementById("adminHttpPort").value.trim() : "8088";
       const wsPort = document.getElementById("adminWsPort") ? document.getElementById("adminWsPort").value.trim() : "8089";
@@ -965,6 +1037,9 @@
             video_api_key: videoApiKey,
             video_base_url: videoBaseUrl,
             video_model: videoModel,
+            image_api_key: imageApiKey,
+            image_base_url: imageBaseUrl,
+            image_model: imageModel,
             admin_key_new: adminKeyNew,
             http_port: httpPort,
             ws_port: wsPort
@@ -1162,9 +1237,18 @@
       const videoBaseUrl = document.getElementById("adminVideoBaseUrl") ? document.getElementById("adminVideoBaseUrl").value.trim() : "";
       const videoModel = document.getElementById("adminVideoModel") ? document.getElementById("adminVideoModel").value.trim() : "";
 
+      const imageApiKey = document.getElementById("adminImageApiKey") ? document.getElementById("adminImageApiKey").value.trim() : "";
+      const imageBaseUrl = document.getElementById("adminImageBaseUrl") ? document.getElementById("adminImageBaseUrl").value.trim() : "";
+      const imageModel = document.getElementById("adminImageModel") ? document.getElementById("adminImageModel").value.trim() : "";
+
       let btn = document.getElementById("btnPingDiagnostic");
       if (target === 'video') btn = document.getElementById("btnPingVideoDiagnostic");
       else if (target === 'drama') btn = document.getElementById("btnPingDramaDiagnostic");
+      else if (target === 'image') btn = document.getElementById("btnPingImageDiagnostic");
+
+      const imageApiKey = document.getElementById("adminImageApiKey") ? document.getElementById("adminImageApiKey").value.trim() : "";
+      const imageBaseUrl = document.getElementById("adminImageBaseUrl") ? document.getElementById("adminImageBaseUrl").value.trim() : "";
+      const imageModel = document.getElementById("adminImageModel") ? document.getElementById("adminImageModel").value.trim() : "";
 
       if (btn) btn.disabled = true;
 
@@ -1185,7 +1269,10 @@
             drama_model: dramaModel,
             video_api_key: videoApiKey,
             video_base_url: videoBaseUrl,
-            video_model: videoModel
+            video_model: videoModel,
+            image_api_key: imageApiKey,
+            image_base_url: imageBaseUrl,
+            image_model: imageModel
           })
         });
 
@@ -1225,6 +1312,8 @@
     function setDramaModel(name) { if (document.getElementById("adminDramaModel")) document.getElementById("adminDramaModel").value = name; }
     function setVideoBaseUrl(url) { if (document.getElementById("adminVideoBaseUrl")) document.getElementById("adminVideoBaseUrl").value = url; }
     function setVideoModel(name) { if (document.getElementById("adminVideoModel")) document.getElementById("adminVideoModel").value = name; }
+    function setImageBaseUrl(url) { if (document.getElementById("adminImageBaseUrl")) document.getElementById("adminImageBaseUrl").value = url; }
+    function setImageModel(name) { if (document.getElementById("adminImageModel")) document.getElementById("adminImageModel").value = name; }
 
     // 系统版本与在线更新逻辑
     async function adminCheckVersion() {
