@@ -5879,17 +5879,23 @@ function copyTampermonkeyUrl() {
         return;
       }
 
-      gallery.innerHTML = chars.map(c => `
+      gallery.innerHTML = chars.map(c => {
+        const isFem = (c.gender === 'female' || /(女|娘|姐|妹|母|妇|妻|姑|妃|仙子|圣女|剑女|翠花|苏晴|青霜|雪|霜|月|婷|静|娟|丽)/.test((c.name || '') + (c.role_title || '') + (c.public_profile || '')));
+        const genderBadge = isFem ? '<span class="pill" style="font-size: 9px; padding: 1px 4px; background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3);">女主角</span>' : '<span class="pill" style="font-size: 9px; padding: 1px 4px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">男主角</span>';
+        return `
         <div class="drama-char-card">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-size: 12.5px; font-weight: 700; color: #fff;">${escapeHtml(c.name || '主角')}</div>
+            <div style="font-size: 12.5px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 4px;">
+              <span>${escapeHtml(c.name || '主角')}</span>
+              ${genderBadge}
+            </div>
             <span class="pill pill-gold" style="font-size: 9.5px; padding: 1px 5px;">${escapeHtml(c.role_title || '关键角色')}</span>
           </div>
           ${c.portrait_url ? `
             <div style="position: relative;">
               <img src="${escapeHtml(c.portrait_url)}" alt="${escapeHtml(c.name)}" class="drama-char-poster" />
               <div style="position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 2px 6px; border-radius: 4px; font-size: 9.5px; color: #34d399;">
-                9:16 定妆照
+                9:16 东方定妆照
               </div>
             </div>
           ` : `
@@ -5900,21 +5906,22 @@ function copyTampermonkeyUrl() {
             </div>
           `}
           <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; max-height: 38px; overflow: hidden; text-overflow: ellipsis;">
-            <b>外貌服饰:</b> ${escapeHtml(c.costume || c.personality || '标准竖屏短剧主角服装')}
+            <b>外貌服饰:</b> ${escapeHtml(c.costume || c.personality || '标准东方短剧主角服饰')}
           </div>
           <div style="display: flex; gap: 4px; margin-top: auto;">
-            <button class="btn btn-primary" style="flex: 1; font-size: 10px; padding: 4px 6px;" onclick="triggerGenerateCharacterPortrait('${escapeHtml(c.name)}', '${escapeHtml(c.id || '')}', false, this)">
+            <button class="btn btn-primary" style="flex: 1; font-size: 10px; padding: 4px 6px;" onclick="triggerGenerateCharacterPortrait('${escapeHtml(c.name)}', '${escapeHtml(c.id || '')}', false, this, '${isFem ? 'female' : 'male'}')">
               ${c.portrait_url ? '重绘定妆' : 'AI 生成定妆'}
             </button>
-            <button class="btn btn-secondary" style="font-size: 10px; padding: 4px 6px;" onclick="triggerGenerateCharacterPortrait('${escapeHtml(c.name)}', '${escapeHtml(c.id || '')}', true, this)" title="免Key模拟定妆照">
+            <button class="btn btn-secondary" style="font-size: 10px; padding: 4px 6px;" onclick="triggerGenerateCharacterPortrait('${escapeHtml(c.name)}', '${escapeHtml(c.id || '')}', true, this, '${isFem ? 'female' : 'male'}')" title="免Key模拟定妆照">
               模拟
             </button>
           </div>
         </div>
-      `).join("");
+      `;
+      }).join("");
     }
 
-    async function triggerGenerateCharacterPortrait(charName, charId = "", isMock = false, btn = null) {
+    async function triggerGenerateCharacterPortrait(charName, charId = "", isMock = false, btn = null, gender = "") {
       const bid = globalState ? globalState.book_id : "";
       if (!bid) {
         alert("请先选择作品！");
@@ -5926,7 +5933,7 @@ function copyTampermonkeyUrl() {
         origHtml = btn.innerHTML;
         btn.innerHTML = `<svg class="icon spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 生成中...`;
       }
-      showToast(isMock ? `正在为【${charName}】模拟生成 9:16 定妆照...` : `AI 视觉引擎正在为【${charName}】生成 9:16 主角定妆照...`);
+      showToast(isMock ? `正在为【${charName}】模拟生成 9:16 东方定妆照...` : `AI 视觉引擎正在为【${charName}】生成 9:16 东方主角定妆照...`);
 
       try {
         const res = await fetch("/api/drama/character/generate_portrait", {
@@ -5936,6 +5943,7 @@ function copyTampermonkeyUrl() {
             book_id: bid,
             character_name: charName,
             character_id: charId,
+            gender: gender,
             mock: isMock
           })
         });

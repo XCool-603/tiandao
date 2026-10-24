@@ -106,7 +106,11 @@ class DramaAgent:
 1. 0-5s 黄金Hook：第一眼就要有致命危机或巨大冲突抓人眼球；
 2. 40-70s 高潮爆发：正面冲突对峙、恶霸破门/主角亮剑、残忍反杀或无情反转；
 3. 85-90s 悬念断章：危机升级/神秘势力到来/致命一击前戛然而止，促使观众划向下一集；
-4. 视频 Prompt 规范：为可灵 (Kling AI) 或即梦 (Jimeng) 提供提示词，必须符合 9:16 竖屏短剧视觉，电影级构图，逼真质感，人物特征一致，中英文双语。
+4. 东方东亚面孔与精准性别强制约束（极其重要）：
+   - 本剧所有人物必须明确指定为东亚面孔/中国人（East Asian / Chinese face），严禁生成白人或外国人面孔！
+   - 提示词中必须严格遵循小说角色性别：女性角色必须显式使用 "beautiful Chinese woman / young East Asian female / heroine"；男性角色必须显式使用 "handsome Chinese man / young East Asian male / hero"；严禁女性被生成为男性！
+5. 视频 Prompt 规范：为可灵 (Kling AI) 或即梦 (Jimeng) 提供提示词，必须符合 9:16 竖屏短剧视觉，电影级构图，逼真质感，人物特征一致，中英文双语。格式示例：
+   "9:16 vertical short drama shot, [Chinese woman/man + 年龄 + 东方五官 + 服饰 + 镜头运镜], cinematic photorealistic lighting, dramatic contrast, 8k resolution, [中文核心画面与东方气质描述]"
 
 【返回格式】：
 请严格输出标准 JSON 对象，禁止包裹额外文本：

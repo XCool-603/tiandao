@@ -2342,6 +2342,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                         "name": c.get("name", "无名"),
                         "title": c.get("title", "主角"),
                         "camp": c.get("camp", "主角阵营"),
+                        "gender": c.get("gender", ""),
                         "cultivation_level": c.get("cultivation_level", ""),
                         "public_profile": c.get("public_profile", ""),
                         "portrait_url": c.get("portrait_url", ""),
@@ -3026,12 +3027,14 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                         target_book.world = WorldState()
                     target_book.world.characters[target_cid] = target_char
 
+                req_gender = req_data.get("gender", "") or target_char.get("gender", "")
                 v_agent = VideoAgent()
                 p_res = v_agent.generate_character_portrait(
                     name=target_char.get("name", "主角"),
                     role_title=target_char.get("title", "主角"),
                     visual_desc=custom_desc or target_char.get("public_profile", ""),
                     genre=target_book.genre or "短剧",
+                    gender=req_gender,
                     force_mock=use_mock
                 )
 
@@ -3039,6 +3042,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 target_char["portrait_prompt"] = p_res.get("portrait_prompt", "")
                 target_char["costume"] = p_res.get("costume", "")
                 target_char["portrait_status"] = "ready"
+                if p_res.get("gender"):
+                    target_char["gender"] = p_res.get("gender")
                 target_book.save()
 
                 self.send_response(200)

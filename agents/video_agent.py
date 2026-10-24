@@ -653,27 +653,70 @@ class VideoAgent:
         }
 
     # ================= 主角定妆照与分镜首尾帧生图实现 =================
+    @staticmethod
+    def infer_gender_and_demographics(name: str, role_title: str = "", visual_desc: str = "") -> Dict[str, str]:
+        """
+        根据角色名、称号、外观描述精确推断性别与东亚人像标签，彻底杜绝女性生成男相或生成西方外国人面孔
+        """
+        combined = f"{name} {role_title} {visual_desc}".lower()
+        female_keywords = [
+            "女", "娘", "姐", "妹", "母", "妇", "妻", "姑", "妃", "仙子", "圣女", "剑女", 
+            "师妹", "师姐", "师尊女", "道姑", "公主", "夫人", "小姐", "翠花", "苏晴", "青霜", 
+            "雪", "莲", "霜", "月", "瑶", "柔", "婷", "静", "娜", "娟", "丽", "芳", "敏",
+            "female", "woman", "girl", "lady", "heroine", "actress"
+        ]
+        is_female = any(kw in combined for kw in female_keywords)
+
+        if is_female:
+            gender_tag = "female"
+            en_desc = "East Asian beautiful young woman, Chinese female face, delicate facial features, feminine graceful charisma"
+            zh_desc = "东亚绝色东方女性面孔，五官清丽出尘，中国短剧女主角质感"
+        else:
+            gender_tag = "male"
+            en_desc = "East Asian handsome young man, Chinese male face, defined jawline, masculine heroic charisma"
+            zh_desc = "东亚冷峻英挺东方男性面孔，剑眉星目，中国短剧男主角气场"
+
+        return {
+            "gender": gender_tag,
+            "en_desc": en_desc,
+            "zh_desc": zh_desc
+        }
+
     def generate_character_portrait(
         self,
         name: str,
         role_title: str = "主角",
         visual_desc: str = "",
         genre: str = "短剧",
+        gender: str = "",
         force_mock: bool = False
     ) -> Dict[str, Any]:
         """
         生成主角/关键角色 9:16 电影级定妆照（Character Concept Art）
-        作为全剧人物面容与服饰一致性基准
+        作为全剧人物面容与服饰一致性基准，强制指定东亚国人面孔与准确性别
         """
+        demo = self.infer_gender_and_demographics(name, role_title, visual_desc)
+        if gender:
+            if gender in ["女", "female", "woman"]:
+                demo["gender"] = "female"
+                demo["en_desc"] = "East Asian beautiful young woman, Chinese female face, delicate facial features, feminine graceful charisma"
+                demo["zh_desc"] = "东亚绝色东方女性面孔，五官清丽出尘，中国短剧女主角质感"
+            elif gender in ["男", "male", "man"]:
+                demo["gender"] = "male"
+                demo["en_desc"] = "East Asian handsome young man, Chinese male face, defined jawline, masculine heroic charisma"
+                demo["zh_desc"] = "东亚冷峻英挺东方男性面孔，剑眉星目，中国短剧男主角气场"
+
         prompt = (
             f"9:16 vertical short drama cinematic character concept portrait, "
             f"masterpiece, 8k resolution, photorealistic, dramatic studio lighting, "
             f"sharp focus, three-quarter angle hero pose, "
+            f"demographics: {demo['en_desc']}, "
             f"character: {name} ({role_title}), genre: {genre}, "
-            f"costume and visual features: {visual_desc or 'sharp piercing gaze, distinctive hero outfit, highly detailed texture'}"
+            f"costume and visual features: {visual_desc or 'distinctive iconic short drama outfit, highly detailed texture'}. "
+            f"Strictly Chinese East Asian face, not Caucasian, not Western. {demo['zh_desc']}。"
         )
         if force_mock or not self.api_key or self.api_key == "your_api_key_here":
-            return self._mock_character_portrait(name, role_title, visual_desc, prompt)
+            return self._mock_character_portrait(name, role_title, visual_desc, prompt, demo["gender"])
 
         res = self._generate_image_asset(prompt, mode="character_portrait")
         if res.get("status") == "completed":
@@ -681,14 +724,15 @@ class VideoAgent:
                 "status": "completed",
                 "name": name,
                 "role_title": role_title,
+                "gender": demo["gender"],
                 "portrait_url": res.get("image_url", ""),
                 "portrait_prompt": prompt,
-                "costume": visual_desc or "标志性短剧主角战袍",
+                "costume": visual_desc or "标志性东方短剧战袍",
                 "message": f"角色【{name}】主角定妆照已成功生成！"
             }
         # 回退到模拟
-        mock_res = self._mock_character_portrait(name, role_title, visual_desc, prompt)
-        mock_res["notice"] = res.get("error", "网关生图不可用，已自动加载高清定妆样照")
+        mock_res = self._mock_character_portrait(name, role_title, visual_desc, prompt, demo["gender"])
+        mock_res["notice"] = res.get("error", "网关生图不可用，已自动加载高匹配度东方定妆样照")
         return mock_res
 
     def generate_frame_image(
@@ -702,12 +746,13 @@ class VideoAgent:
     ) -> Dict[str, Any]:
         """
         生成分镜首帧/尾帧关键帧画面（First / Last Frame Keyframe）
-        融合角色定妆照特质以维持人物一致性
+        融合角色定妆照特质以维持人物一致性，强制东亚面孔约束
         """
         frame_label = "first frame start action keyframe" if frame_type == "first" else "end frame climax outcome keyframe"
         prompt = (
             f"9:16 vertical short drama keyframe, {frame_label}, {shot_type} shot, {camera_movement}, "
             f"cinematic photorealistic 8k, dramatic lighting, {shot_visual}. "
+            f"Characters must be East Asian Chinese descent, authentic Asian facial features, authentic gender presentation. "
             f"{'Character consistency appearance: ' + character_traits if character_traits else ''}"
         )
         if force_mock or not self.api_key or self.api_key == "your_api_key_here":
@@ -789,26 +834,41 @@ class VideoAgent:
 
         return {"status": "failed", "error": f"生图接口未就绪: {last_err}"}
 
-    def _mock_character_portrait(self, name: str, role_title: str, visual_desc: str, prompt: str) -> Dict[str, Any]:
-        """模拟主角定妆照精选高清图库"""
-        mock_portraits = [
+    def _mock_character_portrait(self, name: str, role_title: str, visual_desc: str, prompt: str, gender: str = "male") -> Dict[str, Any]:
+        """模拟主角定妆照精选高清图库（严格按性别与东亚人像分流）"""
+        # 东亚男性主角定妆图库（中国青年武侠/都市/短剧主角男神质感）
+        mock_portraits_male = [
             "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&h=1280&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=720&h=1280&fit=crop&q=80",
             "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&h=1280&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&h=1280&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=720&h=1280&fit=crop&q=80"
+            "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&h=1280&fit=crop&q=80"
+        ]
+        # 东亚女性主角定妆图库（中国仙侠女修/都市女主/绝美女主清丽容貌）
+        mock_portraits_female = [
+            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=720&h=1280&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=720&h=1280&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=720&h=1280&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=720&h=1280&fit=crop&q=80"
         ]
         import hashlib
-        idx = int(hashlib.md5(name.encode("utf-8")).hexdigest(), 16) % len(mock_portraits)
+        if gender == "female":
+            idx = int(hashlib.md5(name.encode("utf-8")).hexdigest(), 16) % len(mock_portraits_female)
+            chosen_url = mock_portraits_female[idx]
+            default_costume = "清丽修身东方古风流云锦裳，身负青罡残剑，英姿飒爽"
+        else:
+            idx = int(hashlib.md5(name.encode("utf-8")).hexdigest(), 16) % len(mock_portraits_male)
+            chosen_url = mock_portraits_male[idx]
+            default_costume = "标志性冷峻短剧主角深色战袍，腰束玄纹革带，眼神如刃"
+
         return {
             "status": "completed",
             "name": name,
             "role_title": role_title,
-            "portrait_url": mock_portraits[idx],
+            "gender": gender,
+            "portrait_url": chosen_url,
             "portrait_prompt": prompt,
-            "costume": visual_desc or "标志性极寒求生特制防弹羽绒作战服，领口配多功能战术护目镜",
+            "costume": visual_desc or default_costume,
             "provider": "mock_portrait",
-            "message": f"角色【{name}】主角定妆照已就绪！"
+            "message": f"角色【{name}】({'女' if gender == 'female' else '男'})定妆照已就绪！"
         }
 
     def _mock_frame_image(self, shot_visual: str, frame_type: str, prompt: str) -> Dict[str, Any]:
