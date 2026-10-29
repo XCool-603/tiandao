@@ -1977,6 +1977,17 @@
             </div>
           </div>
 
+                    <!-- 快捷神谕干预胶囊 (Preset Divine Decrees) -->
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+              <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 快捷神谕:
+            </span>
+            <button type="button" class="pill" style="cursor: pointer; background: rgba(59,130,246,0.12); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); font-size: 11px; padding: 2px 8px;" onclick="applyDivinePreset('天降神雷·惩戒反派')">天降神雷·惩戒反派</button>
+            <button type="button" class="pill" style="cursor: pointer; background: rgba(16,185,129,0.12); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); font-size: 11px; padding: 2px 8px;" onclick="applyDivinePreset('远古秘境现世·主角得造化')">远古秘境现世·主角得造化</button>
+            <button type="button" class="pill" style="cursor: pointer; background: rgba(236,72,153,0.12); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); font-size: 11px; padding: 2px 8px;" onclick="applyDivinePreset('绝美女修登门·突发修罗场')">绝美女修登门·突发修罗场</button>
+            <button type="button" class="pill" style="cursor: pointer; background: rgba(245,158,11,0.12); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); font-size: 11px; padding: 2px 8px;" onclick="applyDivinePreset('当众嘲讽·绝地反杀打脸')">当众嘲讽·绝地反杀打脸</button>
+            <button type="button" class="pill" style="cursor: pointer; background: rgba(168,85,247,0.12); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.3); font-size: 11px; padding: 2px 8px;" onclick="applyDivinePreset('天地异象·远古凶兽兵临城下')">天地异象·远古凶兽兵临城下</button>
+          </div>
           <div class="studio-input-row">
             <input type="text" id="decreeInput" class="decree-simple-input" placeholder="输入剧情引导词（如：主角遭遇伏击被迫动用底牌... 留空则全自动根据大纲推演）">
             
@@ -5519,7 +5530,15 @@ function copyTampermonkeyUrl() {
 
             ${s.dialogue ? `
               <div>
-                <div class="shot-section-title"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> 对白 / 旁白OS</div>
+                <div class="shot-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="display: flex; align-items: center; gap: 4px;">
+                    <svg class="icon-sm" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> 对白 / 旁白OS
+                  </span>
+                  <button class="btn btn-ghost" style="font-size: 10px; padding: 2px 7px; color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); border-radius: 4px;" onclick="playShotAudio(${d.episode_num}, ${s.shot_num || 1}, this)" title="AI 自然语音配音试听">
+                    <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    试听配音
+                  </button>
+                </div>
                 <div class="shot-dialogue-box">${escapeHtml(s.dialogue)}</div>
               </div>
             ` : ''}
@@ -5882,6 +5901,7 @@ function copyTampermonkeyUrl() {
       gallery.innerHTML = chars.map(c => {
         const isFem = (c.gender === 'female' || /(女|娘|姐|妹|母|妇|妻|姑|妃|仙子|圣女|剑女|翠花|苏晴|青霜|雪|霜|月|婷|静|娟|丽)/.test((c.name || '') + (c.role_title || '') + (c.public_profile || '')));
         const genderBadge = isFem ? '<span class="pill" style="font-size: 9px; padding: 1px 4px; background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3);">女主角</span>' : '<span class="pill" style="font-size: 9px; padding: 1px 4px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">男主角</span>';
+        const cands = c.candidates || [];
         return `
         <div class="drama-char-card">
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -5905,6 +5925,24 @@ function copyTampermonkeyUrl() {
               <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;">点击下方按钮生成</div>
             </div>
           `}
+          ${cands.length > 0 ? `
+            <div style="background: rgba(0,0,0,0.28); padding: 5px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); margin-top: 2px;">
+              <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center;">
+                <span>备选定妆 (点击一键换选):</span>
+                <span style="font-size: 9.5px; color: #60a5fa; font-weight: 600;">${cands.length} 款可选</span>
+              </div>
+              <div style="display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px;">
+                ${cands.map((candUrl, candIdx) => `
+                  <img src="${escapeHtml(candUrl)}" 
+                       title="点击切换为此款方案 #${candIdx + 1}" 
+                       style="width: 36px; height: 54px; object-fit: cover; border-radius: 4px; cursor: pointer; flex-shrink: 0; border: 2px solid ${candUrl === c.portrait_url ? '#3b82f6' : 'rgba(255,255,255,0.15)'}; box-shadow: ${candUrl === c.portrait_url ? '0 0 6px rgba(59,130,246,0.6)' : 'none'}; transition: transform 0.15s;"
+                       onmouseover="this.style.transform='scale(1.08)'"
+                       onmouseout="this.style.transform='scale(1)'"
+                       onclick="selectCharacterPortraitCandidate('${escapeHtml(c.id || c.name)}', '${escapeHtml(candUrl)}')" />
+                `).join("")}
+              </div>
+            </div>
+          ` : ''}
           <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; max-height: 38px; overflow: hidden; text-overflow: ellipsis;">
             <b>外貌服饰:</b> ${escapeHtml(c.costume || c.personality || '标准东方短剧主角服饰')}
           </div>
@@ -5961,6 +5999,81 @@ function copyTampermonkeyUrl() {
           btn.disabled = false;
           btn.innerHTML = origHtml;
         }
+      }
+    }
+
+    
+    async function selectCharacterPortraitCandidate(charId, portraitUrl) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) return;
+      try {
+        const res = await fetch("/api/drama/character/update_portrait", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book_id: bid,
+            character_id: charId,
+            portrait_url: portraitUrl
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast("已切换该主角的当前定妆照");
+          loadDramaCharacters();
+        } else {
+          showToast("换选失败: " + (data.message || "未知错误"));
+        }
+      } catch (err) {
+        showToast("请求失败: " + err.message);
+      }
+    }
+
+    let currentPlayingAudio = null;
+    function playShotAudio(epNum, shotNum, btn) {
+      const bid = globalState ? globalState.book_id : "";
+      const audioUrl = `/api/drama/shot/tts?book_id=${encodeURIComponent(bid)}&episode_num=${epNum}&shot_num=${shotNum}&t=${Date.now()}`;
+      
+      if (currentPlayingAudio) {
+        try {
+          currentPlayingAudio.pause();
+        } catch (e) {}
+        currentPlayingAudio = null;
+      }
+      
+      if (btn) {
+        btn.disabled = true;
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="icon-sm spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 配音中...`;
+        
+        const audio = new Audio(audioUrl);
+        currentPlayingAudio = audio;
+        audio.oncanplay = () => {
+          btn.disabled = false;
+          btn.innerHTML = `<svg class="icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> 播放中...`;
+        };
+        audio.onended = () => {
+          btn.disabled = false;
+          btn.innerHTML = oldHtml;
+        };
+        audio.onerror = () => {
+          btn.disabled = false;
+          btn.innerHTML = oldHtml;
+          showToast("配音音频生成或加载失败");
+        };
+        audio.play().catch(e => {
+          btn.disabled = false;
+          btn.innerHTML = oldHtml;
+          showToast("自动播放受阻: " + e.message);
+        });
+      }
+    }
+
+    function applyDivinePreset(text) {
+      const input = document.getElementById("decreeInput");
+      if (input) {
+        input.value = text;
+        input.focus();
+        showToast("已注入神谕预设: " + text);
       }
     }
 

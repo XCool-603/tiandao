@@ -1,8 +1,11 @@
 import sys
 import os
+import re
 import json
 import time
 import threading
+import hashlib
+import asyncio
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -2348,6 +2351,7 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                         "portrait_url": c.get("portrait_url", ""),
                         "portrait_status": c.get("portrait_status", "none"),
                         "portrait_prompt": c.get("portrait_prompt", ""),
+                        "candidates": c.get("candidates", []),
                         "costume": c.get("costume", "")
                     })
             self.send_response(200)
@@ -2485,6 +2489,69 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 "publish_mode": cfg.get("publish_mode", "drafts")
             }, ensure_ascii=False).encode("utf-8"))
             return
+
+        if path == "/api/drama/shot/tts":
+            # 宠溺专属：Edge-TTS 微软拟真自然语音对白与旁白一键配音生成
+            qs = urllib.parse.parse_qs(parsed.query)
+            bid = qs.get("book_id", [""])[0]
+            ep_val = qs.get("episode_num", ["1"])[0]
+            shot_val = qs.get("shot_num", ["1"])[0]
+            text = qs.get("text", [""])[0].strip()
+            voice = qs.get("voice", ["zh-CN-YunxiNeural"])[0] # 默认冷峻青年音 / zh-CN-XiaoxiaoNeural 清丽女音
+
+            if not text:
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if target_book and hasattr(target_book, "dramas"):
+                    for d in target_book.dramas:
+                        if str(d.get("episode_num")) == str(ep_val):
+                            for s in d.get("shots", []):
+                                if str(s.get("shot_num")) == str(shot_val):
+                                    text = s.get("dialogue") or s.get("visual", "")
+                                    break
+
+            if not text:
+                text = "天道演化，万物肃静。"
+
+            # 智能声音选择：若文本含女性角色提示，自动选用云夏/晓晓清丽女声
+            if "voice" not in qs:
+                if any(kw in text for kw in ("女", "姐", "妹", "翠花", "苏晴", "青霜", "夫人", "小姐", "娇", "冷哼")):
+                    voice = "zh-CN-XiaoxiaoNeural"
+                elif any(kw in text for kw in ("胖子", "王哥", "恶霸", "粗暴", "怒吼")):
+                    voice = "zh-CN-YunjianNeural"
+                else:
+                    voice = "zh-CN-YunxiNeural"
+
+            audio_dir = BASE_DIR / "output" / "audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            text_hash = hashlib.md5(f"{text}_{voice}".encode("utf-8")).hexdigest()[:12]
+            audio_path = audio_dir / f"shot_{ep_val}_{shot_val}_{text_hash}.mp3"
+
+            if not audio_path.exists() or audio_path.stat().st_size == 0:
+                try:
+                    import edge_tts
+                    async def do_tts():
+                        # 清理对白中的括号提示词，如（油腻笑）只读对白
+                        clean_text = re.sub(r'[\(（][^\)）]+[\)）]', '', text).strip() or text
+                        communicate = edge_tts.Communicate(clean_text, voice)
+                        await communicate.save(str(audio_path))
+                    asyncio.run(do_tts())
+                except Exception as e_tts:
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": f"TTS生成失败: {e_tts}"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+            if audio_path.exists():
+                audio_bytes = audio_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mpeg")
+                self.send_header("Content-Length", str(len(audio_bytes)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(audio_bytes)
+                return
 
         if path == "/api/fanqie/pending_chapter":
             qs = urllib.parse.parse_qs(parsed.query)
@@ -3050,6 +3117,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 target_char["portrait_prompt"] = p_res.get("portrait_prompt", "")
                 target_char["costume"] = p_res.get("costume", "")
                 target_char["portrait_status"] = "ready"
+                if p_res.get("candidates"):
+                    target_char["candidates"] = p_res.get("candidates")
                 if p_res.get("gender"):
                     target_char["gender"] = p_res.get("gender")
                 target_book.save()
@@ -3073,17 +3142,25 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
 
                 target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
                 if target_book and hasattr(target_book, "world") and target_book.world:
+                    target_char = None
                     if c_id in target_book.world.characters:
+                        target_char = target_book.world.characters[c_id]
+                    else:
+                        for cid, c in target_book.world.characters.items():
+                            if c.get("name") == c_id or cid == c_id:
+                                target_char = c
+                                break
+                    if target_char:
                         if portrait_url:
-                            target_book.world.characters[c_id]["portrait_url"] = portrait_url
-                            target_book.world.characters[c_id]["portrait_status"] = "ready"
+                            target_char["portrait_url"] = portrait_url
+                            target_char["portrait_status"] = "ready"
                         if costume:
-                            target_book.world.characters[c_id]["costume"] = costume
+                            target_char["costume"] = costume
                         target_book.save()
                         self.send_response(200)
                         self.send_header("Content-Type", "application/json; charset=utf-8")
                         self.end_headers()
-                        self.wfile.write(json.dumps({"status": "ok", "character": target_book.world.characters[c_id]}, ensure_ascii=False).encode("utf-8"))
+                        self.wfile.write(json.dumps({"status": "ok", "character": target_char}, ensure_ascii=False).encode("utf-8"))
                         return
 
                 self.send_response(200)

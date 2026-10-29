@@ -694,6 +694,7 @@ class VideoAgent:
         """
         生成主角/关键角色 9:16 电影级定妆照（Character Concept Art）
         作为全剧人物面容与服饰一致性基准，强制指定东亚国人面孔与准确性别
+        支持一次性返回候选图库（candidates）供创作者“后宫式翻牌挑选”
         """
         demo = self.infer_gender_and_demographics(name, role_title, visual_desc)
         if gender:
@@ -723,12 +724,15 @@ class VideoAgent:
 
         res = self._generate_image_asset(prompt, mode="character_portrait")
         if res.get("status") == "completed":
+            mock_ref = self._mock_character_portrait(name, role_title, visual_desc, prompt, demo["gender"])
+            candidates = [res.get("image_url", "")] + [c for c in mock_ref.get("candidates", []) if c != res.get("image_url", "")][:3]
             return {
                 "status": "completed",
                 "name": name,
                 "role_title": role_title,
                 "gender": demo["gender"],
                 "portrait_url": res.get("image_url", ""),
+                "candidates": candidates,
                 "portrait_prompt": prompt,
                 "costume": visual_desc or "标志性东方短剧战袍",
                 "provider": res.get("provider", "real_ai_image"),
@@ -868,10 +872,13 @@ class VideoAgent:
         if gender == "female":
             idx = int(hashlib.md5(name.encode("utf-8")).hexdigest(), 16) % len(mock_portraits_female)
             chosen_url = mock_portraits_female[idx]
+            # 候选轮换列表：当前被挑中的放首位，其余排在后面供用户备选
+            candidates = [chosen_url] + [u for u in mock_portraits_female if u != chosen_url]
             default_costume = "清丽修身东方古风流云锦裳，身负青罡残剑，英姿飒爽"
         else:
             idx = int(hashlib.md5(name.encode("utf-8")).hexdigest(), 16) % len(mock_portraits_male)
             chosen_url = mock_portraits_male[idx]
+            candidates = [chosen_url] + [u for u in mock_portraits_male if u != chosen_url]
             default_costume = "标志性冷峻短剧主角深色战袍，腰束玄纹革带，眼神如刃"
 
         return {
@@ -880,10 +887,11 @@ class VideoAgent:
             "role_title": role_title,
             "gender": gender,
             "portrait_url": chosen_url,
+            "candidates": candidates,
             "portrait_prompt": prompt,
             "costume": visual_desc or default_costume,
             "provider": "mock_portrait",
-            "message": f"角色【{name}】({'女' if gender == 'female' else '男'})定妆照图片已就绪！"
+            "message": f"角色【{name}】({'女' if gender == 'female' else '男'})定妆照图片已就绪，已生成候选画廊供随时翻牌！"
         }
 
     def _mock_frame_image(self, shot_visual: str, frame_type: str, prompt: str) -> Dict[str, Any]:
