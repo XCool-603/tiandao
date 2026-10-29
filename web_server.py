@@ -2553,6 +2553,68 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.wfile.write(audio_bytes)
                 return
 
+        if path == "/api/drama/export_jianying":
+            from jianying_exporter import JianyingDraftExporter
+            qs = urllib.parse.parse_qs(parsed.query)
+            bid = qs.get("book_id", [""])[0]
+            ep_val = qs.get("episode_num", ["1"])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            target_drama = None
+            if target_book and hasattr(target_book, "dramas"):
+                for d in target_book.dramas:
+                    if str(d.get("episode_num")) == str(ep_val):
+                        target_drama = d
+                        break
+            if not target_drama:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": f"未找到第{ep_val}集短剧数据"}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            zip_bytes = JianyingDraftExporter.export_draft_zip_bytes(
+                target_drama,
+                book_title=(target_book.title if target_book else "天道短剧")
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(len(zip_bytes)))
+            safe_title = urllib.parse.quote(f"JianyingDraft_Ep{ep_val}.zip")
+            self.send_header("Content-Disposition", f"attachment; filename={safe_title}")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(zip_bytes)
+            return
+
+        if path == "/api/drama/episode/batch_status":
+            qs = urllib.parse.parse_qs(parsed.query)
+            bid = qs.get("book_id", [""])[0]
+            ep_val = int(qs.get("episode_num", ["1"])[0])
+            task_mgr = VideoTaskManager.get_instance()
+            prog = task_mgr.get_episode_batch_status(bid, ep_val)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "progress": prog}, ensure_ascii=False).encode("utf-8"))
+            return
+
+        if path == "/api/drama/props/list":
+            qs = urllib.parse.parse_qs(parsed.query)
+            bid = qs.get("book_id", [""])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            props_list = []
+            if target_book and hasattr(target_book, "world") and target_book.world:
+                w_props = getattr(target_book.world, "props", {})
+                if isinstance(w_props, dict):
+                    props_list = list(w_props.values())
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "props": props_list}, ensure_ascii=False).encode("utf-8"))
+            return
+
         if path == "/api/fanqie/pending_chapter":
             qs = urllib.parse.parse_qs(parsed.query)
             query_book_id = qs.get("book_id", [""])[0]
@@ -3265,6 +3327,36 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     "drama": target_drama,
                     "processed_count": processed_count,
                     "message": f"第 {ep_num} 集全部 {processed_count} 个分镜头视频已触发生成！"
+                }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/drama/prop/generate":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                prop_name = req_data.get("prop_name", "").strip()
+                prop_desc = req_data.get("prop_desc", "").strip()
+                use_mock = req_data.get("mock", False)
+                v_agent = VideoAgent()
+                p_res = v_agent.generate_prop_image(prop_name, prop_desc, force_mock=use_mock)
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if target_book and hasattr(target_book, "world") and target_book.world:
+                    if not hasattr(target_book.world, "props") or not isinstance(target_book.world.props, dict):
+                        target_book.world.props = {}
+                    target_book.world.props[prop_name] = {
+                        "name": prop_name,
+                        "desc": prop_desc,
+                        "image_url": p_res.get("image_url", ""),
+                        "status": "ready"
+                    }
+                    target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "prop": p_res
                 }, ensure_ascii=False).encode("utf-8"))
                 return
 

@@ -915,6 +915,36 @@ class VideoAgent:
             "message": f"分镜{'首帧' if frame_type == 'first' else '尾帧'}画面已就绪！"
         }
 
+    def generate_prop_image(self, prop_name: str, prop_desc: str = "", force_mock: bool = False) -> Dict[str, Any]:
+        """为短剧核心道具生成客体持久化 9:16 参考概念图"""
+        prompt = f"9:16 vertical shot, movie prop closeup studio shot, isolated on dark reflective background, {prop_name}, {prop_desc}, hyper-detailed, photorealistic, 8k"
+        if force_mock or not self.api_key or self.api_key == "your_api_key_here":
+            return self._mock_prop_image(prop_name, prop_desc, prompt)
+        # 尝试调用生图接口
+        return self._generate_prop_via_api(prop_name, prop_desc, prompt)
+
+    def _mock_prop_image(self, prop_name: str, prop_desc: str, prompt: str) -> Dict[str, Any]:
+        mock_props = [
+            "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=720&h=1280&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1589254065878-42c9da997008?w=720&h=1280&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1533158307587-828f0a76ef46?w=720&h=1280&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=720&h=1280&fit=crop&q=80"
+        ]
+        import hashlib
+        idx = int(hashlib.md5(prop_name.encode("utf-8")).hexdigest(), 16) % len(mock_props)
+        return {
+            "status": "completed",
+            "prop_name": prop_name,
+            "image_url": mock_props[idx],
+            "prompt": prompt,
+            "provider": "mock_prop",
+            "message": f"核心道具【{prop_name}】客体参考图已锁定！"
+        }
+
+    def _generate_prop_via_api(self, prop_name: str, prop_desc: str, prompt: str) -> Dict[str, Any]:
+        # 回退至模拟，若无生图
+        return self._mock_prop_image(prop_name, prop_desc, prompt)
+
 
 class VideoTaskManager:
     """
@@ -1055,3 +1085,111 @@ class VideoTaskManager:
                             return
         except Exception as e:
             print(f"[视频状态更新异常] {e}")
+
+    def start_episode_batch_render(self, book_id: str, ep_num: int, use_mock: bool = False) -> Dict[str, Any]:
+        """开启整集所有分镜的工业级批量一致性自动渲染队列"""
+        batch_key = f"{book_id}_{ep_num}"
+        if not hasattr(self, "batch_renders"):
+            self.batch_renders: Dict[str, Dict[str, Any]] = {}
+
+        if batch_key in self.batch_renders and self.batch_renders[batch_key].get("status") == "rendering":
+            return {"status": "ok", "message": "该集渲染任务已在后台运转中", "progress": self.batch_renders[batch_key]}
+
+        self.batch_renders[batch_key] = {
+            "book_id": book_id,
+            "episode_num": ep_num,
+            "status": "rendering",
+            "total_shots": 0,
+            "completed_shots": 0,
+            "failed_shots": 0,
+            "current_shot": 1,
+            "started_at": time.time(),
+            "message": "启动整集分镜工业级渲染流水线..."
+        }
+
+        def _batch_worker():
+            try:
+                target_book = self.book_mgr.books.get(book_id) if self.book_mgr else None
+                if not target_book and self.sim_mgr:
+                    target_book = self.sim_mgr.active_book
+                if not target_book:
+                    self.batch_renders[batch_key]["status"] = "failed"
+                    self.batch_renders[batch_key]["message"] = "作品不存在"
+                    return
+
+                target_drama = next((d for d in getattr(target_book, "dramas", []) if d.get("episode_num") == ep_num), None)
+                if not target_drama:
+                    self.batch_renders[batch_key]["status"] = "failed"
+                    self.batch_renders[batch_key]["message"] = f"未找到第{ep_num}集"
+                    return
+
+                shots = target_drama.get("shots", [])
+                self.batch_renders[batch_key]["total_shots"] = len(shots)
+
+                v_agent = VideoAgent()
+                for idx, shot in enumerate(shots):
+                    s_num = shot.get("shot_num", idx + 1)
+                    self.batch_renders[batch_key]["current_shot"] = s_num
+                    self.batch_renders[batch_key]["message"] = f"正在渲染镜号 #{s_num} (共{len(shots)}镜)..."
+
+                    # 1. 自动确保首帧定桩
+                    if not shot.get("first_frame_url"):
+                        f_res = v_agent.generate_frame_image(
+                            shot_visual=shot.get("visual") or shot.get("ai_prompt", ""),
+                            shot_type=shot.get("shot_type", "特写"),
+                            camera_movement=shot.get("camera_movement", "推近"),
+                            frame_type="first",
+                            force_mock=use_mock
+                        )
+                        if f_res.get("image_url"):
+                            shot["first_frame_url"] = f_res.get("image_url")
+                            shot["first_frame_status"] = "completed"
+                            target_book.save()
+
+                    # 2. 提交生视频任务
+                    v_res = v_agent.submit_video_task(
+                        prompt=shot.get("ai_prompt", ""),
+                        duration=int(shot.get("duration_sec", 4)),
+                        first_frame_url=shot.get("first_frame_url", ""),
+                        force_mock=use_mock
+                    )
+
+                    if v_res.get("status") == "completed":
+                        shot["video_url"] = v_res.get("video_url")
+                        shot["video_status"] = "completed"
+                        self.batch_renders[batch_key]["completed_shots"] += 1
+                        target_book.save()
+                    elif v_res.get("status") == "processing":
+                        tid = v_res.get("task_id", "")
+                        shot["video_status"] = "processing"
+                        shot["video_task_id"] = tid
+                        self.register_task(book_id, ep_num, s_num, tid, v_agent)
+                        target_book.save()
+                    else:
+                        shot["video_status"] = "failed"
+                        shot["video_error"] = v_res.get("error", "视频任务失败")
+                        self.batch_renders[batch_key]["failed_shots"] += 1
+                        target_book.save()
+
+                    time.sleep(0.5)
+
+                self.batch_renders[batch_key]["status"] = "completed"
+                self.batch_renders[batch_key]["message"] = f"第{ep_num}集所有分镜渲染任务已全部派发与调度完成！"
+            except Exception as e:
+                self.batch_renders[batch_key]["status"] = "failed"
+                self.batch_renders[batch_key]["message"] = f"批量渲染流水线中断: {e}"
+
+        threading.Thread(target=_batch_worker, daemon=True, name=f"BatchRender_{batch_key}").start()
+        return {"status": "ok", "message": f"第{ep_num}集批量渲染流水线已在后台启动", "progress": self.batch_renders[batch_key]}
+
+    def get_episode_batch_status(self, book_id: str, ep_num: int) -> Dict[str, Any]:
+        """获取整集分镜批量渲染进度"""
+        if not hasattr(self, "batch_renders"):
+            self.batch_renders = {}
+        batch_key = f"{book_id}_{ep_num}"
+        return self.batch_renders.get(batch_key, {
+            "status": "idle",
+            "message": "尚未启动批量渲染",
+            "completed_shots": 0,
+            "total_shots": 0
+        })

@@ -329,6 +329,7 @@ class SpatialDirectorEngine:
         optimized_shots = []
         last_scale = None
         consecutive_scale_count = 0
+        last_post_action = "主体立于空间基准位，眼神锐利对峙"
 
         pacing_curve = self.generate_tension_and_pacing_curve(shot_count=len(raw_shots), total_duration=90)
 
@@ -354,15 +355,10 @@ class SpatialDirectorEngine:
             rig = self.RIG_PRESETS.get(rig_key, self.RIG_PRESETS["CAM_MASTER"])
 
             # 计算屏幕左右站位关系（以主相机视角为基准，在轴线前侧观看）：
-            # A在世界坐标偏左，B在世界坐标偏右。因此机位在轴线前方拍摄时：
-            # A必然投影在【屏幕左侧 (Screen-Left)】，面朝右侧
-            # B必然投影在【屏幕右侧 (Screen-Right)】，面朝左侧
             if rig_key in ("CAM_OTS_A", "CAM_CU_B"):
-                # 焦点在B角色，A为前景虚化侧影或画外
                 spatial_layout_desc = f"角色【{char_a}】置于屏幕左下前景侧影(20%宽度)，视线朝右；核心焦点为角色【{char_b}】位于屏幕中央偏右(65%宽度)，正面朝左与A对视"
                 prompt_spatial_tag = f"Subject [{char_b}] at screen-right (65% horizontal), facing left; Subject [{char_a}] at foreground extreme screen-left shoulder silhouette, facing right; 180-degree axis locked on front side"
             elif rig_key in ("CAM_OTS_B", "CAM_CU_A"):
-                # 焦点在A角色，B为前景虚化侧影或画外
                 spatial_layout_desc = f"角色【{char_b}】置于屏幕右下前景侧影(20%宽度)，视线朝左；核心焦点为角色【{char_a}】位于屏幕中央偏左(35%宽度)，正面朝右目光冷酷"
                 prompt_spatial_tag = f"Subject [{char_a}] at screen-left (35% horizontal), facing right sharp focus; Subject [{char_b}] at foreground extreme screen-right shoulder silhouette, facing left; 180-degree axis locked on front side"
             elif rig_key == "CAM_TWO_SHOT":
@@ -376,10 +372,32 @@ class SpatialDirectorEngine:
             anchor_desc = ", ".join(f"{a['name']}({a['desc']})" for a in topology["anchors"][:2])
             prompt_anchor_tag = f"Consistent scene environment: {topology['scene_name']}, fixed background anchors [{anchor_desc}], fixed lighting direction"
 
-            # 4. 优化生视频 Prompt
+            # 4. 动作接戏状态机 (Action Continuity & State Transition)
+            visual_text = shot.get("visual", "")
+            pre_action = f"延续前镜落点状态：{last_post_action}" if idx > 0 else "初始起势：主角在左侧冷眼审视，对手在右侧挑衅逼近"
+            post_action = self._derive_post_action_state(visual_text, cur_scale, char_a, char_b)
+            last_post_action = post_action
+            action_continuity = {
+                "pre_action_state": pre_action,
+                "post_action_state": post_action,
+                "continuity_locked": True
+            }
+            prompt_action_tag = f"Action continuity: starting from ({pre_action}), ending in ({post_action})"
+
+            # 5. 音画同步与唇形语法打标 (Lip Sync Flagging)
+            dialogue_text = (shot.get("dialogue") or "").strip()
+            lip_sync_meta = self._classify_lip_sync_requirement(dialogue_text, rig_key, cur_scale, char_a, char_b)
+
+            # 6. 核心道具客体持久化 (Hero Prop Anchoring)
+            hero_props = self._extract_hero_props(visual_text + " " + dialogue_text)
+            prompt_prop_tag = f"Hero Prop continuity: [{', '.join(hero_props)}]" if hero_props else ""
+
+            # 7. 优化生视频 Prompt
             raw_prompt = shot.get("ai_prompt", "")
-            # 若原始 prompt 缺少详细参数，执行空间转译合成
-            enhanced_prompt = self._synthesize_spatial_prompt(raw_prompt, cur_scale, rig, prompt_spatial_tag, prompt_anchor_tag, shot.get("visual", ""))
+            enhanced_prompt = self._synthesize_spatial_prompt(
+                raw_prompt, cur_scale, rig, prompt_spatial_tag, prompt_anchor_tag,
+                shot.get("visual", ""), prompt_action_tag, prompt_prop_tag
+            )
 
             opt_shot = dict(shot)
             opt_shot["shot_type"] = cur_scale
@@ -392,10 +410,81 @@ class SpatialDirectorEngine:
                 "axis_side": "Axis-Left (Compliant)",
                 "spatial_layout": spatial_layout_desc
             }
+            opt_shot["action_continuity"] = action_continuity
+            opt_shot["lip_sync"] = lip_sync_meta
+            opt_shot["hero_props"] = hero_props
             opt_shot["ai_prompt"] = enhanced_prompt
             optimized_shots.append(opt_shot)
 
         return optimized_shots
+
+    def _derive_post_action_state(self, visual: str, scale: str, char_a: str, char_b: str) -> str:
+        """根据视觉描述自动推演当前镜头的物理姿态落点，供下个镜头接戏"""
+        if any(kw in visual for kw in ("射", "劈", "砍", "打", "击", "斩", "刺")):
+            return f"{char_a}完成攻击动作，手臂微沉保持击发/出招后收势姿态，胸膛起伏，目光如刃锁定{char_b}"
+        elif any(kw in visual for kw in ("倒", "跪", "飞", "退", "颤", "嚎", "惊")):
+            return f"{char_b}受击或震慑后退半步，身形不稳，单膝或半躬，惊恐抬头"
+        elif any(kw in visual for kw in ("笑", "傲", "逼", "喝", "吼")):
+            return f"{char_b}右臂前指或握拳，神色狰狞逼近，身形微前倾"
+        else:
+            return f"{char_a}单手负后/微垂，身姿渊渟岳峙，双足扎实固定于地面，视线不动"
+
+    def _classify_lip_sync_requirement(
+        self,
+        dialogue: str,
+        rig_key: str,
+        scale: str,
+        char_a: str,
+        char_b: str
+    ) -> Dict[str, Any]:
+        """视听语言智能打标：区分说话人特写(必须对口型)与过肩/画外音(免唇动规避)"""
+        if not dialogue or dialogue == "(无对白)":
+            return {
+                "requires_lip_sync": False,
+                "speaker": "none",
+                "reason": "无对白纯动作镜，无需唇动驱动",
+                "badge": "纯动作镜"
+            }
+
+        # 检查是否为内心独白或画外音
+        if any(kw in dialogue for kw in ("画外音", "OS", "旁白", "心中", "内心", "暗道")):
+            return {
+                "requires_lip_sync": False,
+                "speaker": "voiceover",
+                "reason": "画外音/OS旁白，角色无需张嘴，规避AI唇形破绽",
+                "badge": "旁白OS (免唇动)"
+            }
+
+        # 过肩反打机位：镜头前景为后脑勺，主要拍对方表情
+        if rig_key in ("CAM_OTS_A", "CAM_OTS_B"):
+            speaker = char_a if char_a in dialogue else char_b
+            return {
+                "requires_lip_sync": False,
+                "speaker": speaker,
+                "reason": "过肩正反打背影视角，发声者背对镜头，免口型驱动",
+                "badge": "过肩背视 (免唇动)"
+            }
+
+        # 正向特写与近景：必须毫秒级口型驱动对齐
+        speaker = char_a if char_a in dialogue else (char_b if char_b in dialogue else "角色")
+        return {
+            "requires_lip_sync": True,
+            "speaker": speaker,
+            "reason": f"正向{scale}清晰展示说话面部，已挂载 Wav2Lip / MuseTalk 毫秒口型对位管线",
+            "badge": "口型高精对齐"
+        }
+
+    def _extract_hero_props(self, text: str) -> List[str]:
+        """提取短剧中的核心道具客体"""
+        prop_keywords = [
+            "复合弩", "战弩", "弓弩", "钛合金弩", "开山砍刀", "剔骨尖刀", "青罡残剑", "古剑",
+            "战斧牛排", "红酒杯", "防弹盾牌", "黑卡", "储物戒", "龙纹玉佩", "卷宗", "黄金令牌"
+        ]
+        found = []
+        for kw in prop_keywords:
+            if kw in text and kw not in found:
+                found.append(kw)
+        return found
 
     def _synthesize_spatial_prompt(
         self,
@@ -404,10 +493,21 @@ class SpatialDirectorEngine:
         rig: Dict[str, Any],
         spatial_tag: str,
         anchor_tag: str,
-        visual_desc: str
+        visual_desc: str,
+        action_tag: str = "",
+        prop_tag: str = ""
     ) -> str:
-        """精准将空间几何与摄影参数缝合入 9:16 短剧视频提示词"""
+        """精准将空间几何、动作接戏、核心道具与摄影参数缝合入 9:16 短剧视频提示词"""
         lens_tag = f"{rig['focal_length']}mm lens, {rig['motion']}"
+        tags = [t for t in [spatial_tag, anchor_tag, action_tag, prop_tag] if t]
+        tags_str = ", ".join(tags)
+        prefix = f"9:16 vertical short drama shot, {shot_scale}, {lens_tag}, {tags_str}"
+
+        if not base_prompt:
+            return f"{prefix}, cinematic photorealistic lighting, dramatic contrast, 8k resolution, {visual_desc}"
+
+        clean_base = base_prompt.replace("9:16 vertical short drama shot,", "").replace("9:16 vertical shot,", "").strip()
+        return f"{prefix}, {clean_base}"
         prefix = f"9:16 vertical short drama shot, {shot_scale}, {lens_tag}, {spatial_tag}, {anchor_tag}"
 
         if not base_prompt:

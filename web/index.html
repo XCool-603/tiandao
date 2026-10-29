@@ -5426,10 +5426,16 @@ function copyTampermonkeyUrl() {
               </div>
               <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(d.logline || '')}</div>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
               <span class="shot-pill"><svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${d.duration_sec || 90} 秒</span>
               <span class="shot-pill"><svg class="icon-sm" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg> 竖屏 9:16</span>
               <span class="shot-pill"><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> ${shots.length} 个镜头</span>
+              <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; color: #34d399; border-color: rgba(52,211,153,0.35);" onclick="exportJianyingDraft(${d.episode_num})" title="直接导出剪映专业版原生工程ZIP包，包含视频轨、TTS对白轨、音效轨、台词字幕轨">
+                <svg class="icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 一键导出剪映工程
+              </button>
+              <button class="btn btn-primary" style="font-size: 11px; padding: 4px 11px;" onclick="batchRenderAllEpisodeShots(${d.episode_num}, false, this)" title="工业级全镜头异步批量渲染与守护轮询">
+                <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> 批量渲染全片
+              </button>
               <button class="btn btn-ghost" style="color: var(--accent-red); font-size: 11px; padding: 2px 6px;" onclick="deleteDramaEpisode(${d.episode_num})" title="删除本集分镜">
                 <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除
               </button>
@@ -5599,6 +5605,22 @@ function copyTampermonkeyUrl() {
               <div class="shot-visual-box">${escapeHtml(s.visual || '')}</div>
             </div>
 
+            ${s.action_continuity ? `
+              <div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.22); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;">
+                <div style="font-size: 10px; color: #6ee7b7; font-weight: 600; display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+                  <span style="display: flex; align-items: center; gap: 4px;">
+                    <svg class="icon-sm" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    跨镜头时序动作接戏状态机:
+                  </span>
+                  <span class="pill pill-green" style="font-size: 9px; padding: 1px 4px;">落点已锚定</span>
+                </div>
+                <div style="font-size: 10.5px; color: var(--text-secondary); line-height: 1.45;">
+                  <b>前置起势:</b> ${escapeHtml(s.action_continuity.pre_action_state || '')}<br/>
+                  <b>后置收势:</b> ${escapeHtml(s.action_continuity.post_action_state || '')}
+                </div>
+              </div>
+            ` : ''}
+
             ${s.dialogue ? `
               <div>
                 <div class="shot-section-title" style="display: flex; justify-content: space-between; align-items: center;">
@@ -5611,6 +5633,22 @@ function copyTampermonkeyUrl() {
                   </button>
                 </div>
                 <div class="shot-dialogue-box">${escapeHtml(s.dialogue)}</div>
+                ${s.lip_sync ? `
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 10.5px; color: var(--text-muted); background: rgba(0,0,0,0.25); padding: 3px 8px; border-radius: 4px;">
+                    <span style="display: flex; align-items: center; gap: 4px;">
+                      <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${s.lip_sync.requires_lip_sync ? '#3b82f6' : '#64748b'};"></span>
+                      音画对位模式: <b style="color: ${s.lip_sync.requires_lip_sync ? '#93c5fd' : '#94a3b8'};">${escapeHtml(s.lip_sync.badge || '')}</b>
+                    </span>
+                    <span>${escapeHtml(s.lip_sync.reason || '')}</span>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+
+            ${s.hero_props && s.hero_props.length > 0 ? `
+              <div style="display: flex; gap: 5px; align-items: center; margin-top: 4px; margin-bottom: 6px; flex-wrap: wrap;">
+                <span style="font-size: 10px; color: #f59e0b; font-weight: 600;">核心道具客体锁:</span>
+                ${s.hero_props.map(p => `<span class="pill pill-gold" style="font-size: 9.5px; padding: 1px 6px;">${escapeHtml(p)}</span>`).join("")}
               </div>
             ` : ''}
 
@@ -6104,6 +6142,55 @@ function copyTampermonkeyUrl() {
           `).join("")}
         </svg>
       `;
+    }
+
+    
+    function exportJianyingDraft(epNum) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("请先选择作品！");
+        return;
+      }
+      showToast("正在构建剪映专业版多轨原生工程...", 3000);
+      const downloadUrl = `/api/drama/export_jianying?book_id=${encodeURIComponent(bid)}&episode_num=${epNum}`;
+      window.open(downloadUrl, "_blank");
+    }
+
+    async function batchRenderAllEpisodeShots(epNum, isMock = false, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) {
+        alert("请先选择作品！");
+        return;
+      }
+      let origHtml = "";
+      if (btn) {
+        btn.disabled = true;
+        origHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="icon-sm spin" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> 批量调度中...`;
+      }
+      showToast("正在启动第 " + epNum + " 集全镜头工业级批量渲染队列...", 4000);
+      try {
+        const res = await fetch("/api/drama/episode/generate_all_videos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: bid, episode_num: epNum, mock: isMock })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast("全集 " + (data.processed_count || "") + " 个镜头视频渲染已全部触发！后台守护轮询已接管。");
+          fetchStatus(true);
+          setTimeout(() => renderSelectedDramaEpisode(epNum), 1500);
+        } else {
+          alert("批量渲染异常: " + (data.message || "未知错误"));
+        }
+      } catch (err) {
+        alert("请求异常: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
     }
 
     function renderDramaCharacterGallery(chars) {
