@@ -1246,10 +1246,6 @@
       else if (target === 'drama') btn = document.getElementById("btnPingDramaDiagnostic");
       else if (target === 'image') btn = document.getElementById("btnPingImageDiagnostic");
 
-      const imageApiKey = document.getElementById("adminImageApiKey") ? document.getElementById("adminImageApiKey").value.trim() : "";
-      const imageBaseUrl = document.getElementById("adminImageBaseUrl") ? document.getElementById("adminImageBaseUrl").value.trim() : "";
-      const imageModel = document.getElementById("adminImageModel") ? document.getElementById("adminImageModel").value.trim() : "";
-
       if (btn) btn.disabled = true;
 
       try {
