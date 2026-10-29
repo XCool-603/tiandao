@@ -2887,13 +2887,15 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 llm = LLMClient(api_key=drama_api_key, base_url=drama_base_url)
                 drama_agent = DramaAgent(llm, model_name=drama_model)
 
+                active_chars_list = list(target_book.world.characters.values()) if hasattr(target_book.world, "characters") else []
                 drama_data = drama_agent.generate_from_chapter(
                     book_title=target_book.title,
                     genre=target_book.genre,
                     chapter_title=chap_title,
                     chapter_content=chap_content,
                     episode_num=ep_num,
-                    force_mock=use_mock
+                    force_mock=use_mock,
+                    active_characters=active_chars_list
                 )
 
                 if not hasattr(target_book, "dramas") or target_book.dramas is None:

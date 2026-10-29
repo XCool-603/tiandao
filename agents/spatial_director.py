@@ -119,7 +119,8 @@ class SpatialDirectorEngine:
         self,
         scene_name: str,
         characters: List[str],
-        genre_cat: str = "doomsday"
+        genre_cat: str = "doomsday",
+        scene_desc: str = ""
     ) -> Dict[str, Any]:
         """
         构建离散三维场景空间拓扑与环境锚点
@@ -128,28 +129,8 @@ class SpatialDirectorEngine:
         Y轴: 0m (前景近端) ~ 20m (背景远端)
         Z轴: 0m (地面) ~ 4m (天花板/顶棚)
         """
-        # 1. 确立场景地标物理锚点（保证多镜头切机位时背景不变形）
-        if genre_cat == "doomsday":
-            anchors = [
-                {"name": "防弹重型合金门", "pos": [0.0, 1.5, 1.2], "desc": "正中玄关冷光合金安全门，带微光单向视窗"},
-                {"name": "恒温战术操作台", "pos": [-3.5, 5.0, 0.9], "desc": "左侧靠墙现代金属台面，微电脑冷蓝屏幕与牛排厨具"},
-                {"name": "深渊隔音落地防弹窗", "pos": [0.0, 12.0, 2.0], "desc": "正后方背景，屋外零下50度暴风雪拍击玻璃"},
-                {"name": "主光源", "pos": [-2.0, 3.0, 3.2], "type": "冷暖交织强侧逆光"}
-            ]
-        elif genre_cat == "urban":
-            anchors = [
-                {"name": "黑曜石签字主办公桌", "pos": [0.0, 7.0, 0.8], "desc": "正中心奢华办公桌，摆放金笔与资产卷宗"},
-                {"name": "百叶天幕落地窗", "pos": [0.0, 12.0, 2.5], "desc": "俯瞰都市CBD天际线"},
-                {"name": "真皮会客主沙发区", "pos": [3.5, 4.0, 0.5], "desc": "右侧客座区"},
-                {"name": "主光源", "pos": [0.0, 5.0, 3.5], "type": "现代商务冷调漫反射光"}
-            ]
-        else: # 仙侠/玄幻
-            anchors = [
-                {"name": "青铜九龙浮雕主宝座", "pos": [0.0, 10.0, 1.8], "desc": "大殿正北雕龙石座，云雾缭绕"},
-                {"name": "通天盘龙石柱(左)", "pos": [-4.5, 5.0, 3.0], "desc": "左侧巨大龙柱，铭刻太古阵法金芒"},
-                {"name": "通天盘龙石柱(右)", "pos": [4.5, 5.0, 3.0], "desc": "右侧立柱，暗浮阵法符文"},
-                {"name": "主光源", "pos": [0.0, 15.0, 6.0], "type": "穹顶天光与仙雾自发光"}
-            ]
+        # 1. 动态确立场景地标物理锚点（保证多镜头切机位时背景不变形）
+        anchors = self._extract_dynamic_anchors(scene_name, scene_desc, genre_cat)
 
         # 2. 离散角色三维站位与视线向量 (默认两核心对峙模式)
         char_spatial: Dict[str, Dict[str, Any]] = {}
@@ -474,11 +455,95 @@ class SpatialDirectorEngine:
             "badge": "口型高精对齐"
         }
 
+    def _extract_dynamic_anchors(
+        self,
+        scene_name: str,
+        scene_desc: str = "",
+        genre_cat: str = "doomsday"
+    ) -> List[Dict[str, Any]]:
+        """从场景名称、环境描写与题材标签中动态提取构建三维空间物理锚点"""
+        text = f"{scene_name} {scene_desc}".strip()
+        anchors = []
+
+        # 1. 空间出入口 / 关卡门扉 (前景近端 Y: 1.5m ~ 2.2m)
+        entry_name = "核心进出门户"
+        for kw in ["防爆门", "合金门", "防弹门", "隔离门", "重型铁门", "青铜门", "山门", "舱门", "殿门", "玄关门", "石门", "门", "闸", "关隘"]:
+            if kw in text:
+                entry_name = kw if len(kw) > 1 else f"主进出{kw}"
+                break
+        anchors.append({
+            "name": entry_name,
+            "pos": [0.0, 1.8, 1.2],
+            "desc": f"近景主通道（{entry_name}），确立场景进深起点与视线遮挡边界"
+        })
+
+        # 2. 中轴功能实体 / 枢纽台案 / 法阵 (中景区 Y: 4.5m ~ 7.0m)
+        mid_name = "中轴对峙核心台"
+        for kw in ["战术操作台", "控制终端", "办公桌", "长案", "主会议桌", "祭坛", "法台", "王座", "青石台", "指挥台", "操作台", "终端", "实验台"]:
+            if kw in text:
+                mid_name = kw
+                break
+        else:
+            if genre_cat == "urban":
+                mid_name = "主办公签字桌"
+            elif genre_cat == "doomsday":
+                mid_name = "战术操作台"
+            elif genre_cat == "scifi":
+                mid_name = "量子控制终端"
+            elif genre_cat == "history":
+                mid_name = "紫檀公案"
+            elif genre_cat == "wuxia":
+                mid_name = "红木方桌"
+            else:
+                mid_name = "青铜法位主座"
+
+        anchors.append({
+            "name": mid_name,
+            "pos": [-2.5, 5.5, 0.9],
+            "desc": f"中景核心功能实体（{mid_name}），承载双方视线交汇与重要交锋动作"
+        })
+
+        # 3. 远端天幕立面 / 纵深环境背景 (远景区 Y: 11.0m ~ 16.0m)
+        bg_name = "纵深全景天幕"
+        for kw in ["全息天幕", "落地窗", "观景窗", "全息屏幕", "深渊裂谷", "古殿巨壁", "天际线", "风雪荒野", "虚空穹顶", "舷窗", "星海全景"]:
+            if kw in text:
+                bg_name = kw
+                break
+        else:
+            if genre_cat == "urban":
+                bg_name = "CBD天际线落地窗"
+            elif genre_cat == "doomsday":
+                bg_name = "高透隔音防弹窗"
+            elif genre_cat == "scifi":
+                bg_name = "深空星海全息幕"
+            elif genre_cat == "history":
+                bg_name = "九龙金漆大屏风"
+            elif genre_cat == "wuxia":
+                bg_name = "塞外风雪客栈檐"
+            else:
+                bg_name = "通天石柱与苍穹云雾"
+
+        anchors.append({
+            "name": bg_name,
+            "pos": [0.0, 13.0, 2.2],
+            "desc": f"远景景深立面（{bg_name}），烘托世界观氛围与戏剧空间层次"
+        })
+
+        # 4. 主视听聚光点 (三维高位光源)
+        anchors.append({
+            "name": "主视听聚光点",
+            "pos": [-1.5, 4.5, 3.5],
+            "type": "高对比度电影级主光，强化角色立体轮廓与眼神交锋"
+        })
+
+        return anchors
+
     def _extract_hero_props(self, text: str) -> List[str]:
-        """提取短剧中的核心道具客体"""
+        """提取短剧分镜中的核心道具客体"""
         prop_keywords = [
-            "复合弩", "战弩", "弓弩", "钛合金弩", "开山砍刀", "剔骨尖刀", "青罡残剑", "古剑",
-            "战斧牛排", "红酒杯", "防弹盾牌", "黑卡", "储物戒", "龙纹玉佩", "卷宗", "黄金令牌"
+            "复合弩", "战弩", "弓弩", "长弓", "利刃", "短刀", "佩剑", "长剑", "古剑", "飞剑",
+            "手枪", "战术盾牌", "法杖", "符箓", "玉佩", "卷宗", "令牌", "纳戒", "储物戒",
+            "罗盘", "晶核", "终端", "黑卡", "机密文件", "钥匙", "药剂", "信物", "合同"
         ]
         found = []
         for kw in prop_keywords:
@@ -506,14 +571,6 @@ class SpatialDirectorEngine:
         if not base_prompt:
             return f"{prefix}, cinematic photorealistic lighting, dramatic contrast, 8k resolution, {visual_desc}"
 
-        clean_base = base_prompt.replace("9:16 vertical short drama shot,", "").replace("9:16 vertical shot,", "").strip()
-        return f"{prefix}, {clean_base}"
-        prefix = f"9:16 vertical short drama shot, {shot_scale}, {lens_tag}, {spatial_tag}, {anchor_tag}"
-
-        if not base_prompt:
-            return f"{prefix}, cinematic photorealistic lighting, dramatic contrast, 8k resolution, {visual_desc}"
-
-        # 若已有 prompt，将空间几何与镜头参数注入最前沿强制生效
         clean_base = base_prompt.replace("9:16 vertical short drama shot,", "").replace("9:16 vertical shot,", "").strip()
         return f"{prefix}, {clean_base}"
 
