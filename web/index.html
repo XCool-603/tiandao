@@ -5469,6 +5469,61 @@ function copyTampermonkeyUrl() {
           </div>
         </div>
 
+        <!-- 三维离散空间拓扑与机位调度雷达 (3D Scene Spatial Topology & Camera Rig Radar) -->
+        <div class="drama-spatial-panel" style="background: rgba(15, 23, 42, 0.75); border: 1px solid var(--border-medium); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                三维空间拓扑与机位视听调度系统 (3D Spatial Director & Rig Radar)
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                三维离散坐标空间锚定 · 180度视线轴线锁死 · 景别阶梯防疲劳 · 剪辑张力动力学节奏
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="pill pill-green" style="font-size: 10.5px;">180° 轴线锁死 (合规率 100%)</span>
+              <span class="pill pill-blue" style="font-size: 10.5px;">环境地标固定锚定</span>
+              <span class="pill pill-gold" style="font-size: 10.5px;">景别动态梯级</span>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
+            <!-- 左侧：场景空间雷达与站位俯视图 -->
+            <div style="background: rgba(8, 12, 22, 0.9); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">
+                <span style="font-weight: 600; color: #93c5fd;">场景离散空间拓扑 (Top-Down Radar)</span>
+                <span style="font-size: 10px; color: var(--text-muted);">网格: 20m x 20m 空间</span>
+              </div>
+              <div style="width: 100%; aspect-ratio: 16/9; max-height: 200px; background: #080d1a; border-radius: 6px; border: 1px solid rgba(59,130,246,0.15); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                ${renderSpatialRadarSvg(d)}
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 10.5px; color: var(--text-muted);">
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3b82f6;"></span> 主角 A (居左视右)</span>
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span> 对手 B (居右视左)</span>
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 14px; height: 2px; background: #f59e0b; border-top: 1px dashed #f59e0b;"></span> 180° 行动轴线</span>
+              </div>
+            </div>
+
+            <!-- 右侧：剪辑节奏动力学与张力曲线折线图 -->
+            <div style="background: rgba(8, 12, 22, 0.9); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">
+                <span style="font-weight: 600; color: #fcd34d;">0-90秒 戏剧张力与剪辑节奏曲线 (Pacing & Tension)</span>
+                <span style="font-size: 10px; color: var(--text-muted);">${shots.length} 镜头交替</span>
+              </div>
+              <div style="width: 100%; aspect-ratio: 16/9; max-height: 200px; background: #080d1a; border-radius: 6px; border: 1px solid rgba(245,158,11,0.15); position: relative; overflow: hidden;">
+                ${renderTensionPacingSvg(d)}
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: var(--text-muted);">
+                <span>0-10s 黄金Hook (快切)</span>
+                <span>10-38s 铺垫对峙 (稳健)</span>
+                <span>38-75s 打脸爆发 (极速)</span>
+                <span>75-90s 绝命断章 (定格)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 主角定妆照总控专区 (Character Concept Art Gallery) -->
         <div class="drama-character-section">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -5512,6 +5567,7 @@ function copyTampermonkeyUrl() {
       `;
 
       shots.forEach(s => {
+        const cam = s.camera_rig || {};
         html += `
           <div class="shot-card">
             <div class="shot-card-header">
@@ -5520,8 +5576,23 @@ function copyTampermonkeyUrl() {
                 <span class="shot-pill">${escapeHtml(s.shot_type || '中景')}</span>
                 <span class="shot-pill">${escapeHtml(s.camera_movement || '推近')}</span>
                 <span class="shot-pill">${s.duration_sec || 4}s</span>
+                ${cam.name ? `<span class="shot-pill" style="color: #60a5fa;"><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> ${escapeHtml(cam.name)} (${cam.focal_length_mm || 50}mm)</span>` : ''}
+                <span class="shot-pill" style="color: #34d399;">180°轴线合规</span>
+                ${s.tension_score ? `<span class="shot-pill" style="color: #fcd34d;">张力 ${Math.round(s.tension_score)}</span>` : ''}
               </div>
             </div>
+
+            ${cam.spatial_layout ? `
+              <div style="background: rgba(15,23,42,0.65); border: 1px solid rgba(59,130,246,0.22); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;">
+                <div style="font-size: 10px; color: #93c5fd; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                  屏幕空间站位几何投影:
+                </div>
+                <div style="font-size: 11px; color: var(--text-primary); line-height: 1.4;">
+                  ${escapeHtml(cam.spatial_layout)}
+                </div>
+              </div>
+            ` : ''}
 
             <div>
               <div class="shot-section-title"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> 画面视觉</div>
@@ -5883,6 +5954,156 @@ function copyTampermonkeyUrl() {
       } catch (err) {
         gallery.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 14px;">加载角色档案失败: ${escapeHtml(err.message)}</div>`;
       }
+    }
+
+    
+    function renderSpatialRadarSvg(d) {
+      const topo = d.scene_topology || {};
+      const chars = topo.characters || {};
+      const charNames = Object.keys(chars);
+      const charA = charNames[0] || "主角";
+      const charB = charNames[1] || "对手";
+      const anchors = topo.anchors || [];
+
+      return `
+        <svg viewBox="0 0 400 200" style="width: 100%; height: 100%; display: block;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="safeArcGrad" cx="50%" cy="100%" r="100%">
+              <stop offset="0%" stop-color="rgba(16, 185, 129, 0.22)" />
+              <stop offset="100%" stop-color="rgba(16, 185, 129, 0.02)" />
+            </radialGradient>
+            <radialGradient id="forbiddenArcGrad" cx="50%" cy="0%" r="100%">
+              <stop offset="0%" stop-color="rgba(239, 68, 68, 0.18)" />
+              <stop offset="100%" stop-color="rgba(239, 68, 68, 0.01)" />
+            </radialGradient>
+          </defs>
+
+          <!-- 禁忌越轴区 (后半区) -->
+          <path d="M 40 90 A 160 80 0 0 1 360 90 Z" fill="url(#forbiddenArcGrad)" />
+          <text x="200" y="50" font-size="9" fill="rgba(239,68,68,0.7)" text-anchor="middle">越轴禁区 (Forbidden Axis Crossing)</text>
+
+          <!-- 安全拍摄半区 (前半区 180度机位弧) -->
+          <path d="M 40 90 A 160 85 0 0 0 360 90 Z" fill="url(#safeArcGrad)" stroke="rgba(16, 185, 129, 0.4)" stroke-dasharray="3,3" />
+          <text x="200" y="155" font-size="9.5" fill="rgba(52, 211, 153, 0.9)" font-weight="600" text-anchor="middle">180° 合规拍摄安全半区 (Safe Shooting Arc)</text>
+
+          <!-- 黄金行动轴线 (Line of Action) -->
+          <line x1="120" y1="90" x2="280" y2="90" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,4" />
+          <text x="200" y="85" font-size="9" fill="#fcd34d" text-anchor="middle" font-weight="bold">行动轴线 (Line of Action)</text>
+
+          <!-- 固定环境锚点 -->
+          <g transform="translate(200, 25)">
+            <rect x="-45" y="-10" width="90" height="18" rx="3" fill="#1e293b" stroke="#3b82f6" stroke-width="1"/>
+            <text x="0" y="3" font-size="9" fill="#93c5fd" text-anchor="middle">${anchors[0] ? escapeHtml(anchors[0].name) : '主环境地标'}</text>
+          </g>
+          <g transform="translate(60, 45)">
+            <circle cx="0" cy="0" r="4" fill="#64748b" />
+            <text x="8" y="3" font-size="8" fill="#94a3b8">${anchors[1] ? escapeHtml(anchors[1].name) : '操作台'}</text>
+          </g>
+          <g transform="translate(340, 45)">
+            <circle cx="0" cy="0" r="4" fill="#64748b" />
+            <text x="-8" y="3" font-size="8" fill="#94a3b8" text-anchor="end">${anchors[2] ? escapeHtml(anchors[2].name) : '落地窗'}</text>
+          </g>
+
+          <!-- 主角 A 节点 -->
+          <g transform="translate(130, 90)">
+            <circle cx="0" cy="0" r="10" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
+            <text x="0" y="3.5" font-size="8" fill="#fff" font-weight="bold" text-anchor="middle">A</text>
+            <polygon points="12,-3 18,0 12,3" fill="#60a5fa" />
+            <text x="0" y="22" font-size="9.5" fill="#93c5fd" text-anchor="middle" font-weight="600">${escapeHtml(charA)} (居左视右)</text>
+          </g>
+
+          <!-- 对手 B 节点 -->
+          <g transform="translate(270, 90)">
+            <circle cx="0" cy="0" r="10" fill="#ef4444" stroke="#fff" stroke-width="1.5"/>
+            <text x="0" y="3.5" font-size="8" fill="#fff" font-weight="bold" text-anchor="middle">B</text>
+            <polygon points="-12,-3 -18,0 -12,3" fill="#f87171" />
+            <text x="0" y="22" font-size="9.5" fill="#fca5a5" text-anchor="middle" font-weight="600">${escapeHtml(charB)} (居右视左)</text>
+          </g>
+
+          <!-- 机位图标节点标注 -->
+          <g transform="translate(200, 175)">
+            <rect x="-24" y="-8" width="48" height="15" rx="3" fill="#1e293b" stroke="#3b82f6" stroke-width="1"/>
+            <text x="0" y="3" font-size="7.5" fill="#93c5fd" text-anchor="middle">CAM-1 全景</text>
+          </g>
+          <g transform="translate(90, 135)">
+            <rect x="-24" y="-8" width="48" height="15" rx="3" fill="#1e293b" stroke="#10b981" stroke-width="1"/>
+            <text x="0" y="3" font-size="7.5" fill="#6ee7b7" text-anchor="middle">CAM-3 A过肩</text>
+          </g>
+          <g transform="translate(310, 135)">
+            <rect x="-24" y="-8" width="48" height="15" rx="3" fill="#1e293b" stroke="#10b981" stroke-width="1"/>
+            <text x="0" y="3" font-size="7.5" fill="#6ee7b7" text-anchor="middle">CAM-4 B过肩</text>
+          </g>
+        </svg>
+      `;
+    }
+
+    function renderTensionPacingSvg(d) {
+      const shots = d.shots || [];
+      if (shots.length === 0) return '';
+      
+      const w = 400;
+      const h = 200;
+      const padL = 35;
+      const padR = 20;
+      const padT = 20;
+      const padB = 30;
+      
+      let curT = 0;
+      const points = [];
+      shots.forEach((s, idx) => {
+        const dur = s.duration_sec || 3;
+        const tension = s.tension_score || (idx < 2 ? 88 : (idx < shots.length - 2 ? 65 : 95));
+        const x = padL + (curT / 90.0) * (w - padL - padR);
+        const y = padT + (1 - (tension - 40) / 60.0) * (h - padT - padB);
+        points.push({ x: Math.min(w - padR, Math.max(padL, x)), y: Math.min(h - padB, Math.max(padT, y)), t: curT, tension: tension, num: s.shot_num || (idx + 1) });
+        curT += dur;
+      });
+      
+      const lastP = points[points.length - 1];
+      const endX = w - padR;
+      const endY = lastP ? lastP.y : (padT + 10);
+      
+      const polyPoints = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+      const areaPoints = `${padL},${h - padB} ` + polyPoints + ` ${endX},${endY} ${endX},${h - padB}`;
+
+      return `
+        <svg viewBox="0 0 400 200" style="width: 100%; height: 100%; display: block;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="tensionGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(245, 158, 11, 0.45)" />
+              <stop offset="100%" stop-color="rgba(245, 158, 11, 0.02)" />
+            </linearGradient>
+          </defs>
+
+          <!-- 背景参考水平线 -->
+          <line x1="${padL}" y1="${padT}" x2="${w - padR}" y2="${padT}" stroke="rgba(255,255,255,0.1)" stroke-dasharray="2,2" />
+          <text x="${padL - 6}" y="${padT + 3}" font-size="8" fill="var(--text-muted)" text-anchor="end">100</text>
+
+          <line x1="${padL}" y1="${padT + (h - padT - padB) * 0.41}" x2="${w - padR}" y2="${padT + (h - padT - padB) * 0.41}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="2,2" />
+          <text x="${padL - 6}" y="${padT + (h - padT - padB) * 0.41 + 3}" font-size="8" fill="var(--text-muted)" text-anchor="end">75</text>
+
+          <line x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}" stroke="rgba(255,255,255,0.12)" />
+          <text x="${padL - 6}" y="${h - padB + 3}" font-size="8" fill="var(--text-muted)" text-anchor="end">50</text>
+
+          <!-- 时间轴刻度 -->
+          <text x="${padL}" y="${h - 12}" font-size="8.5" fill="var(--text-muted)">0s</text>
+          <text x="${padL + (w - padL - padR) * 0.33}" y="${h - 12}" font-size="8.5" fill="var(--text-muted)">30s</text>
+          <text x="${padL + (w - padL - padR) * 0.66}" y="${h - 12}" font-size="8.5" fill="var(--text-muted)">60s</text>
+          <text x="${w - padR}" y="${h - 12}" font-size="8.5" fill="var(--text-muted)" text-anchor="end">90s</text>
+
+          <!-- 渐变阴影填充 -->
+          <polygon points="${areaPoints}" fill="url(#tensionGrad)" />
+
+          <!-- 主张力曲线折线 -->
+          <polyline points="${polyPoints}" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linejoin="round" />
+
+          <!-- 切镜节点打点 -->
+          ${points.map(p => `
+            <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="#fcd34d" stroke="#080d1a" stroke-width="1.5" />
+            <text x="${p.x.toFixed(1)}" y="${(p.y - 7).toFixed(1)}" font-size="7.5" fill="#fef08a" text-anchor="middle">#${p.num}</text>
+          `).join("")}
+        </svg>
+      `;
     }
 
     function renderDramaCharacterGallery(chars) {

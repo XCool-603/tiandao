@@ -4,6 +4,7 @@ import time
 from typing import Dict, Any, List, Optional
 from llm_client import LLMClient
 from config import classify_genre
+from agents.spatial_director import spatial_director
 
 class DramaAgent:
     """
@@ -63,6 +64,23 @@ class DramaAgent:
             parsed.setdefault("shots", [])
             parsed.setdefault("characters_in_scene", [])
             parsed["created_at"] = time.time()
+
+            # 注入三维离散场景拓扑与视听语法合规检查器
+            topology = spatial_director.build_scene_topology(
+                scene_name=parsed.get("episode_title", f"第{episode_num}集核心场景"),
+                characters=parsed.get("characters_in_scene", []),
+                genre_cat=cat
+            )
+            parsed["scene_topology"] = topology
+            parsed["shots"] = spatial_director.lint_and_optimize_storyboard(
+                parsed.get("shots", []),
+                topology,
+                parsed.get("characters_in_scene", [])
+            )
+            parsed["pacing_curve"] = spatial_director.generate_tension_and_pacing_curve(
+                shot_count=len(parsed["shots"]),
+                total_duration=parsed.get("duration_sec", 90)
+            )
             return parsed
         except Exception as e:
             print(f"[DramaAgent] LLM 解析短剧失败或异常: {e}，启用智能后备分镜构建")
@@ -155,7 +173,8 @@ class DramaAgent:
         return text
 
     def _generate_mock_drama(self, book_title: str, genre: str, chapter_title: str, episode_num: int) -> Dict[str, Any]:
-        return {
+        cat = classify_genre(genre, book_title)
+        mock_data = {
             "episode_num": episode_num,
             "episode_title": f"第{episode_num}集：零下六十度！开门我就杀",
             "logline": "全球天灾暴雪降临，恶霸邻居持刀砸门抢粮，主角隔着防弹合金门悠然吃和牛牛排冷眼反杀。",
@@ -208,11 +227,28 @@ class DramaAgent:
             ],
             "created_at": time.time()
         }
+        topology = spatial_director.build_scene_topology(
+            scene_name=mock_data["episode_title"],
+            characters=mock_data["characters_in_scene"],
+            genre_cat=cat
+        )
+        mock_data["scene_topology"] = topology
+        mock_data["shots"] = spatial_director.lint_and_optimize_storyboard(
+            mock_data["shots"],
+            topology,
+            mock_data["characters_in_scene"]
+        )
+        mock_data["pacing_curve"] = spatial_director.generate_tension_and_pacing_curve(
+            shot_count=len(mock_data["shots"]),
+            total_duration=mock_data["duration_sec"]
+        )
+        return mock_data
 
     def _generate_fallback_drama(self, book_title: str, genre: str, chapter_title: str, content: str, episode_num: int) -> Dict[str, Any]:
         """降级兜底生成"""
+        cat = classify_genre(genre, book_title)
         first_line = content.strip().splitlines()[0] if content.strip() else chapter_title
-        return {
+        fallback_data = {
             "episode_num": episode_num,
             "episode_title": f"第{episode_num}集：{chapter_title}",
             "logline": f"《{book_title}》高能冲突转折点，核心人物激烈对抗展开。",
@@ -265,6 +301,22 @@ class DramaAgent:
             ],
             "created_at": time.time()
         }
+        topology = spatial_director.build_scene_topology(
+            scene_name=fallback_data["episode_title"],
+            characters=fallback_data["characters_in_scene"],
+            genre_cat=cat
+        )
+        fallback_data["scene_topology"] = topology
+        fallback_data["shots"] = spatial_director.lint_and_optimize_storyboard(
+            fallback_data["shots"],
+            topology,
+            fallback_data["characters_in_scene"]
+        )
+        fallback_data["pacing_curve"] = spatial_director.generate_tension_and_pacing_curve(
+            shot_count=len(fallback_data["shots"]),
+            total_duration=fallback_data["duration_sec"]
+        )
+        return fallback_data
 
     # ================= 导出实用工具 =================
 
