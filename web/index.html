@@ -5558,6 +5558,34 @@ function copyTampermonkeyUrl() {
           </div>
         </div>
 
+        <!-- 短剧核心道具与法宝持久化库 (Hero Prop & Artifact Lorebook) -->
+        <div class="drama-prop-section" style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                核心道具与法宝持久化库 (Hero Prop Lorebook)
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                锁定关键道具外观（冷黑战弩、神剑、玉佩、令牌），跨镜头注入客体特征锁，杜绝道具形变！
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" style="font-size: 11.5px; padding: 4px 10px;" onclick="promptAddNewProp()">
+                + 新增道具
+              </button>
+              <button class="btn btn-primary" style="font-size: 11.5px; padding: 4px 12px;" onclick="loadDramaProps(true)">
+                <span><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> 萃取剧情道具</span>
+              </button>
+            </div>
+          </div>
+          <div id="dramaPropGallery" class="drama-char-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+            <div style="grid-column: 1 / -1; text-align: center; padding: 16px; font-size: 12px; color: var(--text-muted);">
+              正在加载核心道具档案...
+            </div>
+          </div>
+        </div>
+
         <!-- 逐镜头分镜列表 -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
           <div style="font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
@@ -5800,8 +5828,9 @@ function copyTampermonkeyUrl() {
       html += `</div>`;
       container.innerHTML = html;
 
-      // 自动加载登场角色定妆照画廊
+      // 自动加载登场角色定妆照画廊与核心道具库
       loadDramaCharacters();
+      loadDramaProps();
 
       // 自动唤醒并接管所有正在排队中的分镜视频自动轮询
       autoResumePendingVideoPollers(d);
@@ -5973,6 +6002,130 @@ function copyTampermonkeyUrl() {
     // 角色定妆照与首尾帧控制系统
     // ==========================================
     let cachedDramaCharacters = [];
+
+    
+    let cachedDramaProps = [];
+    async function loadDramaProps(autoExtract = false) {
+      const gallery = document.getElementById("dramaPropGallery");
+      if (!gallery) return;
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) return;
+
+      try {
+        const res = await fetch(`/api/drama/props/list?book_id=${encodeURIComponent(bid)}`);
+        const data = await res.json();
+        let props = data.props || [];
+
+        if (props.length === 0 && autoExtract) {
+          showToast("正在从当前短剧分镜中萃取关键道具客体...", 3000);
+          const d = (currentDramas && currentDramas.length > 0) ? (currentDramas.find(x => x.episode_num === currentDramaEpisode) || currentDramas[0]) : null;
+          const shots = d ? (d.shots || []) : [];
+          const extractedNames = new Set();
+          shots.forEach(s => {
+            (s.hero_props || []).forEach(p => extractedNames.add(p));
+          });
+          if (extractedNames.size === 0) {
+            extractedNames.add("黑钛合金复合弩");
+            extractedNames.add("开山砍刀");
+          }
+          for (const pName of extractedNames) {
+            await fetch("/api/drama/prop/generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ book_id: bid, prop_name: pName, prop_desc: "短剧核心特写武器道具", mock: true })
+            });
+          }
+          const reFetch = await fetch(`/api/drama/props/list?book_id=${encodeURIComponent(bid)}`);
+          const reData = await reFetch.json();
+          props = reData.props || [];
+        }
+
+        cachedDramaProps = props;
+        renderDramaProps(props);
+      } catch (err) {
+        gallery.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 14px;">加载道具失败: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderDramaProps(props) {
+      const gallery = document.getElementById("dramaPropGallery");
+      if (!gallery) return;
+
+      if (!props || props.length === 0) {
+        gallery.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: var(--text-muted); font-size: 11.5px;">
+            当前尚未注册核心道具，点击右上角【萃取剧情道具】自动从当前集提取武器与法宝！
+          </div>
+        `;
+        return;
+      }
+
+      gallery.innerHTML = props.map(p => `
+        <div class="drama-char-card" style="padding: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 12px; font-weight: 700; color: #fff;">${escapeHtml(p.name || '核心道具')}</span>
+            <span class="pill pill-gold" style="font-size: 9px; padding: 1px 4px;">客体持久化</span>
+          </div>
+          ${p.image_url ? `
+            <div style="position: relative;">
+              <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="drama-char-poster" style="aspect-ratio: 9/16; max-height: 180px;" />
+              <div style="position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 2px 5px; border-radius: 4px; font-size: 9px; color: #f59e0b;">
+                9:16 客体基准图
+              </div>
+            </div>
+          ` : `
+            <div class="frame-empty-placeholder" style="aspect-ratio: 9/16; max-height: 180px;">
+              <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <div style="margin-top: 4px; font-size: 10px;">未锁定基准图</div>
+            </div>
+          `}
+          <div style="font-size: 10.5px; color: var(--text-muted); line-height: 1.3; max-height: 28px; overflow: hidden; margin-top: 4px;">
+            ${escapeHtml(p.desc || '短剧高频特写关键道具')}
+          </div>
+          <div style="display: flex; gap: 4px; margin-top: 6px;">
+            <button class="btn btn-secondary" style="flex: 1; font-size: 9.5px; padding: 3px 6px;" onclick="triggerGenerateProp('${escapeHtml(p.name)}', '${escapeHtml(p.desc || '')}', true, this)">
+              模拟定型
+            </button>
+            <button class="btn btn-primary" style="flex: 1; font-size: 9.5px; padding: 3px 6px;" onclick="triggerGenerateProp('${escapeHtml(p.name)}', '${escapeHtml(p.desc || '')}', false, this)">
+              AI 定型
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function triggerGenerateProp(propName, propDesc = "", isMock = false, btn = null) {
+      const bid = globalState ? globalState.book_id : "";
+      if (!bid) return;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "...";
+      }
+      showToast("正在渲染道具【" + propName + "】9:16 客体基准图...");
+      try {
+        const res = await fetch("/api/drama/prop/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book_id: bid, prop_name: propName, prop_desc: propDesc, mock: isMock })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast("道具【" + propName + "】客体参考图已锁定入库！");
+          loadDramaProps();
+        }
+      } catch (err) {
+        alert("道具生成失败: " + err.message);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function promptAddNewProp() {
+      const name = prompt("请输入要锁定的短剧核心道具名称（如：黑钛合金复合弩、龙纹玉佩、赤霄剑）：");
+      if (!name || !name.trim()) return;
+      const desc = prompt("请输入道具的外观特征与材质描述（如：哑光冷黑双滑轮机械结构、玄铁铸造）：", "短剧高能对抗核心关键道具");
+      triggerGenerateProp(name.trim(), (desc || "").trim(), true);
+    }
 
     async function loadDramaCharacters() {
       const bid = globalState ? globalState.book_id : "";

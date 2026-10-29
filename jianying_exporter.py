@@ -381,4 +381,18 @@ class JianyingDraftExporter:
 """
             zf.writestr(f"{draft_name}/导入说明.txt", readme_text)
 
+            # 自动物理打包本地已生成的真实对白 MP3 音频进工程包
+            audio_dir = Path("output/audio")
+            ep_num = drama_data.get("episode_num", 1)
+            if audio_dir.exists():
+                for s in drama_data.get("shots", []):
+                    s_num = s.get("shot_num", 1)
+                    for a_file in audio_dir.glob(f"shot_{ep_num}_{s_num}_*.mp3"):
+                        if a_file.is_file() and a_file.stat().st_size > 0:
+                            zf.writestr(
+                                f"{draft_name}/audio/shot_{ep_num}_{s_num}.mp3",
+                                a_file.read_bytes()
+                            )
+                            break
+
         return buf.getvalue()
