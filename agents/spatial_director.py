@@ -132,7 +132,10 @@ class SpatialDirectorEngine:
         # 1. 动态确立场景地标物理锚点（保证多镜头切机位时背景不变形）
         anchors = self._extract_dynamic_anchors(scene_name, scene_desc, genre_cat)
 
-        # 2. 离散角色三维站位与视线向量 (默认两核心对峙模式)
+        # 2. 确立场景全局电影级主光照与色彩基准 (Master Lighting & Tone Rig)
+        master_lighting = self._build_master_lighting(scene_name, scene_desc, genre_cat)
+
+        # 3. 离散角色三维站位与视线向量 (默认两核心对峙模式)
         char_spatial: Dict[str, Dict[str, Any]] = {}
         if not characters:
             characters = ["主角", "对手"]
@@ -147,6 +150,7 @@ class SpatialDirectorEngine:
             "pos": [-1.8, 4.5, 0.0],
             "facing": [0.8, -0.2], # 面向右前（视线投向B）
             "gaze_target": char_b,
+            "eyeline_angle": "Screen-Right (Gaze Angle: -6°)",
             "status": "优势防御/冷酷审视"
         }
         char_spatial[char_b] = {
@@ -154,6 +158,7 @@ class SpatialDirectorEngine:
             "pos": [1.8, 3.5, 0.0],
             "facing": [-0.8, 0.2], # 面向左后（视线投向A）
             "gaze_target": char_a,
+            "eyeline_angle": "Screen-Left (Gaze Angle: +6°)",
             "status": "挑衅逼近/狂妄施压"
         }
 
@@ -164,10 +169,11 @@ class SpatialDirectorEngine:
                 "pos": [3.0 + idx * 0.8, 6.0 + idx * 0.5, 0.0],
                 "facing": [-0.6, -0.4],
                 "gaze_target": char_a,
+                "eyeline_angle": "Screen-Left (Gaze Angle: 0°)",
                 "status": "旁观/惊骇"
             }
 
-        # 3. 确立主行动轴线 (Line of Action)
+        # 4. 确立主行动轴线 (Line of Action)
         # 连接主角A与对手B两点的水平线段
         p_a = (char_spatial[char_a]["pos"][0], char_spatial[char_a]["pos"][1])
         p_b = (char_spatial[char_b]["pos"][0], char_spatial[char_b]["pos"][1])
@@ -177,6 +183,7 @@ class SpatialDirectorEngine:
             "scene_name": scene_name,
             "dimensions": {"width": 20, "depth": 20, "height": 4},
             "anchors": anchors,
+            "master_lighting": master_lighting,
             "characters": char_spatial,
             "line_of_action": {
                 "subject_a": char_a,
@@ -186,6 +193,67 @@ class SpatialDirectorEngine:
                 "vector": axis_vec,
                 "allowed_side": "camera_front" # 锁死在视线轴前方（近机位侧），严禁越轴到后方翻转
             }
+        }
+
+    def _build_master_lighting(
+        self,
+        scene_name: str,
+        scene_desc: str = "",
+        genre_cat: str = "doomsday"
+    ) -> Dict[str, Any]:
+        """构建全场统一的电影级色温、光影对比度与调色基准，防止同一集各镜头色彩跳跃"""
+        text = f"{scene_name} {scene_desc}"
+
+        if genre_cat == "urban":
+            temp_k = 4800
+            style = "冷暖商务冷峻光"
+            contrast = "中高对比度漫反射"
+            palette = ["#0F172A", "#1E293B", "#38BDF8", "#F1F5F9"]
+            atmosphere = "明暗分明的现代玻璃幕墙漫反射与冷调轮廓光"
+            prompt_tag = "cinematic lighting, modern commercial cool grading, 4800K color temp, sharp rim light, high contrast shadows"
+        elif genre_cat == "scifi":
+            temp_k = 7200
+            style = "深空冰蓝与全息荧光"
+            contrast = "极限动态范围 (HDR) 低影调"
+            palette = ["#050814", "#0D1B2A", "#00F0FF", "#FF0055"]
+            atmosphere = "舱室深暗背景衬托幽蓝全息荧光与警告闪烁"
+            prompt_tag = "cinematic lighting, cyberpunk sci-fi cyan and magenta rim light, 7200K deep cold grade, volumetric laser haze"
+        elif genre_cat == "wuxia":
+            temp_k = 3600
+            style = "塞外残阳与黄泥微光"
+            contrast = "沧桑粗粝自然光"
+            palette = ["#1C1917", "#44403C", "#D97706", "#FEF3C7"]
+            atmosphere = "漫天风雪席卷，客栈炭火微红与窗棂斜射逆光"
+            prompt_tag = "cinematic lighting, gritty wuxia natural sunlight, 3600K warm twilight, dust motes in light beam, film grain texture"
+        elif genre_cat == "history":
+            temp_k = 3200
+            style = "紫禁宫灯与阴沉天光"
+            contrast = "庄严肃穆油画质感"
+            palette = ["#1A130B", "#3E2723", "#B45309", "#E2E8F0"]
+            atmosphere = "大殿深沉幽暗，雕花棂窗透入肃杀晨曦，宫廷油画质感"
+            prompt_tag = "cinematic lighting, historical classical chiaroscuro, 3200K golden candlelight and cold skylight, solemn atmosphere"
+        elif genre_cat == "doomsday":
+            temp_k = 6500
+            style = "暴风雪极寒冷调与避难所暖光对冲"
+            contrast = "冷暖强对比 (Teal and Orange)"
+            palette = ["#09131B", "#162E3B", "#EA580C", "#94A3B8"]
+            atmosphere = "室外极寒暴雪幽蓝背景，室内战术操作台橙黄暖光，形成强烈生死反差"
+            prompt_tag = "cinematic lighting, intense teal and orange contrast, 6500K blizzard cold exterior with 3000K warm shelter interior key light"
+        else:
+            temp_k = 4200
+            style = "紫金太虚与云雾氤氲光"
+            contrast = "空灵飘逸丁达尔光束"
+            palette = ["#180A2A", "#3B185F", "#A855F7", "#FDE047"]
+            atmosphere = "九霄云气缭绕，古殿穹顶垂落祥云天光，符文自发微光"
+            prompt_tag = "cinematic lighting, ethereal fantasy lighting, 4200K mystic purple-gold rim light, soft volumetric Tyndall fog"
+
+        return {
+            "color_temperature_k": temp_k,
+            "style": style,
+            "contrast_ratio": contrast,
+            "palette": palette,
+            "atmosphere": atmosphere,
+            "prompt_tag": prompt_tag
         }
 
     def generate_tension_and_pacing_curve(self, shot_count: int = 10, total_duration: int = 90) -> List[Dict[str, Any]]:
@@ -338,20 +406,31 @@ class SpatialDirectorEngine:
             # 计算屏幕左右站位关系（以主相机视角为基准，在轴线前侧观看）：
             if rig_key in ("CAM_OTS_A", "CAM_CU_B"):
                 spatial_layout_desc = f"角色【{char_a}】置于屏幕左下前景侧影(20%宽度)，视线朝右；核心焦点为角色【{char_b}】位于屏幕中央偏右(65%宽度)，正面朝左与A对视"
+                eyeline_desc = f"视线交错锁定：【{char_a}】视线朝右前方(-6°俯角)，【{char_b}】视线朝左后方(+6°仰角)，眼神交锋对撞"
                 prompt_spatial_tag = f"Subject [{char_b}] at screen-right (65% horizontal), facing left; Subject [{char_a}] at foreground extreme screen-left shoulder silhouette, facing right; 180-degree axis locked on front side"
+                prompt_eyeline_tag = f"Eyeline Vector: Subject [{char_a}] looking screen-right (-6 deg), Subject [{char_b}] looking screen-left (+6 deg), strict eye-line match"
             elif rig_key in ("CAM_OTS_B", "CAM_CU_A"):
                 spatial_layout_desc = f"角色【{char_b}】置于屏幕右下前景侧影(20%宽度)，视线朝左；核心焦点为角色【{char_a}】位于屏幕中央偏左(35%宽度)，正面朝右目光冷酷"
+                eyeline_desc = f"视线交错锁定：【{char_b}】视线朝左后方(+6°仰角)，【{char_a}】视线朝右前方(-6°俯角)，眼神交锋对撞"
                 prompt_spatial_tag = f"Subject [{char_a}] at screen-left (35% horizontal), facing right sharp focus; Subject [{char_b}] at foreground extreme screen-right shoulder silhouette, facing left; 180-degree axis locked on front side"
+                prompt_eyeline_tag = f"Eyeline Vector: Subject [{char_a}] looking screen-right (-6 deg focus), Subject [{char_b}] looking screen-left (+6 deg silhouette), strict eye-line match"
             elif rig_key == "CAM_TWO_SHOT":
                 spatial_layout_desc = f"双人对峙构图：角色【{char_a}】稳居屏幕左侧(30%)，角色【{char_b}】立于屏幕右侧(70%)，两人视线对穿，空间张力紧绷"
+                eyeline_desc = "双向平视对峙：水平视线连通两极，距离3米对撞"
                 prompt_spatial_tag = f"Two-shot dynamic confrontation, Subject [{char_a}] at screen-left (30%), Subject [{char_b}] at screen-right (70%), eye lines connecting horizontally, 180-degree cinematography axis preserved"
+                prompt_eyeline_tag = "Eyeline Vector: horizontal level eye contact connection across screen"
             else:
                 spatial_layout_desc = f"主控全局空间构图：【{char_a}】居左(35%)，【{char_b}】居右(65%)，背景正中清晰呈现地标锚点"
+                eyeline_desc = "全景广角深景深视线布局"
                 prompt_spatial_tag = f"Master spatial layout, Subject [{char_a}] on screen-left, Subject [{char_b}] on screen-right, clear environmental anchors in background center"
+                prompt_eyeline_tag = "Eyeline Vector: master shot wide focus alignment"
 
-            # 3. 提取环境锚点注入提示词（防背景抽卡漂移）
+            # 3. 提取环境锚点与全场光影注入提示词（防背景与色温抽卡漂移）
             anchor_desc = ", ".join(f"{a['name']}({a['desc']})" for a in topology["anchors"][:2])
-            prompt_anchor_tag = f"Consistent scene environment: {topology['scene_name']}, fixed background anchors [{anchor_desc}], fixed lighting direction"
+            prompt_anchor_tag = f"Consistent scene environment: {topology['scene_name']}, fixed background anchors [{anchor_desc}]"
+            
+            master_lighting = topology.get("master_lighting") or {}
+            prompt_lighting_tag = master_lighting.get("prompt_tag", "cinematic lighting, dramatic contrast")
 
             # 4. 动作接戏状态机 (Action Continuity & State Transition)
             visual_text = shot.get("visual", "")
@@ -373,11 +452,12 @@ class SpatialDirectorEngine:
             hero_props = self._extract_hero_props(visual_text + " " + dialogue_text)
             prompt_prop_tag = f"Hero Prop continuity: [{', '.join(hero_props)}]" if hero_props else ""
 
-            # 7. 优化生视频 Prompt
+            # 7. 优化生视频 Prompt (注入空间、轴线、视线交锋、全局光影)
             raw_prompt = shot.get("ai_prompt", "")
             enhanced_prompt = self._synthesize_spatial_prompt(
                 raw_prompt, cur_scale, rig, prompt_spatial_tag, prompt_anchor_tag,
-                shot.get("visual", ""), prompt_action_tag, prompt_prop_tag
+                shot.get("visual", ""), prompt_action_tag, prompt_prop_tag,
+                prompt_lighting_tag, prompt_eyeline_tag
             )
 
             opt_shot = dict(shot)
@@ -389,7 +469,13 @@ class SpatialDirectorEngine:
                 "name": rig["name"],
                 "focal_length_mm": rig["focal_length"],
                 "axis_side": "Axis-Left (Compliant)",
-                "spatial_layout": spatial_layout_desc
+                "spatial_layout": spatial_layout_desc,
+                "eyeline_vector": eyeline_desc
+            }
+            opt_shot["master_lighting"] = {
+                "style": master_lighting.get("style", "电影级冷暖光"),
+                "color_temp_k": master_lighting.get("color_temperature_k", 5600),
+                "palette": master_lighting.get("palette", ["#0F172A", "#38BDF8"])
             }
             opt_shot["action_continuity"] = action_continuity
             opt_shot["lip_sync"] = lip_sync_meta
@@ -560,11 +646,13 @@ class SpatialDirectorEngine:
         anchor_tag: str,
         visual_desc: str,
         action_tag: str = "",
-        prop_tag: str = ""
+        prop_tag: str = "",
+        lighting_tag: str = "",
+        eyeline_tag: str = ""
     ) -> str:
-        """精准将空间几何、动作接戏、核心道具与摄影参数缝合入 9:16 短剧视频提示词"""
+        """精准将空间几何、动作接戏、核心道具、全局光影与摄影参数缝合入 9:16 短剧视频提示词"""
         lens_tag = f"{rig['focal_length']}mm lens, {rig['motion']}"
-        tags = [t for t in [spatial_tag, anchor_tag, action_tag, prop_tag] if t]
+        tags = [t for t in [spatial_tag, eyeline_tag, anchor_tag, lighting_tag, action_tag, prop_tag] if t]
         tags_str = ", ".join(tags)
         prefix = f"9:16 vertical short drama shot, {shot_scale}, {lens_tag}, {tags_str}"
 

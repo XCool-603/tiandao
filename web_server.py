@@ -1110,6 +1110,18 @@ class SimulationManager:
             fate_twist = f"{decree_text}【宿命终局演变】：终局决断降临，众生各展平生至高底牌！"
             arbitration = "残存强者终极对撞，胜者破局夺魁绝尘而去，败者遗恨终生，天地因果落定！"
 
+        # 动态推进未揭晓的长程伏笔
+        for f in getattr(target_book, "foreshadowings", []):
+            if f.get("status") == "planted" and round_num >= 2:
+                f["status"] = "progressing"
+                fate_twist += f"\n【伏笔暗涌】：暗线《{f.get('title')}》初显端倪，各方惊觉局势早有预兆！"
+                break
+            elif f.get("status") == "progressing" and round_num >= 3:
+                f["status"] = "resolved"
+                f["resolved_chapter"] = len(target_book.chapters) + 1
+                arbitration += f" 暗线《{f.get('title')}》真相彻底大白，震动全场宿命局势！"
+                break
+
         log = RoundLog(
             round_number=round_num,
             environment_state=env_change,
@@ -1244,6 +1256,13 @@ class SimulationManager:
                 f"- 爆点高潮：{chapter_outline.get('climax')}"
             )
 
+        # 提取当前尚未完全揭露的长程伏笔线索
+        active_foreshadowings = book_mgr.get_active_foreshadowings(target_book)
+        foreshadow_context = ""
+        if active_foreshadowings:
+            f_lines = [f"  * 伏笔[{f.get('id')}]: 《{f.get('title')}》- 细节: {f.get('detail')} (状态: {f.get('status')})" for f in active_foreshadowings[:4]]
+            foreshadow_context = f"\n【大千世界暗线长程伏笔（若因果时机成熟，请在交锋与变数中自然推进或揭开）】：\n" + "\n".join(f_lines)
+
         decree_text = f"\n【天道法旨钦定强制干涉】：{divine_decree}" if divine_decree else ""
 
         turbo_prompt = f"""
@@ -1251,15 +1270,17 @@ class SimulationManager:
 当前现场环境：
 {target_book.world.scene_description}
 {outline_goal}
+{foreshadow_context}
 {decree_text}
 
 【在场存活角色的真实档案（严格双盲战争迷雾！角色间绝对看不到彼此的内心独白与秘密底牌）】：
 {chars_context}
 
-作为至高天道主宰，请在一轮深度因果推演中，一次性完成以下三大职责：
+作为至高天道主宰，请在一轮深度因果推演中，一次性完成以下四大职责：
 1. 【全员双盲决策】：为在场每位角色推演本回合行动。必须严格依据其各自的绝密心机与携带道具，生成深层内心算计独白、表面掩饰言辞、暗中具体出手招式及所消耗道具。
-2. 【天道因果裁决】：给出客观真实的招式对撞结果、天地格局动荡、外部大劫催化。
+2. 【天道因果裁决与伏笔推进】：给出客观真实的招式对撞结果、天地格局动荡、外部大劫催化；若场面契合暗线伏笔，自然推动其进展。
 3. 【确定性状态结算】：精确指定各角色实际消耗掉的道具、获得的战利品、新受到的真实伤势（如断臂、中毒、内伤吐血）以及生死走向（alive/dead/escaped）。
+4. 【伏笔状态演化追踪】：若本轮涉及长程伏笔，标明状态变更（progressing: 推进显露 / resolved: 彻底揭秘收束）。
 
 必须严格按以下 JSON 格式输出，杜绝废话：
 ```json
@@ -1292,6 +1313,13 @@ class SimulationManager:
       "角色名C": "escaped"
     }}
   }},
+  "foreshadowing_updates": [
+    {{
+      "id": "伏笔ID",
+      "status": "progressing 或 resolved",
+      "resolution_note": "伏笔推进或收束细节说明"
+    }}
+  ],
   "new_arrival": {{
     "should_spawn": false,
     "name": "新角色名",
@@ -1338,6 +1366,21 @@ class SimulationManager:
         # 4. 执行确定性状态机结算（法宝道具确切扣除、伤势记录、生死状态变更）
         settlement = parsed.get("settlement", {})
         book_mgr.apply_deterministic_settlement(target_book, settlement)
+
+        # 4.1 推进长程伏笔因果收束 (Foreshadowing Lifecycle Tracking)
+        for f_up in parsed.get("foreshadowing_updates", []):
+            if isinstance(f_up, dict) and f_up.get("id"):
+                f_id = f_up.get("id")
+                new_st = f_up.get("status", "progressing")
+                res_note = f_up.get("resolution_note") or ""
+                for existing_f in target_book.foreshadowings:
+                    if existing_f.get("id") == f_id:
+                        existing_f["status"] = new_st
+                        if res_note:
+                            existing_f["detail"] = f"{existing_f.get('detail', '')} (演化进展: {res_note})".strip()
+                        if new_st == "resolved":
+                            existing_f["resolved_chapter"] = len(target_book.chapters) + 1
+                        break
 
         # 5. 引渡新登场修士（如果场上活跃人数少于 5 且天道认为机缘已至）
         new_arrival = parsed.get("new_arrival")
@@ -1711,7 +1754,8 @@ class SimulationManager:
                         is_final=is_final,
                         previous_summary=prev_summary,
                         chapter_outline=chap_outline,
-                        force_mock=use_mock
+                        force_mock=use_mock,
+                        active_foreshadowings=book_mgr.get_active_foreshadowings(target_book)
                     ):
                         if runner.stop_requested:
                             break

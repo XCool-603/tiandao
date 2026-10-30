@@ -112,7 +112,8 @@ class ChroniclerAgent:
         is_final: bool = False,
         previous_summary: str = "",
         chapter_outline: Optional[Dict[str, Any]] = None,
-        force_mock: bool = False
+        force_mock: bool = False,
+        active_foreshadowings: Optional[List[Dict[str, Any]]] = None
     ) -> Iterator[str]:
         """
         流式生成整篇小说章节，实时 yield 生成内容片段 (Token / Delta Chunk)
@@ -126,6 +127,16 @@ class ChroniclerAgent:
             return
 
         genre_info = self._build_genre_style(genre, book_title)
+
+        # 组织长程伏笔脉络指引
+        foreshadow_directive = ""
+        if active_foreshadowings:
+            f_items = [f"- 伏笔《{f.get('title')}》: {f.get('detail')} (状态: {f.get('status')})" for f in active_foreshadowings[:4]]
+            foreshadow_directive = f"""
+【★★★ 伏脉千里 · 长程暗线伏笔指引（草蛇灰线，自然呼应）★★★】：
+{chr(10).join(f_items)}
+请在小说正文中自然穿插、呼应或暗中推进上述伏笔线索，拒绝机械生硬，让剧情深度回甘！
+"""
 
         # 构建演化全卷
         evolution_records = []
@@ -188,6 +199,7 @@ class ChroniclerAgent:
 3. 登场核心人物：{char_roster}。绝不能写出单一脸谱化工具人，写出各自立场与命运冲突。
 
 {outline_directive}
+{foreshadow_directive}
 
 【本场演化发生的情景舞台】：
 {world.scene_description}

@@ -1,10 +1,11 @@
 """
 剪映专业版原生工程生成器 (Jianying Pro / CapCut Draft Exporter)
 自动将分镜数据组装导出为剪映原生多轨工程文件 (draft_content.json + draft_meta_info.json):
-- 视频轨 (Video Track): 9:16 竖屏视频片段顺序排布
+- 视频轨 (Video Track): 9:16 竖屏视频片段顺序排布，含 Hook 闪白与高潮震荡转场
 - 对白轨 (Audio Dialogue Track): Edge-TTS 高清配音文件对齐
 - 音效重音轨 (Audio SFX Track): 氛围、打脸重音、环境底噪
-- 智能字幕轨 (Text Subtitle Track): 对白台词毫秒级贴合字幕
+- 智能避让BGM轨 (Audio Ducking BGM Track): 有对白时自动压制音量，动作高潮自动回弹
+- 黄金花字字幕轨 (Text Subtitle Track): 角色名金字高亮、正文纯白描边黑框
 """
 
 import json
@@ -12,6 +13,7 @@ import uuid
 import time
 import zipfile
 import io
+import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -41,18 +43,45 @@ class JianyingDraftExporter:
         video_track_id = cls._gen_id()
         audio_track_id = cls._gen_id()
         sfx_track_id = cls._gen_id()
+        bgm_track_id = cls._gen_id()
         text_track_id = cls._gen_id()
 
-        total_duration_micros = 0
         video_segments = []
         audio_segments = []
         sfx_segments = []
+        bgm_segments = []
         text_segments = []
 
         materials_videos = []
         materials_audios = []
         materials_texts = []
         materials_speeds = []
+        materials_transitions = []
+
+        # 预先生成专用的转场物料 (Hook 闪白、高潮震荡)
+        hook_trans_id = cls._gen_id()
+        materials_transitions.append({
+            "category_id": "flash",
+            "category_name": "闪白转场",
+            "duration": 350000, # 0.35s
+            "id": hook_trans_id,
+            "is_overlap": False,
+            "name": "闪白Hook快切",
+            "resource_id": "flash_white",
+            "type": "transition"
+        })
+
+        climax_trans_id = cls._gen_id()
+        materials_transitions.append({
+            "category_id": "shake",
+            "category_name": "震荡转场",
+            "duration": 400000, # 0.4s
+            "id": climax_trans_id,
+            "is_overlap": False,
+            "name": "镜头重音冲击",
+            "resource_id": "impact_shake",
+            "type": "transition"
+        })
 
         current_time_micros = 0
 
@@ -60,6 +89,7 @@ class JianyingDraftExporter:
             shot_num = shot.get("shot_num", idx + 1)
             duration_sec = float(shot.get("duration_sec", 3.0))
             shot_duration_micros = int(duration_sec * MICROS_PER_SEC)
+            tension = float(shot.get("tension_score", 60.0))
 
             # 1. 速度对象 (1.0倍速)
             speed_id = cls._gen_id()
@@ -88,7 +118,7 @@ class JianyingDraftExporter:
             })
 
             video_seg_id = cls._gen_id()
-            video_segments.append({
+            video_seg: Dict[str, Any] = {
                 "clip": {
                     "alpha": 1.0,
                     "flip": {"horizontal": False, "vertical": False},
@@ -105,11 +135,21 @@ class JianyingDraftExporter:
                 "target_timerange": {"duration": shot_duration_micros, "start": current_time_micros},
                 "speed_id": speed_id,
                 "volume": 1.0
-            })
+            }
+
+            # 挂载转场：第1镜与第2镜交接处挂载 Hook 闪白；高潮张力大于85时挂载冲击震荡
+            if idx == 0 and len(shots) > 1:
+                video_seg["extra_material_refs"] = [hook_trans_id]
+            elif tension >= 88.0:
+                video_seg["extra_material_refs"] = [climax_trans_id]
+
+            video_segments.append(video_seg)
 
             # 3. 对白轨物料与片段 (若有对白台词)
             dialogue = (shot.get("dialogue") or "").strip()
-            if dialogue and dialogue != "(无对白)":
+            has_speech = bool(dialogue and dialogue != "(无对白)")
+
+            if has_speech:
                 audio_mat_id = cls._gen_id()
                 materials_audios.append({
                     "app_id": 0,
@@ -134,16 +174,30 @@ class JianyingDraftExporter:
                     "volume": 1.0
                 })
 
-                # 4. 字幕文本物料与片段
+                # 4. 黄金花字字幕物料与片段 (角色名高亮 + 正文纯白黑边)
                 text_mat_id = cls._gen_id()
+                spk_match = re.match(r"^([^\(（：:]{1,10})([\(（][^\)）]+[\)）])?[：:]\s*(.*)$", dialogue)
+                if spk_match:
+                    spk_name = spk_match.group(1).strip()
+                    spk_action = spk_match.group(2) or ""
+                    spk_line = spk_match.group(3).strip()
+                    formatted_content = f"<color=#FBBF24>【{spk_name}】</color><color=#94A3B8>{spk_action}</color> <color=#FFFFFF>{spk_line}</color>"
+                else:
+                    formatted_content = f"<color=#FFFFFF>{dialogue}</color>"
+
                 materials_texts.append({
                     "alignment": 1,
                     "background_alpha": 0.0,
                     "bold": True,
-                    "content": f"<color=#FFFFFF>{dialogue}</color>",
-                    "font_size": 8.0,
+                    "content": formatted_content,
+                    "font_size": 8.5,
                     "id": text_mat_id,
                     "line_spacing": 0.02,
+                    "stroke_color": "#000000",
+                    "stroke_width": 0.08,
+                    "shadow_color": "#000000",
+                    "shadow_alpha": 0.9,
+                    "shadow_distance": 0.02,
                     "type": "text"
                 })
 
@@ -153,7 +207,7 @@ class JianyingDraftExporter:
                         "alpha": 1.0,
                         "rotation": 0.0,
                         "scale": {"x": 1.0, "y": 1.0},
-                        "transform": {"x": 0.0, "y": -0.72} # 竖屏底部黄金字幕位
+                        "transform": {"x": 0.0, "y": -0.72} # 竖屏底部黄金字幕安全区
                     },
                     "id": text_seg_id,
                     "material_id": text_mat_id,
@@ -186,8 +240,35 @@ class JianyingDraftExporter:
                     "source_timerange": {"duration": shot_duration_micros, "start": 0},
                     "target_timerange": {"duration": shot_duration_micros, "start": current_time_micros},
                     "speed_id": speed_id,
-                    "volume": 0.8
+                    "volume": 0.85
                 })
+
+            # 6. 智能音频避让 BGM 氛围轨 (Audio Ducking)
+            # 有对白时音量压至 0.22 避让语音；无对白纯动作时回弹至 0.85 增强张力
+            bgm_mat_id = cls._gen_id()
+            materials_audios.append({
+                "app_id": 0,
+                "category_id": "",
+                "category_name": "bgm",
+                "check_flag": 1,
+                "duration": shot_duration_micros,
+                "id": bgm_mat_id,
+                "material_name": f"BGM_Atmosphere_{episode_num}_{shot_num}.mp3",
+                "path": f"bgm/ambient_{episode_num}.mp3",
+                "type": "music"
+            })
+
+            ducking_volume = 0.22 if has_speech else (0.85 if tension >= 80 else 0.55)
+            bgm_seg_id = cls._gen_id()
+            bgm_segments.append({
+                "id": bgm_seg_id,
+                "material_id": bgm_mat_id,
+                "render_index": 0,
+                "source_timerange": {"duration": shot_duration_micros, "start": 0},
+                "target_timerange": {"duration": shot_duration_micros, "start": current_time_micros},
+                "speed_id": speed_id,
+                "volume": ducking_volume
+            })
 
             current_time_micros += shot_duration_micros
 
@@ -224,9 +305,18 @@ class JianyingDraftExporter:
             {
                 "attribute": 0,
                 "flag": 0,
+                "id": bgm_track_id,
+                "is_default_name": False,
+                "name": "智能避让BGM氛围轨(Ducking)",
+                "segments": bgm_segments,
+                "type": "audio"
+            },
+            {
+                "attribute": 0,
+                "flag": 0,
                 "id": text_track_id,
                 "is_default_name": False,
-                "name": "智能台词字幕轨",
+                "name": "黄金花字台词字幕轨",
                 "segments": text_segments,
                 "type": "text"
             }
@@ -253,6 +343,7 @@ class JianyingDraftExporter:
                 "original_sound_last_index": 1,
                 "record_audio_last_index": 1,
                 "sticker_max_index": 1,
+                "subtitle_keywords_config": None,
                 "subtitle_recognition_id": "",
                 "subtitle_sync": True,
                 "subtitle_taskinfo": [],
@@ -265,7 +356,30 @@ class JianyingDraftExporter:
             "duration": total_duration_micros,
             "extra_info": None,
             "fps": 30.0,
+            "free_render_index_mode_on": False,
+            "group_container": None,
             "id": draft_id,
+            "keyframe_graph_list": [],
+            "keyframes": {
+                "adjusts": [],
+                "audios": [],
+                "effects": [],
+                "filters": [],
+                "handwrites": [],
+                "stickers": [],
+                "texts": [],
+                "videos": []
+            },
+            "last_modified_platform": {
+                "app_id": 3704,
+                "app_source": "jianying",
+                "app_version": "6.0.0",
+                "device_id": "tiandao_engine",
+                "hard_disk_id": "tiandao_disk",
+                "mac_address": "tiandao_mac",
+                "os": "windows",
+                "os_version": "10.0.19045"
+            },
             "materials": {
                 "audio_balances": [],
                 "audio_effects": [],
@@ -276,6 +390,7 @@ class JianyingDraftExporter:
                 "canvases": [],
                 "chromas": [],
                 "color_curves": [],
+                "digital_humans": [],
                 "drafts": [],
                 "effects": [],
                 "flowers": [],
@@ -284,10 +399,14 @@ class JianyingDraftExporter:
                 "hsl": [],
                 "images": [],
                 "log_color_wheels": [],
+                "loudnesses": [],
                 "manual_deformations": [],
                 "masks": [],
                 "material_animations": [],
                 "material_colors": [],
+                "multi_language_refs": [],
+                "music_hit_points": [],
+                "placeholder_researches": [],
                 "placeholders": [],
                 "plugin_effects": [],
                 "primary_color_wheels": [],
@@ -300,7 +419,7 @@ class JianyingDraftExporter:
                 "tail_leaders": [],
                 "text_templates": [],
                 "texts": materials_texts,
-                "transitions": [],
+                "transitions": materials_transitions,
                 "video_effects": [],
                 "video_track_indexes": [],
                 "videos": materials_videos,
@@ -368,16 +487,22 @@ class JianyingDraftExporter:
 作品名：《{book_title}》
 集数：第 {drama_data.get('episode_num', 1)} 集
 镜头数：{len(drama_data.get('shots', []))} 个镜头
+工程特色：
+- 9:16竖屏电影级多机位与行动轴线锁死保护
+- 自动挂载 Hook 闪白与高潮冲击震荡转场
+- 黄金花字字幕：角色名金字高亮 + 纯白黑边高反差防遮挡
+- 智能避让 BGM 氛围轨：对白时音量自动压低，纯动作戏自动回升
+- 物理打包真实 TTS 配音音频文件
 
 【如何导入剪映专业版】：
 1. 打开电脑中的剪映草稿目录：
    - Windows 路径：
-     C:\\Users\\<用户名>\\AppData\\Local\\JianyingPro\\User Data\\Projects\\com.lveditor.draft\\
+     C:/Users/<用户名>/AppData/Local/JianyingPro/User Data/Projects/com.lveditor.draft/
    - macOS 路径：
      ~/Movies/JianyingPro/User Data/Projects/com.lveditor.draft/
 2. 将本压缩包解压后的文件夹【{draft_name}】直接复制粘贴进上述目录。
 3. 打开剪映专业版，在草稿列表中即可看到《{draft_name}》！
-4. 双击打开，视频轨、TTS对白轨、重音音效轨、智能台词字幕轨已全部精确对齐！
+4. 双击打开，视频轨、TTS对白轨、重音音效轨、智能避让BGM轨、黄金花字字幕轨已全部精确对齐！
 """
             zf.writestr(f"{draft_name}/导入说明.txt", readme_text)
 

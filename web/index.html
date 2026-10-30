@@ -5528,6 +5528,27 @@ function copyTampermonkeyUrl() {
               </div>
             </div>
           </div>
+
+          <!-- 全片电影主光照与色彩基准看板 (Master Lighting & Tone Rig) -->
+          ${(d.scene_topology && d.scene_topology.master_lighting) ? `
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="font-size: 11px; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 4px;">
+                  <svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                  全片电影主光照与色彩基准:
+                </span>
+                <span class="pill pill-gold" style="font-size: 10.5px;">${d.scene_topology.master_lighting.color_temperature_k || 5600}K 色温</span>
+                <span class="pill pill-blue" style="font-size: 10.5px;">${escapeHtml(d.scene_topology.master_lighting.style || '电影级冷暖光')}</span>
+                <span style="font-size: 11px; color: var(--text-muted);">${escapeHtml(d.scene_topology.master_lighting.atmosphere || '')}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 10.5px; color: var(--text-muted); margin-right: 2px;">调色板:</span>
+                ${(d.scene_topology.master_lighting.palette || []).map(hex => `
+                  <span style="display: inline-block; width: 18px; height: 18px; border-radius: 4px; background: ${hex}; border: 1px solid rgba(255,255,255,0.2);" title="${hex}"></span>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
         </div>
 
         <!-- 主角定妆照总控专区 (Character Concept Art Gallery) -->
@@ -5618,12 +5639,16 @@ function copyTampermonkeyUrl() {
 
             ${cam.spatial_layout ? `
               <div style="background: rgba(15,23,42,0.65); border: 1px solid rgba(59,130,246,0.22); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;">
-                <div style="font-size: 10px; color: #93c5fd; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
-                  <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-                  屏幕空间站位几何投影:
+                <div style="font-size: 10px; color: #93c5fd; font-weight: 600; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                  <span style="display: flex; align-items: center; gap: 4px;">
+                    <svg class="icon-sm" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                    屏幕空间站位几何投影:
+                  </span>
+                  ${cam.eyeline_vector ? `<span style="color: #fcd34d; font-size: 9.5px;">视线交错锁定</span>` : ''}
                 </div>
                 <div style="font-size: 11px; color: var(--text-primary); line-height: 1.4;">
                   ${escapeHtml(cam.spatial_layout)}
+                  ${cam.eyeline_vector ? `<div style="font-size: 10.5px; color: #fcd34d; margin-top: 3px; border-top: 1px dashed rgba(245,158,11,0.2); padding-top: 2px;"><b>视线交错向量:</b> ${escapeHtml(cam.eyeline_vector)}</div>` : ''}
                 </div>
               </div>
             ` : ''}
