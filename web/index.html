@@ -3879,6 +3879,24 @@
 
         const cult = c.cultivation || c.cultivation_level || '';
 
+        // 提取本角色与他人的恩怨羁绊状态 (Affinity & Karmic Matrix)
+        const affinityMap = (currentData && currentData.affinity_matrix && currentData.affinity_matrix[c.name]) || {};
+        const affinityPills = Object.entries(affinityMap)
+          .filter(([otherName, r]) => otherName !== c.name && (r.trust !== 0 || r.feud !== 0 || (r.last_interaction && r.last_interaction !== '素未谋面')))
+          .map(([otherName, r]) => {
+            const isHostile = (r.feud || 0) >= 30 || (r.trust || 0) <= -20;
+            const isFriendly = (r.trust || 0) >= 20 && (r.feud || 0) <= 20;
+            const pillStyle = isHostile
+              ? 'background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3);'
+              : (isFriendly
+                ? 'background: rgba(16,185,129,0.15); color: #86efac; border: 1px solid rgba(16,185,129,0.3);'
+                : 'background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3);');
+            const relTitle = `${escapeHtml(c.name)} 对 ${escapeHtml(otherName)}: 信任度 ${r.trust}, 仇恨度 ${r.feud} | 因果: ${escapeHtml(r.last_interaction || '初次交锋')}`;
+            return `<span style="display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; ${pillStyle}" title="${relTitle}">
+              ${isHostile ? '仇' : (isFriendly ? '盟' : '羁')}·${escapeHtml(otherName)} (信${r.trust}/仇${r.feud})
+            </span>`;
+          }).join(" ");
+
         return `
           <div class="char-profile-card">
             <div class="char-card-top">
@@ -3892,6 +3910,7 @@
               </div>
             </div>
             <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 4px;">${escapeHtml(c.public_profile || '')}</div>
+            ${affinityPills ? `<div style="display: flex; gap: 4px; align-items: center; margin-top: 4px; margin-bottom: 4px; flex-wrap: wrap;"><span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">恩怨羁绊:</span> ${affinityPills}</div>` : ''}
             ${injuries ? `<div class="char-inventory-box">${injuries}</div>` : ''}
             ${items ? `<div class="char-inventory-box">${items}</div>` : ''}
           </div>
@@ -5632,6 +5651,8 @@ function copyTampermonkeyUrl() {
                 <span class="shot-pill">${escapeHtml(s.camera_movement || '推近')}</span>
                 <span class="shot-pill">${s.duration_sec || 4}s</span>
                 ${cam.name ? `<span class="shot-pill" style="color: #60a5fa;"><svg class="icon-sm" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> ${escapeHtml(cam.name)} (${cam.focal_length_mm || 50}mm)</span>` : ''}
+                ${cam.aperture ? `<span class="shot-pill" style="color: #c084fc;" title="${escapeHtml(cam.optical_dof || '')}"><svg class="icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> 光圈 ${escapeHtml(cam.aperture)}</span>` : ''}
+                ${(s.shot_num === 1 && s.action_continuity && s.action_continuity.pre_action_state && s.action_continuity.pre_action_state.includes("跨集")) ? `<span class="shot-pill" style="color: #38bdf8; background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.3);"><svg class="icon-sm" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> 跨集接戏中继锁</span>` : ''}
                 <span class="shot-pill" style="color: #34d399;">180°轴线合规</span>
                 ${s.tension_score ? `<span class="shot-pill" style="color: #fcd34d;">张力 ${Math.round(s.tension_score)}</span>` : ''}
               </div>

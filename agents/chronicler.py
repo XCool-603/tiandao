@@ -158,6 +158,23 @@ class ChroniclerAgent:
 
         full_simulation_log = "\n\n".join(evolution_records)
 
+        # 提取在场各人的恩怨羁绊网，指导小说文学刻画角色互动
+        affinity_lines = []
+        if hasattr(world, "affinity_matrix") and world.affinity_matrix:
+            for ca, rels in world.affinity_matrix.items():
+                for cb, data in rels.items():
+                    if ca != cb and (data.get("trust", 0) != 0 or data.get("feud", 0) != 0 or data.get("last_interaction") != "素未谋面"):
+                        affinity_lines.append(f"- 【{ca}】对【{cb}】：信任度 {data.get('trust', 0)}，仇恨度 {data.get('feud', 0)}，过往纠葛: {data.get('last_interaction')}")
+        affinity_directive = ""
+        if affinity_lines:
+            affinity_directive = (
+                f"\n【角色间动态恩怨羁绊与信任因果网】：\n"
+                f"在正文行文、人物对白、微表情动作与杀伐博弈中，必须精准体现以下角色历史过节与信任张力：\n"
+                + "\n".join(affinity_lines) + "\n"
+                f"- 若信任度极低或结下血仇，对话必须绵里藏针、暗藏杀机，绝不轻信对方任何言辞；\n"
+                f"- 若存在人情或盟约，动作应有试探与克制，让利益博弈与恩怨纠葛充满现实主义戏剧张力！\n"
+            )
+
         # 角色阵容名单
         char_roster = ", ".join([f"{c['name']}({c.get('title','')})" for c in world.characters.values()])
 
@@ -200,6 +217,7 @@ class ChroniclerAgent:
 
 {outline_directive}
 {foreshadow_directive}
+{affinity_directive}
 
 【本场演化发生的情景舞台】：
 {world.scene_description}

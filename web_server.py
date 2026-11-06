@@ -946,6 +946,7 @@ class SimulationManager:
             "has_outline": bool(getattr(target_book, "outline", {}).get("main_plot")),
             "foreshadowings": getattr(target_book, "foreshadowings", []),
             "dramas": target_book.dramas,
+            "affinity_matrix": getattr(target_book.world, "affinity_matrix", {}),
             "books_summary": books_summary,
             "is_busy": self.is_book_busy(target_book.id),
             "has_novel": bool(first_chap_content),
