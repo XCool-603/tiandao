@@ -79,6 +79,7 @@ class Book:
             "scene_title": self.world.title,
             "scene_description": self.world.scene_description,
             "characters": self.world.characters,
+            "affinity_matrix": getattr(self.world, "affinity_matrix", {}),
             "history": history_list,
             "chapters": self.chapters,
             "dramas": self.dramas,
@@ -94,6 +95,7 @@ class Book:
         world.title = data.get("scene_title", "【大千混沌】")
         world.scene_description = data.get("scene_description", "")
         world.characters = data.get("characters", {})
+        world.affinity_matrix = data.get("affinity_matrix", {})
 
         # 还原历史记录
         world.history = []
@@ -272,7 +274,7 @@ class BookManager:
             book_id="",
             title="暂无作品",
             genre="未选择",
-            synopsis="当前书库为空，请点击顶部【➕ 新建作品】开始创作！",
+            synopsis="当前书库为空，请点击顶部【+ 新建作品】开始创作！",
             chapters=[],
             current_round=0
         )

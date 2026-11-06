@@ -1122,6 +1122,19 @@ class SimulationManager:
                 arbitration += f" 暗线《{f.get('title')}》真相彻底大白，震动全场宿命局势！"
                 break
 
+        # 动态演化角色间恩怨羁绊网 (Affinity Matrix)
+        if len(active_chars) >= 2:
+            c_a = active_chars[0]["name"]
+            c_b = active_chars[1]["name"]
+            if round_num == 1:
+                target_book.world.update_relationship(c_a, c_b, delta_trust=-20, delta_feud=30, interaction="初次因果碰撞，互相猜忌试探")
+                target_book.world.update_relationship(c_b, c_a, delta_trust=-25, delta_feud=35, interaction="视对方为夺宝竞争大敌")
+            elif round_num == 2:
+                target_book.world.update_relationship(c_a, c_b, delta_trust=-40, delta_feud=50, interaction="杀招白刃相见，结下死仇")
+                target_book.world.update_relationship(c_b, c_a, delta_trust=-50, delta_feud=60, interaction="受其重创，势不两立")
+            else:
+                target_book.world.update_relationship(c_a, c_b, delta_trust=-10, delta_feud=10, interaction="宿命决战尘埃落定，因果终结")
+
         log = RoundLog(
             round_number=round_num,
             environment_state=env_change,
@@ -1265,6 +1278,15 @@ class SimulationManager:
 
         decree_text = f"\n【天道法旨钦定强制干涉】：{divine_decree}" if divine_decree else ""
 
+        # 提取在场角色间的恩怨羁绊网 (Affinity & Karmic Matrix)
+        affinity_lines = []
+        if hasattr(target_book.world, "affinity_matrix") and target_book.world.affinity_matrix:
+            for ca, rels in target_book.world.affinity_matrix.items():
+                for cb, data in rels.items():
+                    if ca != cb and (data.get("trust", 0) != 0 or data.get("feud", 0) != 0 or data.get("last_interaction") != "素未谋面"):
+                        affinity_lines.append(f"  * 【{ca}】对【{cb}】：信任度 {data.get('trust', 0)}，仇恨度 {data.get('feud', 0)}，渊源: {data.get('last_interaction')}")
+        affinity_context = "\n【角色间历史恩怨羁绊网 (Affinity & Karmic Matrix)】：\n" + "\n".join(affinity_lines) if affinity_lines else ""
+
         turbo_prompt = f"""
 你是不容忤逆的【{target_book.genre}因果律天道主宰】。
 当前现场环境：
@@ -1272,6 +1294,7 @@ class SimulationManager:
 {outline_goal}
 {foreshadow_context}
 {decree_text}
+{affinity_context}
 
 【在场存活角色的真实档案（严格双盲战争迷雾！角色间绝对看不到彼此的内心独白与秘密底牌）】：
 {chars_context}
@@ -1281,6 +1304,7 @@ class SimulationManager:
 2. 【天道因果裁决与伏笔推进】：给出客观真实的招式对撞结果、天地格局动荡、外部大劫催化；若场面契合暗线伏笔，自然推动其进展。
 3. 【确定性状态结算】：精确指定各角色实际消耗掉的道具、获得的战利品、新受到的真实伤势（如断臂、中毒、内伤吐血）以及生死走向（alive/dead/escaped）。
 4. 【伏笔状态演化追踪】：若本轮涉及长程伏笔，标明状态变更（progressing: 推进显露 / resolved: 彻底揭秘收束）。
+5. 【恩怨羁绊动态演化】：结算本轮交锋中角色两两之间的恩怨信任变化 (delta_trust: -100~+100, delta_feud: 0~100, interaction)。
 
 必须严格按以下 JSON 格式输出，杜绝废话：
 ```json
@@ -1313,6 +1337,15 @@ class SimulationManager:
       "角色名C": "escaped"
     }}
   }},
+  "affinity_updates": [
+    {{
+      "char_a": "角色名A",
+      "char_b": "角色名B",
+      "delta_trust": -20,
+      "delta_feud": 30,
+      "interaction": "因果交锋细节简述"
+    }}
+  ],
   "foreshadowing_updates": [
     {{
       "id": "伏笔ID",
@@ -1381,6 +1414,17 @@ class SimulationManager:
                         if new_st == "resolved":
                             existing_f["resolved_chapter"] = len(target_book.chapters) + 1
                         break
+
+        # 4.2 动态更新角色恩怨羁绊网 (Affinity Matrix Updates)
+        for aff in parsed.get("affinity_updates", []):
+            if isinstance(aff, dict) and aff.get("char_a") and aff.get("char_b"):
+                target_book.world.update_relationship(
+                    char_a=aff.get("char_a"),
+                    char_b=aff.get("char_b"),
+                    delta_trust=int(aff.get("delta_trust", 0)),
+                    delta_feud=int(aff.get("delta_feud", 0)),
+                    interaction=aff.get("interaction", "")
+                )
 
         # 5. 引渡新登场修士（如果场上活跃人数少于 5 且天道认为机缘已至）
         new_arrival = parsed.get("new_arrival")
@@ -2587,6 +2631,20 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     return
 
             if audio_path.exists():
+                from jianying_exporter import JianyingDraftExporter
+                dur = JianyingDraftExporter.get_mp3_duration_seconds(audio_path)
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if target_book and hasattr(target_book, "dramas"):
+                    for d in target_book.dramas:
+                        if str(d.get("episode_num")) == str(ep_val):
+                            for s in d.get("shots", []):
+                                if str(s.get("shot_num")) == str(shot_val):
+                                    s["audio_duration_sec"] = dur
+                                    if dur > 0:
+                                        s["duration_sec"] = max(float(s.get("duration_sec", 3.0)), round(dur + 0.35, 1))
+                                    target_book.save()
+                                    break
+
                 audio_bytes = audio_path.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "audio/mpeg")
@@ -2932,6 +2990,22 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 drama_agent = DramaAgent(llm, model_name=drama_model)
 
                 active_chars_list = list(target_book.world.characters.values()) if hasattr(target_book.world, "characters") else []
+
+                # 跨集接戏中继锁：提取上一集高潮悬念与最终姿态落点
+                prev_cliffhanger = ""
+                prev_post_action = ""
+                if ep_num and ep_num > 1 and hasattr(target_book, "dramas") and target_book.dramas:
+                    prev_drama = next((d for d in target_book.dramas if d.get("episode_num") == ep_num - 1), None)
+                    if prev_drama:
+                        prev_cliffhanger = prev_drama.get("cliffhanger", "")
+                        prev_shots = prev_drama.get("shots", [])
+                        if prev_shots:
+                            last_shot = prev_shots[-1]
+                            prev_post_action = (
+                                last_shot.get("action_continuity", {}).get("post_action_state", "") or
+                                last_shot.get("visual", "")
+                            )
+
                 drama_data = drama_agent.generate_from_chapter(
                     book_title=target_book.title,
                     genre=target_book.genre,
@@ -2939,7 +3013,9 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     chapter_content=chap_content,
                     episode_num=ep_num,
                     force_mock=use_mock,
-                    active_characters=active_chars_list
+                    active_characters=active_chars_list,
+                    prev_cliffhanger=prev_cliffhanger,
+                    prev_post_action=prev_post_action
                 )
 
                 if not hasattr(target_book, "dramas") or target_book.dramas is None:
@@ -3128,13 +3204,18 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({"status": "error", "message": f"未找到镜号 #{shot_num}"}, ensure_ascii=False).encode("utf-8"))
                     return
 
-                # 收集本镜出场角色的定妆人设特质，注入分镜以维持人物面容一致性
+                # 收集本镜出场角色的定妆人设特质与定妆人像/服饰锚点，注入分镜以维持人物面容一致性
                 char_traits = []
+                ref_portrait = ""
+                ref_costume = ""
                 if hasattr(target_book, "world") and target_book.world:
                     for c in target_book.world.characters.values():
                         c_name = c.get("name", "")
                         if c_name and (c_name in target_shot.get("visual", "") or c_name in target_shot.get("dialogue", "")):
                             char_traits.append(f"{c_name} wearing {c.get('costume', 'distinctive outfit')}, {c.get('public_profile', '')}")
+                            if not ref_portrait and c.get("portrait_url"):
+                                ref_portrait = c.get("portrait_url")
+                                ref_costume = c.get("costume", "")
                 traits_str = "; ".join(char_traits)
 
                 v_agent = VideoAgent()
@@ -3144,6 +3225,8 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     camera_movement=target_shot.get("camera_movement", "缓缓推近"),
                     character_traits=traits_str,
                     frame_type=frame_type,
+                    reference_image_url=ref_portrait,
+                    costume=ref_costume,
                     force_mock=use_mock
                 )
 
@@ -3240,6 +3323,17 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                     "character_id": target_cid,
                     "message": p_res.get("message", "主角定妆照已成功就绪！")
                 }, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/world/affinity":
+                qs = urllib.parse.parse_qs(parsed.query)
+                bid = qs.get("book_id", [""])[0]
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                aff_matrix = getattr(target_book.world, "affinity_matrix", {}) if target_book and hasattr(target_book, "world") else {}
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "affinity_matrix": aff_matrix}, ensure_ascii=False).encode("utf-8"))
                 return
 
             if path == "/api/drama/character/update_portrait":

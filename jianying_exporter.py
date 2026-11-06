@@ -25,6 +25,45 @@ class JianyingDraftExporter:
     def _gen_id() -> str:
         return str(uuid.uuid4()).upper()
 
+    @staticmethod
+    def get_mp3_duration_seconds(file_path: Any) -> float:
+        """从 MP3 文件二进制头精准解析实际物理音频时长 (秒)"""
+        try:
+            p = Path(file_path)
+            if not p.exists() or p.stat().st_size == 0:
+                return 0.0
+            file_size = p.stat().st_size
+            with open(p, "rb") as f:
+                data = f.read(8192)
+            bitrate_kbps = 48
+            for i in range(len(data) - 4):
+                if data[i] == 0xFF and (data[i+1] & 0xE0) == 0xE0:
+                    layer = (data[i+1] >> 1) & 0x03
+                    version = (data[i+1] >> 3) & 0x03
+                    bitrate_idx = (data[i+2] >> 4) & 0x0F
+                    if layer == 1 and bitrate_idx not in (0, 15):
+                        if version == 3:
+                            bitrates = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320]
+                        else:
+                            bitrates = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]
+                        if bitrate_idx < len(bitrates):
+                            bitrate_kbps = bitrates[bitrate_idx]
+                            break
+            dur = (file_size * 8.0) / (bitrate_kbps * 1000.0)
+            return max(0.5, round(dur, 2))
+        except Exception:
+            return 0.0
+
+    @staticmethod
+    def estimate_spoken_duration_seconds(text: str) -> float:
+        """基于中文短剧快节奏语速模型估算配音台词时长 (字符/秒 + 呼吸气口间隙)"""
+        clean_text = re.sub(r'[\(（][^\)）]+[\)）]', '', text).strip()
+        pure_chars = re.sub(r'[^\w\u4e00-\u9fa5]', '', clean_text)
+        if not pure_chars:
+            return 1.5
+        dur = len(pure_chars) / 4.2 + 0.35
+        return max(1.2, round(dur, 2))
+
     @classmethod
     def build_draft(
         cls,
@@ -87,9 +126,37 @@ class JianyingDraftExporter:
 
         for idx, shot in enumerate(shots):
             shot_num = shot.get("shot_num", idx + 1)
-            duration_sec = float(shot.get("duration_sec", 3.0))
-            shot_duration_micros = int(duration_sec * MICROS_PER_SEC)
+            raw_duration_sec = float(shot.get("duration_sec", 3.0))
             tension = float(shot.get("tension_score", 60.0))
+
+            dialogue = (shot.get("dialogue") or "").strip()
+            has_speech = bool(dialogue and dialogue != "(无对白)")
+
+            # 视听时序弹性伸缩算法 (TTS Duration vs Shot Pacing Timeline Elasticity)
+            actual_audio_dur = 0.0
+            if has_speech:
+                if shot.get("audio_duration_sec"):
+                    actual_audio_dur = float(shot["audio_duration_sec"])
+                else:
+                    candidate_paths = []
+                    if audio_dir:
+                        candidate_paths.extend(audio_dir.glob(f"shot_{episode_num}_{shot_num}*.mp3"))
+                    candidate_paths.extend(Path("output/audio").glob(f"shot_{episode_num}_{shot_num}*.mp3"))
+                    found_file = next((p for p in candidate_paths if p.is_file() and p.stat().st_size > 0), None)
+                    if found_file:
+                        actual_audio_dur = cls.get_mp3_duration_seconds(found_file)
+                    else:
+                        actual_audio_dur = cls.estimate_spoken_duration_seconds(dialogue)
+
+            # 弹性伸缩：镜头时长必须满足对白完整播放 + 0.35s 气口缓冲，杜绝台词被强行截断
+            if has_speech and actual_audio_dur > 0:
+                duration_sec = max(raw_duration_sec, round(actual_audio_dur + 0.35, 2))
+                audio_micros = int(actual_audio_dur * MICROS_PER_SEC)
+            else:
+                duration_sec = raw_duration_sec
+                audio_micros = int(duration_sec * MICROS_PER_SEC)
+
+            shot_duration_micros = int(duration_sec * MICROS_PER_SEC)
 
             # 1. 速度对象 (1.0倍速)
             speed_id = cls._gen_id()
@@ -146,9 +213,6 @@ class JianyingDraftExporter:
             video_segments.append(video_seg)
 
             # 3. 对白轨物料与片段 (若有对白台词)
-            dialogue = (shot.get("dialogue") or "").strip()
-            has_speech = bool(dialogue and dialogue != "(无对白)")
-
             if has_speech:
                 audio_mat_id = cls._gen_id()
                 materials_audios.append({
@@ -156,7 +220,7 @@ class JianyingDraftExporter:
                     "category_id": "",
                     "category_name": "local",
                     "check_flag": 1,
-                    "duration": shot_duration_micros,
+                    "duration": audio_micros,
                     "id": audio_mat_id,
                     "material_name": f"TTS_Speech_{episode_num}_{shot_num}.mp3",
                     "path": f"audio/shot_{episode_num}_{shot_num}.mp3",
@@ -168,8 +232,8 @@ class JianyingDraftExporter:
                     "id": audio_seg_id,
                     "material_id": audio_mat_id,
                     "render_index": 0,
-                    "source_timerange": {"duration": shot_duration_micros, "start": 0},
-                    "target_timerange": {"duration": shot_duration_micros, "start": current_time_micros},
+                    "source_timerange": {"duration": audio_micros, "start": 0},
+                    "target_timerange": {"duration": audio_micros, "start": current_time_micros},
                     "speed_id": speed_id,
                     "volume": 1.0
                 })

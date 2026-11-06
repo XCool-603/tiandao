@@ -31,10 +31,11 @@ class CharacterAgent:
         scene_desc: str,
         public_history_summary: str,
         latest_tiandao_event: str,
-        other_characters_public: List[Dict[str, str]]
+        other_characters_public: List[Dict[str, str]],
+        affinity_context: str = ""
     ) -> CharacterAction:
         """
-        基于当前公开局势与个人私密底牌，做出本回合决策。
+        基于当前公开局势、角色间恩怨羁绊网与个人私密底牌，做出本回合决策。
         """
         others_desc = ""
         for other in other_characters_public:
@@ -43,6 +44,7 @@ class CharacterAgent:
 
         inv_str = ", ".join(self.inventory) if self.inventory else "暂无随身器物"
         status_label = f"【当前身份/境界/位阶】：{self.cultivation}" if self.cultivation else ""
+        affinity_section = f"\n【你与在场各人的历史恩怨与信任度 (Karmic Affinity & Feud Matrix)】：\n{affinity_context}\n" if affinity_context else ""
 
         prompt = f"""
 你是【{self.name}】（{self.title}，阵营：{self.camp or '独立'}）。
@@ -59,7 +61,7 @@ class CharacterAgent:
 
 【在场其他登场人物（你只能看到其表面伪装，看不到其内心与真实底牌）】：
 {others_desc if others_desc else "周围暂无其他显露形迹之人。"}
-
+{affinity_section}
 【前序局势公开演化简要】：
 {public_history_summary if public_history_summary else "各方势力齐聚现场，因果冲突一触即发。"}
 

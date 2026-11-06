@@ -750,23 +750,34 @@ class VideoAgent:
         camera_movement: str = "缓缓推近",
         character_traits: str = "",
         frame_type: str = "first",
+        reference_image_url: str = "",
+        costume: str = "",
         force_mock: bool = False
     ) -> Dict[str, Any]:
         """
         生成分镜首帧/尾帧关键帧画面（First / Last Frame Keyframe）
-        融合角色定妆照特质以维持人物一致性，强制东亚面孔约束
+        融合角色定妆照特质以维持人物一致性，强制东亚面孔约束与面容/服饰锚定
         """
         frame_label = "first frame start action keyframe" if frame_type == "first" else "end frame climax outcome keyframe"
+        
+        anchor_prompt_tags = []
+        if reference_image_url:
+            anchor_prompt_tags.append(f"[Face Anchor: strictly preserve identity, facial morphology and hairline from reference image {reference_image_url}]")
+        if costume:
+            anchor_prompt_tags.append(f"[Outfit Anchor: consistent wardrobe wearing {costume}]")
+        anchor_str = (", " + ", ".join(anchor_prompt_tags)) if anchor_prompt_tags else ""
+
         prompt = (
             f"9:16 vertical short drama keyframe, {frame_label}, {shot_type} shot, {camera_movement}, "
             f"cinematic photorealistic 8k, dramatic lighting, {shot_visual}. "
             f"Characters must be East Asian Chinese descent, authentic Asian facial features, authentic gender presentation. "
             f"{'Character consistency appearance: ' + character_traits if character_traits else ''}"
+            f"{anchor_str}"
         )
         if force_mock or not self.api_key or self.api_key == "your_api_key_here":
-            return self._mock_frame_image(shot_visual, frame_type, prompt)
+            return self._mock_frame_image(shot_visual, frame_type, prompt, reference_image_url=reference_image_url)
 
-        res = self._generate_image_asset(prompt, mode=f"{frame_type}_frame")
+        res = self._generate_image_asset(prompt, mode=f"{frame_type}_frame", reference_image_url=reference_image_url)
         if res.get("status") == "completed":
             return {
                 "status": "completed",
@@ -776,11 +787,11 @@ class VideoAgent:
                 "message": f"分镜{'首帧' if frame_type == 'first' else '尾帧'}画面已成功生成！"
             }
         # 回退到模拟
-        mock_res = self._mock_frame_image(shot_visual, frame_type, prompt)
+        mock_res = self._mock_frame_image(shot_visual, frame_type, prompt, reference_image_url=reference_image_url)
         mock_res["notice"] = res.get("error", "网关生图不可用，已自动加载高清关键帧样照")
         return mock_res
 
-    def _generate_image_asset(self, prompt: str, mode: str = "image") -> Dict[str, Any]:
+    def _generate_image_asset(self, prompt: str, mode: str = "image", reference_image_url: str = "") -> Dict[str, Any]:
         """
         专门调用正规生图接口 (Text-to-Image / /v1/images/generations)，绝不走视频接口
         优先使用针对生图配置的 IMAGE_BASE_URL 与 IMAGE_API_KEY，其次回退自通用/短剧配置
@@ -823,6 +834,11 @@ class VideoAgent:
                     "n": 1,
                     "response_format": "url"
                 }
+                if reference_image_url:
+                    payload["image"] = reference_image_url
+                    payload["image_url"] = reference_image_url
+                    payload["reference_image"] = reference_image_url
+                    payload["input_reference"] = reference_image_url
                 if m:
                     payload["model"] = m
 
@@ -894,8 +910,18 @@ class VideoAgent:
             "message": f"角色【{name}】({'女' if gender == 'female' else '男'})定妆照图片已就绪，已生成候选画廊供随时翻牌！"
         }
 
-    def _mock_frame_image(self, shot_visual: str, frame_type: str, prompt: str) -> Dict[str, Any]:
-        """模拟分镜首尾关键帧精选图库"""
+    def _mock_frame_image(self, shot_visual: str, frame_type: str, prompt: str, reference_image_url: str = "") -> Dict[str, Any]:
+        """模拟分镜首尾关键帧精选图库（支持角色定妆照面部与服饰强锚定）"""
+        if reference_image_url:
+            return {
+                "status": "completed",
+                "image_url": reference_image_url,
+                "frame_type": frame_type,
+                "prompt": prompt,
+                "provider": "character_anchor_portrait",
+                "message": f"分镜{'首帧' if frame_type == 'first' else '尾帧'}已成功复用角色定妆照面部与服饰锚点（人物100%一致性）！"
+            }
+
         mock_frames = [
             "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=720&h=1280&fit=crop&q=80",
             "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=720&h=1280&fit=crop&q=80",
@@ -1132,13 +1158,30 @@ class VideoTaskManager:
                     self.batch_renders[batch_key]["current_shot"] = s_num
                     self.batch_renders[batch_key]["message"] = f"正在渲染镜号 #{s_num} (共{len(shots)}镜)..."
 
-                    # 1. 自动确保首帧定桩
+                    # 提取本镜相关角色的定妆人像与服饰锚点
+                    ref_portrait = ""
+                    ref_costume = ""
+                    char_traits_list = []
+                    if hasattr(target_book, "world") and target_book.world and getattr(target_book.world, "characters", None):
+                        for c in target_book.world.characters.values():
+                            c_name = c.get("name", "")
+                            if c_name and (c_name in (shot.get("visual") or "") or c_name in (shot.get("dialogue") or "")):
+                                char_traits_list.append(f"{c_name} wearing {c.get('costume', 'distinctive outfit')}, {c.get('public_profile', '')}")
+                                if not ref_portrait and c.get("portrait_url"):
+                                    ref_portrait = c.get("portrait_url")
+                                    ref_costume = c.get("costume", "")
+                    traits_str = "; ".join(char_traits_list)
+
+                    # 1. 自动确保首帧定桩（注入定妆人像与服饰强锚定）
                     if not shot.get("first_frame_url"):
                         f_res = v_agent.generate_frame_image(
                             shot_visual=shot.get("visual") or shot.get("ai_prompt", ""),
                             shot_type=shot.get("shot_type", "特写"),
                             camera_movement=shot.get("camera_movement", "推近"),
+                            character_traits=traits_str,
                             frame_type="first",
+                            reference_image_url=ref_portrait,
+                            costume=ref_costume,
                             force_mock=use_mock
                         )
                         if f_res.get("image_url"):

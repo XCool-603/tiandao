@@ -34,5 +34,27 @@ class WorldState:
     )
     characters: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     history: List[RoundLog] = field(default_factory=list)
+    affinity_matrix: Dict[str, Dict[str, Dict[str, Any]]] = field(default_factory=dict) # 角色间动态恩怨羁绊网
     current_round: int = 0
     max_rounds: int = 5
+
+    def get_relationship(self, char_a: str, char_b: str) -> Dict[str, Any]:
+        """获取角色 A 对 角色 B 的主观关系状态"""
+        if char_a not in self.affinity_matrix:
+            self.affinity_matrix[char_a] = {}
+        if char_b not in self.affinity_matrix[char_a]:
+            self.affinity_matrix[char_a][char_b] = {
+                "trust": 0,          # 信任度 (-100 ~ +100)
+                "feud": 0,           # 仇恨度 (0 ~ 100)
+                "debt": 0,           # 人情恩怨债 (-10 欠对方 ~ +10 对方欠自己)
+                "last_interaction": "素未谋面"
+            }
+        return self.affinity_matrix[char_a][char_b]
+
+    def update_relationship(self, char_a: str, char_b: str, delta_trust: int = 0, delta_feud: int = 0, interaction: str = ""):
+        """更新角色 A 对 角色 B 的恩怨羁绊"""
+        rel = self.get_relationship(char_a, char_b)
+        rel["trust"] = max(-100, min(100, rel["trust"] + delta_trust))
+        rel["feud"] = max(0, min(100, rel["feud"] + delta_feud))
+        if interaction:
+            rel["last_interaction"] = interaction

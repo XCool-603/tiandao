@@ -30,14 +30,16 @@ class DramaAgent:
         chapter_content: str,
         episode_num: int = 1,
         force_mock: bool = False,
-        active_characters: Optional[List[Dict[str, Any]]] = None
+        active_characters: Optional[List[Dict[str, Any]]] = None,
+        prev_cliffhanger: str = "",
+        prev_post_action: str = ""
     ) -> Dict[str, Any]:
-        """将指定章节转化为单集竖屏微短剧分镜剧本"""
+        """将指定章节转化为单集竖屏微短剧分镜剧本（内置跨集接戏中继锁）"""
         if force_mock:
-            return self._generate_mock_drama(book_title, genre, chapter_title, episode_num, active_characters, chapter_content)
+            return self._generate_mock_drama(book_title, genre, chapter_title, episode_num, active_characters, chapter_content, prev_cliffhanger, prev_post_action)
 
         cat = classify_genre(genre, book_title)
-        prompt = self._build_drama_prompt(book_title, genre, cat, chapter_title, chapter_content, episode_num, active_characters)
+        prompt = self._build_drama_prompt(book_title, genre, cat, chapter_title, chapter_content, episode_num, active_characters, prev_cliffhanger, prev_post_action)
 
         messages = [
             {
@@ -78,7 +80,8 @@ class DramaAgent:
             parsed["shots"] = spatial_director.lint_and_optimize_storyboard(
                 parsed.get("shots", []),
                 topology,
-                parsed.get("characters_in_scene", [])
+                parsed.get("characters_in_scene", []),
+                initial_pre_action=prev_post_action
             )
             parsed["pacing_curve"] = spatial_director.generate_tension_and_pacing_curve(
                 shot_count=len(parsed["shots"]),
@@ -87,7 +90,7 @@ class DramaAgent:
             return parsed
         except Exception as e:
             print(f"[DramaAgent] LLM 解析短剧失败或异常: {e}，启用智能后备分镜构建")
-            return self._generate_fallback_drama(book_title, genre, chapter_title, chapter_content, episode_num, active_characters)
+            return self._generate_fallback_drama(book_title, genre, chapter_title, chapter_content, episode_num, active_characters, prev_cliffhanger, prev_post_action)
 
     def _build_drama_prompt(
         self,
@@ -97,7 +100,9 @@ class DramaAgent:
         chapter_title: str,
         content: str,
         episode_num: int,
-        active_characters: Optional[List[Dict[str, Any]]] = None
+        active_characters: Optional[List[Dict[str, Any]]] = None,
+        prev_cliffhanger: str = "",
+        prev_post_action: str = ""
     ) -> str:
         # 截取前 3000 字正文以防超出上下文
         short_content = content[:3000] if len(content) > 3000 else content
@@ -112,13 +117,22 @@ class DramaAgent:
                 char_lines.append(f"- 【{c_name}】({c_title})：携带道具[{c_inv}]，人设：{c.get('public_profile', '')[:60]}")
             char_roster_str = "【小说原著登场人物档案（必须优先选用原著角色）】：\n" + "\n".join(char_lines) + "\n\n"
 
+        relay_str = ""
+        if prev_cliffhanger or prev_post_action:
+            relay_str = (
+                f"【跨集接戏中继锁 (Episode Handover Relay Lock)】：\n"
+                f"- 上一集收势动作状态 (Previous Post-Action)：{prev_post_action or '主体冷酷对峙，气机内敛'}\n"
+                f"- 上一集结尾高潮悬念 (Previous Cliffhanger)：{prev_cliffhanger or '生死杀机未决'}\n"
+                f"- 工业级接戏硬约束：本集第 1 个分镜头（镜号 #1）必须严格承接上一集结尾悬念与收尾动作！主角站位起手必须从上一集收势动作无缝延续，严禁突兀跳跃或重置时空！\n\n"
+            )
+
         return f"""请将以下长篇小说章节内容改编为一段【90秒标准竖屏短剧】（第 {episode_num} 集），并拆解为 8-12 个精细分镜头。
 
 小说名：《{book_title}》
 题材标签：{genre}
 章节名：{chapter_title}
 
-{char_roster_str}【小说正文核心片段】：
+{relay_str}{char_roster_str}【小说正文核心片段】：
 {short_content}
 
 【剧情提炼与自动推演原则】：
@@ -184,7 +198,9 @@ class DramaAgent:
         chapter_title: str,
         episode_num: int,
         active_characters: Optional[List[Dict[str, Any]]] = None,
-        chapter_content: str = ""
+        chapter_content: str = "",
+        prev_cliffhanger: str = "",
+        prev_post_action: str = ""
     ) -> Dict[str, Any]:
         """高质量全题材自适应短剧分镜生成器（杜绝模板死板化，深度取材原著）"""
         cat = classify_genre(genre, book_title)
@@ -266,7 +282,8 @@ class DramaAgent:
         mock_data["shots"] = spatial_director.lint_and_optimize_storyboard(
             mock_data["shots"],
             topology,
-            mock_data["characters_in_scene"]
+            mock_data["characters_in_scene"],
+            initial_pre_action=prev_post_action
         )
         mock_data["pacing_curve"] = spatial_director.generate_tension_and_pacing_curve(
             shot_count=len(mock_data["shots"]),
@@ -281,7 +298,9 @@ class DramaAgent:
         chapter_title: str,
         content: str,
         episode_num: int,
-        active_characters: Optional[List[Dict[str, Any]]] = None
+        active_characters: Optional[List[Dict[str, Any]]] = None,
+        prev_cliffhanger: str = "",
+        prev_post_action: str = ""
     ) -> Dict[str, Any]:
         """降级兜底生成（忠实结合原著角色与正文片段）"""
         cat = classify_genre(genre, book_title)
@@ -298,7 +317,7 @@ class DramaAgent:
             "duration_sec": 90,
             "hook_summary": f"开场直接展现危机：{first_line[:40]}……",
             "climax_summary": f"{c1}与{c2}多方势力正面对决，力量反差与局势反转瞬间引爆全场。",
-            "cliffhanger": "致命危机再度逼近，更大风暴即将席卷而至。",
+            "cliffhanger": prev_cliffhanger or "致命危机再度逼近，更大风暴即将席卷而至。",
             "characters_in_scene": [c1, c2],
             "shots": [
                 {
@@ -354,7 +373,8 @@ class DramaAgent:
         fallback_data["shots"] = spatial_director.lint_and_optimize_storyboard(
             fallback_data["shots"],
             topology,
-            fallback_data["characters_in_scene"]
+            fallback_data["characters_in_scene"],
+            initial_pre_action=prev_post_action
         )
         fallback_data["pacing_curve"] = spatial_director.generate_tension_and_pacing_curve(
             shot_count=len(fallback_data["shots"]),

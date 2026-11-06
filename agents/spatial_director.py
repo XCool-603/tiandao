@@ -58,6 +58,8 @@ class SpatialDirectorEngine:
             "name": "环境全景主控位",
             "scale": "全景",
             "focal_length": 28,
+            "aperture": "f/8",
+            "optical_dof": "f/8 deep depth of field, sharp architectural perspective, edge-to-edge clarity, zero fish-eye distortion",
             "motion": "缓缓推近",
             "desc": "建立整体空间关系，交代地标锚点与全员相对站位"
         },
@@ -65,6 +67,8 @@ class SpatialDirectorEngine:
             "name": "双人对峙水平位",
             "scale": "中景",
             "focal_length": 45,
+            "aperture": "f/4",
+            "optical_dof": "f/4 medium depth of field, crisp subject contrast with natural falloff, stable environmental perspective",
             "motion": "固定平视",
             "desc": "同框捕捉两名核心角色的形体对抗与空间张力"
         },
@@ -72,6 +76,8 @@ class SpatialDirectorEngine:
             "name": "A过肩反打B位",
             "scale": "中近景",
             "focal_length": 65,
+            "aperture": "f/2.2",
+            "optical_dof": "f/2.2 shallow depth of field, creamy foreground shoulder blur, subject in sharp focus with soft background bokeh",
             "motion": "手持微晃",
             "desc": "以A角色后肩/侧影为近景前景，焦点落在B角色面部表情"
         },
@@ -79,6 +85,8 @@ class SpatialDirectorEngine:
             "name": "B过肩正打A位",
             "scale": "中近景",
             "focal_length": 65,
+            "aperture": "f/2.2",
+            "optical_dof": "f/2.2 shallow depth of field, creamy foreground shoulder blur, subject in sharp focus with soft background bokeh",
             "motion": "手持微晃",
             "desc": "以B角色后肩/侧影为近景前景，焦点落在A角色面部表情"
         },
@@ -86,6 +94,8 @@ class SpatialDirectorEngine:
             "name": "A正向特写视线位",
             "scale": "特写",
             "focal_length": 85,
+            "aperture": "f/1.8",
+            "optical_dof": "f/1.8 extreme shallow depth of field, creamy cinematic bokeh, background fully dissolved into soft gradients, zero perspective distortion",
             "motion": "急速推近",
             "desc": "锁定A角色眼神锐度与神态威压，背景深度虚化"
         },
@@ -93,6 +103,8 @@ class SpatialDirectorEngine:
             "name": "B正向特写视线位",
             "scale": "特写",
             "focal_length": 85,
+            "aperture": "f/1.8",
+            "optical_dof": "f/1.8 extreme shallow depth of field, creamy cinematic bokeh, background fully dissolved into soft gradients, zero perspective distortion",
             "motion": "急速推近",
             "desc": "锁定B角色惊恐或狞笑神态，背景深度虚化"
         },
@@ -100,6 +112,8 @@ class SpatialDirectorEngine:
             "name": "冲突斜角仰角位",
             "scale": "特写",
             "focal_length": 35,
+            "aperture": "f/2.8",
+            "optical_dof": "f/2.8 moderate depth of field, dynamic diagonal tension with controlled edge rectilinear projection",
             "motion": "斜角升格慢动作",
             "desc": "倾斜地平线15度低角度仰拍，戏剧压迫感爆表"
         },
@@ -107,6 +121,8 @@ class SpatialDirectorEngine:
             "name": "第三方/反应镜位",
             "scale": "近景",
             "focal_length": 50,
+            "aperture": "f/2.8",
+            "optical_dof": "f/2.8 human-eye neutral depth of field, true-to-life perspective, subtle background blur",
             "motion": "水平摇向",
             "desc": "捕捉旁观者震撼反应或关键道具特写"
         }
@@ -358,7 +374,8 @@ class SpatialDirectorEngine:
         self,
         raw_shots: List[Dict[str, Any]],
         topology: Dict[str, Any],
-        characters: List[str]
+        characters: List[str],
+        initial_pre_action: str = ""
     ) -> List[Dict[str, Any]]:
         """
         视听语法合规检查器 (Cinematography Linter):
@@ -366,6 +383,8 @@ class SpatialDirectorEngine:
         2. 计算每镜拍摄视锥并在屏幕中准确投射左右人物站位 (Screen Left / Screen Right)
         3. 强制在每镜 AI 提示词中注入严格的三维空间几何坐标与环境锚点
         4. 180度行动轴线锁死保护，杜绝跳轴/越轴
+        5. 跨集接戏中继锁 (Episode Handover Relay Lock)
+        6. 光学景深与散景虚化渐变约束 (Optical Depth-of-Field & Bokeh Gradient)
         """
         char_a = characters[0] if characters else "主角"
         char_b = characters[1] if len(characters) > 1 else "对手"
@@ -378,7 +397,7 @@ class SpatialDirectorEngine:
         optimized_shots = []
         last_scale = None
         consecutive_scale_count = 0
-        last_post_action = "主体立于空间基准位，眼神锐利对峙"
+        last_post_action = initial_pre_action if initial_pre_action else "主体立于空间基准位，眼神锐利对峙"
 
         pacing_curve = self.generate_tension_and_pacing_curve(shot_count=len(raw_shots), total_duration=90)
 
@@ -431,10 +450,14 @@ class SpatialDirectorEngine:
             
             master_lighting = topology.get("master_lighting") or {}
             prompt_lighting_tag = master_lighting.get("prompt_tag", "cinematic lighting, dramatic contrast")
+            prompt_optical_tag = rig.get("optical_dof", "")
 
             # 4. 动作接戏状态机 (Action Continuity & State Transition)
             visual_text = shot.get("visual", "")
-            pre_action = f"延续前镜落点状态：{last_post_action}" if idx > 0 else "初始起势：主角在左侧冷眼审视，对手在右侧挑衅逼近"
+            if idx == 0:
+                pre_action = f"跨集接戏中继延续：{initial_pre_action}" if initial_pre_action else "初始起势：主角在左侧冷眼审视，对手在右侧挑衅逼近"
+            else:
+                pre_action = f"延续前镜落点状态：{last_post_action}"
             post_action = self._derive_post_action_state(visual_text, cur_scale, char_a, char_b)
             last_post_action = post_action
             action_continuity = {
@@ -452,12 +475,12 @@ class SpatialDirectorEngine:
             hero_props = self._extract_hero_props(visual_text + " " + dialogue_text)
             prompt_prop_tag = f"Hero Prop continuity: [{', '.join(hero_props)}]" if hero_props else ""
 
-            # 7. 优化生视频 Prompt (注入空间、轴线、视线交锋、全局光影)
+            # 7. 优化生视频 Prompt (注入空间、轴线、视线交锋、光学景深、全局光影)
             raw_prompt = shot.get("ai_prompt", "")
             enhanced_prompt = self._synthesize_spatial_prompt(
                 raw_prompt, cur_scale, rig, prompt_spatial_tag, prompt_anchor_tag,
                 shot.get("visual", ""), prompt_action_tag, prompt_prop_tag,
-                prompt_lighting_tag, prompt_eyeline_tag
+                prompt_lighting_tag, prompt_eyeline_tag, prompt_optical_tag
             )
 
             opt_shot = dict(shot)
@@ -468,6 +491,8 @@ class SpatialDirectorEngine:
                 "rig_key": rig_key,
                 "name": rig["name"],
                 "focal_length_mm": rig["focal_length"],
+                "aperture": rig.get("aperture", "f/2.8"),
+                "optical_dof": rig.get("optical_dof", ""),
                 "axis_side": "Axis-Left (Compliant)",
                 "spatial_layout": spatial_layout_desc,
                 "eyeline_vector": eyeline_desc
@@ -648,11 +673,13 @@ class SpatialDirectorEngine:
         action_tag: str = "",
         prop_tag: str = "",
         lighting_tag: str = "",
-        eyeline_tag: str = ""
+        eyeline_tag: str = "",
+        optical_tag: str = ""
     ) -> str:
-        """精准将空间几何、动作接戏、核心道具、全局光影与摄影参数缝合入 9:16 短剧视频提示词"""
-        lens_tag = f"{rig['focal_length']}mm lens, {rig['motion']}"
-        tags = [t for t in [spatial_tag, eyeline_tag, anchor_tag, lighting_tag, action_tag, prop_tag] if t]
+        """精准将空间几何、动作接戏、核心道具、全局光影、光学景深与摄影参数缝合入 9:16 短剧视频提示词"""
+        aperture_str = f" {rig.get('aperture', '')}" if rig.get('aperture') else ""
+        lens_tag = f"{rig['focal_length']}mm lens{aperture_str}, {rig['motion']}"
+        tags = [t for t in [spatial_tag, eyeline_tag, optical_tag, anchor_tag, lighting_tag, action_tag, prop_tag] if t]
         tags_str = ", ".join(tags)
         prefix = f"9:16 vertical short drama shot, {shot_scale}, {lens_tag}, {tags_str}"
 

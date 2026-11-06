@@ -23,13 +23,15 @@ class TiandaoAgent:
         self,
         round_num: int,
         world: WorldState,
-        actions: List[CharacterAction]
+        actions: List[CharacterAction],
+        affinity_context: str = ""
     ) -> Dict[str, Any]:
         """
         天道进行本轮因果推演与客观裁决：
         1. 判定各角色的攻击、防御、暗算、逃跑是否成功，依据各自真实动机、实力与站位客观推演。
         2. 结合世界环境物理法则与相克机制，结算伤势、道具损耗与战果。
         3. 降下符合大势的外部变数或环境突变（打破僵局，自然催化冲突）。
+        4. 动态演算角色间恩怨羁绊与信任度更新 (Affinity Matrix Updates)。
         """
         actions_context = ""
         char_names = []
@@ -44,6 +46,7 @@ class TiandaoAgent:
 
         genre_name = getattr(world, "genre", "") or "通用幻想"
         world_title = getattr(world, "title", "当前世界")
+        affinity_section = f"\n【当前在场角色历史恩怨羁绊网 (Affinity Matrix)】：\n{affinity_context}\n" if affinity_context else ""
 
         prompt = f"""
 你是不容忤逆的【{genre_name}因果律天道意志 / 至高推演主宰】。
@@ -59,7 +62,7 @@ class TiandaoAgent:
 
 【世界主线暗线与大势法则】：
 {world.tiandao_master_plot}
-
+{affinity_section}
 【本轮为第 {round_num} / {world.max_rounds} 轮交锋】
 
 【各角色本轮提报之行动】：
@@ -76,6 +79,8 @@ class TiandaoAgent:
 4. 【大千世界自然引渡（动态生成新角色）】：
    - 冲突声响、异宝动静或能量震荡，会自然吸引世界中的其他争渡者被动或主动卷入！
    - 若当前在场存活角色少于 5 人，天道可依据当前【{genre_name}】题材与现场因果，**自主生成 1 位符合世界观的新角色**（如路过豪强、巡视密探、敌对阵营援兵、潜伏伺机者等），直接投放下场！
+5. 【动态恩怨羁绊网结算】：
+   - 记录本轮交锋后角色两两之间的信任度升降 (delta_trust: -100~+100) 与仇恨度增减 (delta_feud: 0~100)。
 
 请严格按以下 JSON 格式返回，切勿输出多余废话：
 ```json
@@ -88,6 +93,15 @@ class TiandaoAgent:
     "角色名B": "dead",
     "角色名C": "escaped"
   }},
+  "affinity_updates": [
+    {{
+      "char_a": "角色名A",
+      "char_b": "角色名B",
+      "delta_trust": -20,
+      "delta_feud": 30,
+      "interaction": "交锋后产生的恩怨细节或过节简述"
+    }}
+  ],
   "new_arrival": {{
     "should_spawn": false,
     "name": "新角色姓名 (2~3字)",
