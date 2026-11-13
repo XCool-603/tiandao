@@ -2054,6 +2054,17 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(book_mgr.list_books_summary(), ensure_ascii=False).encode("utf-8"))
             return
 
+        if path == "/api/world/affinity":
+            parsed_qs = urllib.parse.parse_qs(parsed.query)
+            bid = parsed_qs.get("book_id", [""])[0]
+            target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+            aff_matrix = getattr(target_book.world, "affinity_matrix", {}) if target_book and hasattr(target_book, "world") else {}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "affinity_matrix": aff_matrix}, ensure_ascii=False).encode("utf-8"))
+            return
+
         if path == "/api/status":
             parsed_qs = urllib.parse.parse_qs(parsed.query)
             bid = parsed_qs.get("book_id", [None])[0]
@@ -3044,6 +3055,118 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 }, ensure_ascii=False).encode("utf-8"))
                 return
 
+            if path == "/api/drama/batch_generate":
+                load_dotenv()
+                bid = req_data.get("book_id", "")
+                start_ep = int(req_data.get("start_episode", 1))
+                count = int(req_data.get("count", 3))
+                end_ep = int(req_data.get("end_episode", start_ep + count - 1))
+                if end_ep < start_ep:
+                    end_ep = start_ep
+
+                drama_api_key = os.getenv("DRAMA_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+                drama_base_url = os.getenv("DRAMA_BASE_URL") or os.getenv("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
+                drama_model = os.getenv("DRAMA_MODEL") or os.getenv("CHRONICLER_MODEL") or os.getenv("TIANDAO_MODEL") or os.getenv("MODEL_NAME") or "deepseek-chat"
+
+                has_valid_key = bool(drama_api_key and drama_api_key != "your_api_key_here")
+                use_mock = req_data.get("mock", False) or not has_valid_key
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if not target_book:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "error",
+                        "message": "书库为空或作品不存在，请先在右上角新建作品！"
+                    }, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                if not hasattr(target_book, "dramas") or target_book.dramas is None:
+                    target_book.dramas = []
+
+                llm = LLMClient(api_key=drama_api_key, base_url=drama_base_url)
+                drama_agent = DramaAgent(llm, model_name=drama_model)
+                active_chars_list = list(target_book.world.characters.values()) if hasattr(target_book.world, "characters") else []
+
+                generated_episodes = []
+                print(f"[短剧批处理] 启动跨集中继批量编导: 《{target_book.title}》 第 {start_ep} 至 {end_ep} 集 (mock={use_mock})")
+
+                for ep_num in range(start_ep, end_ep + 1):
+                    target_chap = None
+                    if target_book.chapters:
+                        chap_idx = ep_num - 1
+                        if 0 <= chap_idx < len(target_book.chapters):
+                            target_chap = target_book.chapters[chap_idx]
+                        else:
+                            target_chap = target_book.chapters[-1]
+
+                    if not target_chap:
+                        chap_title = f"末世惊变·第{ep_num}幕"
+                        chap_content = f"{target_book.title}。{target_book.synopsis}。世界背景：{getattr(target_book.world, 'scene_description', '')}"
+                    else:
+                        chap_title = target_chap.get("title", f"第{ep_num}章")
+                        chap_content = target_chap.get("content", "")
+
+                    # 跨集接戏中继锁：提取上一集高潮悬念与最终姿态落点
+                    prev_cliffhanger = ""
+                    prev_post_action = ""
+                    if ep_num > 1 and target_book.dramas:
+                        prev_drama = next((d for d in target_book.dramas if d.get("episode_num") == ep_num - 1), None)
+                        if prev_drama:
+                            prev_cliffhanger = prev_drama.get("cliffhanger", "")
+                            prev_shots = prev_drama.get("shots", [])
+                            if prev_shots:
+                                last_shot = prev_shots[-1]
+                                prev_post_action = (
+                                    last_shot.get("action_continuity", {}).get("post_action_state", "") or
+                                    last_shot.get("visual", "")
+                                )
+
+                    drama_data = drama_agent.generate_from_chapter(
+                        book_title=target_book.title,
+                        genre=target_book.genre,
+                        chapter_title=chap_title,
+                        chapter_content=chap_content,
+                        episode_num=ep_num,
+                        force_mock=use_mock,
+                        active_characters=active_chars_list,
+                        prev_cliffhanger=prev_cliffhanger,
+                        prev_post_action=prev_post_action
+                    )
+
+                    replaced = False
+                    for idx, d in enumerate(target_book.dramas):
+                        if d.get("episode_num") == ep_num:
+                            target_book.dramas[idx] = drama_data
+                            replaced = True
+                            break
+                    if not replaced:
+                        target_book.dramas.append(drama_data)
+
+                    target_book.save()
+                    generated_episodes.append({
+                        "episode_num": ep_num,
+                        "title": drama_data.get("episode_title", f"第{ep_num}集"),
+                        "shot_count": len(drama_data.get("shots", [])),
+                        "cliffhanger": drama_data.get("cliffhanger", "")
+                    })
+
+                target_book.dramas.sort(key=lambda d: d.get("episode_num", 0))
+                target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "generated_count": len(generated_episodes),
+                    "episodes": generated_episodes,
+                    "dramas": target_book.dramas,
+                    "message": f"成功批量编导《{target_book.title}》第 {start_ep} 至 {end_ep} 集短剧分镜表 (共 {len(generated_episodes)} 集)，跨集接戏中继锁链已全面咬合！"
+                }, ensure_ascii=False).encode("utf-8"))
+                return
+
             if path == "/api/drama/delete":
                 bid = req_data.get("book_id", "")
                 ep_num = req_data.get("episode_num")
@@ -3335,6 +3458,59 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok", "affinity_matrix": aff_matrix}, ensure_ascii=False).encode("utf-8"))
+                return
+
+            if path == "/api/world/affinity/update":
+                bid = req_data.get("book_id", "")
+                char_a = req_data.get("char_a", "").strip()
+                char_b = req_data.get("char_b", "").strip()
+                trust = req_data.get("trust")
+                feud = req_data.get("feud")
+                delta_trust = req_data.get("delta_trust")
+                delta_feud = req_data.get("delta_feud")
+                interaction = req_data.get("interaction", "").strip()
+
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if not target_book or not hasattr(target_book, "world"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "error", "message": "作品或世界状态不存在"}, ensure_ascii=False).encode("utf-8"))
+                    return
+
+                if not hasattr(target_book.world, "affinity_matrix") or target_book.world.affinity_matrix is None:
+                    target_book.world.affinity_matrix = {}
+
+                if char_a and char_b:
+                    cur = target_book.world.get_relationship(char_a, char_b)
+                    if trust is not None or feud is not None:
+                        new_trust = int(trust) if trust is not None else cur.get("trust", 0)
+                        new_feud = int(feud) if feud is not None else cur.get("feud", 0)
+                        d_t = new_trust - cur.get("trust", 0)
+                        d_f = new_feud - cur.get("feud", 0)
+                        target_book.world.update_relationship(
+                            char_a, char_b,
+                            delta_trust=d_t,
+                            delta_feud=d_f,
+                            interaction=interaction or cur.get("last_interaction", "天道因果修正")
+                        )
+                    elif delta_trust is not None or delta_feud is not None:
+                        target_book.world.update_relationship(
+                            char_a, char_b,
+                            delta_trust=int(delta_trust or 0),
+                            delta_feud=int(delta_feud or 0),
+                            interaction=interaction or "因果变数扰动"
+                        )
+                    target_book.save()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "affinity_matrix": target_book.world.affinity_matrix,
+                    "message": f"角色【{char_a}】与【{char_b}】的恩怨因果羁绊已更新并落盘！"
+                }, ensure_ascii=False).encode("utf-8"))
                 return
 
             if path == "/api/drama/character/update_portrait":

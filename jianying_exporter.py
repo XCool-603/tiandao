@@ -139,10 +139,15 @@ class JianyingDraftExporter:
                     actual_audio_dur = float(shot["audio_duration_sec"])
                 else:
                     candidate_paths = []
-                    if audio_dir:
-                        candidate_paths.extend(audio_dir.glob(f"shot_{episode_num}_{shot_num}*.mp3"))
-                    candidate_paths.extend(Path("output/audio").glob(f"shot_{episode_num}_{shot_num}*.mp3"))
-                    found_file = next((p for p in candidate_paths if p.is_file() and p.stat().st_size > 0), None)
+                    search_patterns = [f"shot_{episode_num}_{shot_num}_*.mp3", f"shot_{episode_num}_{shot_num}.mp3"]
+                    for pat in search_patterns:
+                        if audio_dir:
+                            candidate_paths.extend(audio_dir.glob(pat))
+                        candidate_paths.extend(Path("output/audio").glob(pat))
+                    # 过滤有效音频文件并按修改时间降序排序（优先选用最新生成的语音）
+                    candidate_paths = [p for p in candidate_paths if p.is_file() and p.stat().st_size > 0]
+                    candidate_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    found_file = candidate_paths[0] if candidate_paths else None
                     if found_file:
                         actual_audio_dur = cls.get_mp3_duration_seconds(found_file)
                     else:
@@ -576,12 +581,15 @@ class JianyingDraftExporter:
             if audio_dir.exists():
                 for s in drama_data.get("shots", []):
                     s_num = s.get("shot_num", 1)
-                    for a_file in audio_dir.glob(f"shot_{ep_num}_{s_num}_*.mp3"):
-                        if a_file.is_file() and a_file.stat().st_size > 0:
-                            zf.writestr(
-                                f"{draft_name}/audio/shot_{ep_num}_{s_num}.mp3",
-                                a_file.read_bytes()
-                            )
-                            break
+                    candidate_audio = []
+                    for pat in (f"shot_{ep_num}_{s_num}_*.mp3", f"shot_{ep_num}_{s_num}.mp3"):
+                        candidate_audio.extend(audio_dir.glob(pat))
+                    candidate_audio = [p for p in candidate_audio if p.is_file() and p.stat().st_size > 0]
+                    candidate_audio.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    if candidate_audio:
+                        zf.writestr(
+                            f"{draft_name}/audio/shot_{ep_num}_{s_num}.mp3",
+                            candidate_audio[0].read_bytes()
+                        )
 
         return buf.getvalue()
