@@ -189,19 +189,44 @@ class ChroniclerAgent:
 - 章末追更悬念钩子：{chapter_outline.get('ending_hook', '留下强烈悬念')}
 """
 
+        is_opening = (chapter_num == 1)
         finale_directive = ""
         if is_final:
             finale_directive = f"""
-【★★★ 终极裁定 · 全书大结局指令 ★★★】：
-本章是全书《{book_title}》的【大结局 · 终章】！
-请将全书所有因果线索、各方恩怨、宏大宿命全面推向最壮烈的高潮并完美收束！
-写出最终决战的胜负走向，并在末尾给出一个荡气回肠、令人回味悠长的史诗终局结语！
+【终极裁定 · 全书大结局完结指令（终章收官）】：
+本章是全书《{book_title}》的【终章 · 宏大结局】！必须贯彻【有始有终、因果圆满】的大结局法则：
+1. 【终极决战】：将全书所有主线矛盾、至高宿命对决全面推向全书最悲壮、最浩瀚的巅峰爆发，决出终极胜负生死走向；
+2. 【全员因果清算与归宿】：彻底揭开全书所有深层伏笔谜题，交代各核心角色的最终生死与历史归宿（谁主沉浮、谁证大道、谁化作劫灰）；
+3. 【终章格式规范】：本章标题必须显式带有【终章】或【大结局】（如：第{chapter_num}章 终章·乾坤落定万古长青）；
+4. 【史诗落幕完结结语】：在正文最后，必须以荡气回肠、令人回味悠长的终局文字收束，并在正文最末尾独占一行严格输出：
+   ---
+   【全书完 · 乾坤落定】
+   （天道史官完本结语：至此，大千争渡传奇尽数落幕，因果圆满，浩气长存。）
+"""
+        elif is_opening:
+            finale_directive = f"""
+【黄金开篇 · 万物肇始核心指令（全书第一章，必读！）】：
+本章是全书《{book_title}》的【开篇第一章】！必须贯彻【引人入胜、开篇立骨】的黄金开篇法则：
+1. 【世界底色展开】：以沉浸有力的笔触勾勒《{book_title}》的大千背景与残酷时代法则；
+2. 【核心主角登场】：确立核心破局主角，写出其身处境遇（微末蛰伏/落魄受辱/绝境濒死），立住鲜活性格信条；
+3. 【黄金第一冲突】：开场即遭遇迫在眉睫的生死危机或命运死局，绝不平铺直叙慢热拖沓；
+4. 【第一张底牌逆转】：主角显露特殊机缘、觉醒金手指或施展暗藏心机，险象环生逆转初局；
+5. 【全书主线引线】：章末在化解小危机的同时，轰然引出更宏大、更致命的大千因果危机！
 """
         elif total_chapters > 1:
+            ratio = chapter_num / max(1, total_chapters)
+            if ratio <= 0.35:
+                phase_label = "起承阶段（危机立骨·势力初显）"
+            elif ratio <= 0.70:
+                phase_label = "承转阶段（螺旋升级·利益博弈）"
+            elif ratio <= 0.88:
+                phase_label = "高潮阶段（至暗时刻·重大反转）"
+            else:
+                phase_label = "终局前夕（决战倒计时·因果收束）"
             finale_directive = f"""
-【连载定位】：
-本书当前正处于连载推演阶段（第 {chapter_num} / {total_chapters} 章）。
-请承接前文，既要完成本章的激烈高潮冲突，又要在本章末尾自然留下暗线与引人入胜的伏笔！
+【全书叙事弧定位】：
+本书当前正处于全书【{phase_label}】阶段（第 {chapter_num} / {total_chapters} 章）。
+请承接前文，既要推进本章高潮冲突，又要层层铺展因果线索，并在章末自然留下引人追更的巨大悬念！
 """
 
         prev_hint = f"【前序剧情脉络摘要】：\n{previous_summary}\n\n" if previous_summary else ""
@@ -373,8 +398,29 @@ class ChroniclerAgent:
         chapter_num: int,
         is_final: bool
     ) -> str:
-        """高质量离线/沙盒全题材章节生成器"""
-        title_suffix = "终章 · 乾坤落定万古长青" if is_final else f"第{chapter_num}章 风起云涌，大局初定"
+        """高质量离线/沙盒全题材章节生成器，支持黄金开篇与终章大结局"""
+        raw_body = self._generate_mock_chapter_body(book_title, genre, world, history, chapter_num, is_final)
+        if is_final and "【全书完" not in raw_body:
+            chars = list(world.characters.values())
+            hero = chars[0]["name"] if chars else "楚无痕"
+            raw_body += f"""\n\n---\n\n天道苍茫，万劫落定。\n自微末破局启程，跨越千山万水与重重生死杀局，{hero}终在天地剧变之中力挽狂澜，彻底执掌至高因果定数。过往所有的宿怨暗算、盟誓羁绊与长歌当哭，尽在终极决战后圆满收束。\n乾坤复清，四海晏宁。而这卷波澜壮阔的争渡传奇，已永铸于天地史册，万古流芳！\n\n---\n\n【全书完 · 乾坤落定】\n（天道史官完本寄语：大千世界因果圆满，至此全书大结局。）"""
+        return raw_body
+
+    def _generate_mock_chapter_body(
+        self,
+        book_title: str,
+        genre: str,
+        world: WorldState,
+        history: List[RoundLog],
+        chapter_num: int,
+        is_final: bool
+    ) -> str:
+        if is_final:
+            title_suffix = f"第{chapter_num}章 终章·乾坤落定万古长青【大结局】"
+        elif chapter_num == 1:
+            title_suffix = "第1章 惊变开局，万象肇始"
+        else:
+            title_suffix = f"第{chapter_num}章 风起云涌，大局初定"
         chars = list(world.characters.values())
         c1 = chars[0]["name"] if len(chars) > 0 else "楚无痕"
         c2 = chars[1]["name"] if len(chars) > 1 else "沈炼"

@@ -909,10 +909,13 @@ class SimulationManager:
         lean_chapters = []
         for idx, c in enumerate(target_book.chapters):
             include_content = (idx == 0 or idx == len(target_book.chapters) - 1)
+            is_fin = bool(c.get("is_final") or any(k in c.get("title", "") for k in ["终章", "大结局", "全书完"]))
             lean_chapters.append({
                 "id": c.get("id"),
                 "title": c.get("title", f"第{c.get('id')}章"),
                 "word_count": c.get("word_count", len(c.get("content", ""))),
+                "is_final": is_fin,
+                "is_opening": (c.get("id") == 1),
                 "content": c.get("content", "") if include_content else ""
             })
 
@@ -942,6 +945,8 @@ class SimulationManager:
             "characters": char_list,
             "history": history_list,
             "chapters": lean_chapters,
+            "target_total_chapters": getattr(target_book, "target_total_chapters", 10),
+            "status": getattr(target_book, "status", "ongoing"),
             "outline": getattr(target_book, "outline", {}),
             "has_outline": bool(getattr(target_book, "outline", {}).get("main_plot")),
             "foreshadowings": getattr(target_book, "foreshadowings", []),
@@ -1599,17 +1604,24 @@ class SimulationManager:
             return
 
         try:
-            # 计算目标章节数 (支持自定义章数或全书深度标准)
-            if custom_count and int(custom_count) > 0:
+            # 计算目标章节数 (支持自定义章数、全本完结或终章推演)
+            planned_total = getattr(target_book, "target_total_chapters", 10)
+            if mode == "finale":
+                target_count = 1
+                is_mode_finale = True
+            elif custom_count and int(custom_count) > 0:
                 target_count = int(custom_count)
+                is_mode_finale = False
             elif mode == "ten":
                 target_count = 10
+                is_mode_finale = False
             elif mode == "book":
-                # 全本长篇巨作标准：默认目标为 50 章起步宏大长篇 (若已有章节则补全至目标或追加20章)
                 curr_chaps = len(target_book.chapters)
-                target_count = max(10, 50 - curr_chaps) if curr_chaps < 50 else 20
+                target_count = max(1, planned_total - curr_chaps) if curr_chaps < planned_total else 10
+                is_mode_finale = False
             else:
                 target_count = 1
+                is_mode_finale = False
 
             yield {
                 "type": "start",
@@ -1698,11 +1710,20 @@ class SimulationManager:
                     }
                     return
 
-                is_final = (mode == "book" and i == target_count)
-
                 # 计算新章节 ID
                 existing_ids = [c["id"] for c in target_book.chapters]
                 next_chap_id = (max(existing_ids) + 1) if existing_ids else 1
+
+                # 智能综合判定终章大结局：
+                # 1. 显式 finale 模式；
+                # 2. 到达本轮生成目标末尾且到达/超出全书规划章节数；
+                # 3. 达到全书规划总章节数 target_total_chapters
+                planned_total = getattr(target_book, "target_total_chapters", 10)
+                is_final = bool(
+                    is_mode_finale
+                    or (mode == "book" and i == target_count)
+                    or (next_chap_id >= planned_total and (i == target_count or mode in ("book", "finale")))
+                )
 
                 try:
                     llm = LLMClient(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
@@ -1718,7 +1739,7 @@ class SimulationManager:
                         "message": f"【第 {i}/{target_count} 章】大纲策划师规划第 {next_chap_id} 章细纲与主线矛盾..."
                     }
 
-                    chap_outline = book_mgr.get_or_plan_chapter_outline(target_book, next_chap_id, llm_client=llm, force_mock=use_mock)
+                    chap_outline = book_mgr.get_or_plan_chapter_outline(target_book, next_chap_id, llm_client=llm, force_mock=use_mock, is_final=is_final, total_chapters=planned_total)
                     runner.last_busy_time = time.time()
 
                     yield {
@@ -1871,12 +1892,22 @@ class SimulationManager:
                                 existing_idx = idx
                                 break
 
+                        # 若为终章且正文末尾未含完结标记，自动补全【全书完 · 乾坤落定】
+                        if is_final and "【全书完" not in full_content:
+                            full_content = full_content.rstrip() + "\n\n---\n\n【全书完 · 乾坤落定】\n（天道史官完本结语：大千世界因果圆满，浩气长存，传奇至此落幕。）"
+
+                        if is_final and not any(k in first_line for k in ["终章", "大结局"]):
+                            first_line = f"第{next_chap_id}章 终章·{first_line.replace(f'第{next_chap_id}章', '').strip()}【大结局】"
+
                         chap_data = {
                             "id": next_chap_id,
                             "title": first_line,
                             "word_count": len(full_content),
-                            "content": full_content
+                            "content": full_content,
+                            "is_final": is_final
                         }
+                        if is_final:
+                            target_book.status = "completed"
                         if existing_idx is not None:
                             target_book.chapters[existing_idx] = chap_data
                         else:
@@ -3738,12 +3769,34 @@ class TiandaoHTTPHandler(BaseHTTPRequestHandler):
                 }, ensure_ascii=False).encode("utf-8"))
                 return
 
+            if path == "/api/book/target_chapters":
+                bid = req_data.get("book_id", "")
+                target_count = int(req_data.get("target_total_chapters", 10))
+                status = req_data.get("status", "ongoing")
+                target_book = book_mgr.books.get(bid, sim_mgr.active_book) if bid else sim_mgr.active_book
+                if target_book:
+                    target_book.target_total_chapters = max(1, target_count)
+                    if status in ("ongoing", "completed"):
+                        target_book.status = status
+                    target_book.save()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "ok",
+                        "target_total_chapters": target_book.target_total_chapters,
+                        "book_status": target_book.status,
+                        "message": f"全书篇幅规划已更新为 {target_book.target_total_chapters} 章（状态: {'已完结' if target_book.status == 'completed' else '连载中'}）"
+                    }, ensure_ascii=False).encode("utf-8"))
+                    return
+
             if path == "/api/admin/create_book":
                 title = req_data.get("title", "")
                 genre = req_data.get("genre", "现代都市逆袭")
                 theme = req_data.get("theme", "")
                 synopsis = req_data.get("synopsis", "")
-                new_book = book_mgr.create_book(title=title, genre=genre, theme_prompt=theme, synopsis=synopsis)
+                target_chaps = int(req_data.get("target_total_chapters", 10))
+                new_book = book_mgr.create_book(title=title, genre=genre, theme_prompt=theme, synopsis=synopsis, target_total_chapters=target_chaps)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()

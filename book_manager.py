@@ -25,7 +25,9 @@ class Book:
         dramas: Optional[List[Dict[str, Any]]] = None,
         outline: Optional[Dict[str, Any]] = None,
         foreshadowings: Optional[List[Dict[str, Any]]] = None,
-        current_round: int = 0
+        current_round: int = 0,
+        target_total_chapters: int = 10,
+        status: str = "ongoing"
     ):
         self.id = book_id
         self.title = title
@@ -40,10 +42,13 @@ class Book:
             "world_view": "",
             "power_system": "",
             "main_plot": "",
+            "grand_finale": "",
             "volumes": [],
             "chapter_outlines": []
         }
         self.foreshadowings = foreshadowings or []
+        self.target_total_chapters = int(target_total_chapters or 10)
+        self.status = status or "ongoing"
         self.created_at = time.time()
         self.updated_at = time.time()
 
@@ -85,6 +90,8 @@ class Book:
             "dramas": self.dramas,
             "outline": self.outline,
             "foreshadowings": self.foreshadowings,
+            "target_total_chapters": getattr(self, "target_total_chapters", 10),
+            "status": getattr(self, "status", "ongoing"),
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
@@ -131,7 +138,9 @@ class Book:
             dramas=data.get("dramas", []),
             outline=data.get("outline", {}),
             foreshadowings=data.get("foreshadowings", []),
-            current_round=data.get("current_round", 0)
+            current_round=data.get("current_round", 0),
+            target_total_chapters=data.get("target_total_chapters", 10),
+            status=data.get("status", "ongoing")
         )
         book.created_at = data.get("created_at", time.time())
         book.updated_at = data.get("updated_at", time.time())
@@ -147,6 +156,76 @@ class Book:
             file_path.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception as e:
             print(f"[书籍保存失败] {self.id}: {e}")
+
+
+def get_narrative_phase(chapter_num: int, total_chapters: int = 10, is_final: bool = False) -> Dict[str, Any]:
+    """
+    计算章节在全书四幕叙事弧（起、承、转、合）中的坐标定位与核心创作职责
+    确保生成的小说有始有终、起承转合结构清晰、因果闭环圆满
+    """
+    total = max(1, total_chapters or 10)
+    if is_final or chapter_num >= total:
+        return {
+            "phase": "合",
+            "name": "大结局·乾坤落定",
+            "ratio": 1.0,
+            "is_final": True,
+            "is_opening": False,
+            "directive": (
+                "【终章大结局收官法则】：本章为全书终章！主线矛盾全面彻底引爆并决出最终走向，"
+                "全书因果伏线尽数回收，清算全员最终生死归宿，章末独占一行打出【全书完 · 乾坤落定】与史诗落幕完本结语！"
+            )
+        }
+    if chapter_num == 1:
+        return {
+            "phase": "起",
+            "name": "黄金开局·万物肇始",
+            "ratio": 1.0 / total,
+            "is_final": False,
+            "is_opening": True,
+            "directive": (
+                "【黄金开局核心法则】：本章为全书开篇第一章！必须勾勒时代大千格局，确立核心破局主角处境（微末蛰伏/落魄受辱/绝境求生），"
+                "开场引爆迫在眉睫的生死矛盾冲突，展现主角特殊机缘或第一张保命底牌，险象环生逆转初局，并在章末抛出全书终极大危机悬念！"
+            )
+        }
+
+    ratio = chapter_num / total
+    if ratio <= 0.25:
+        return {
+            "phase": "起",
+            "name": "起步蓄势·危机立骨",
+            "ratio": ratio,
+            "is_final": False,
+            "is_opening": False,
+            "directive": "承接开局胜势，引出更大的宗门/都市/朝堂外部强敌压迫，初步构筑主角的盟友与生死仇敌网。"
+        }
+    elif ratio <= 0.65:
+        return {
+            "phase": "承",
+            "name": "承接激化·因果纠葛",
+            "ratio": ratio,
+            "is_final": False,
+            "is_opening": False,
+            "directive": "各方核心势力全面介入，利益博弈与生死仇怨螺旋升级，长程暗线伏笔层层铺设，主角实力突破并掌控更高位阶底牌。"
+        }
+    elif ratio <= 0.85:
+        return {
+            "phase": "转",
+            "name": "惊天逆转·至暗时刻",
+            "ratio": ratio,
+            "is_final": False,
+            "is_opening": False,
+            "directive": "暗中杀局与深层阴谋全面收网，局势发生颠覆性大反转，主角陷入绝境险局逼出极限心机，决战序幕彻底拉开！"
+        }
+    else:
+        return {
+            "phase": "合",
+            "name": "终局前夕·决战倒计时",
+            "ratio": ratio,
+            "is_final": False,
+            "is_opening": False,
+            "directive": "终极风暴汇聚，各方底牌尽出，全书核心因果线开始收束，为终章大结局决战铺垫最具窒息感的决死战前氛围！"
+        }
 
 
 class BookManager:
@@ -302,12 +381,14 @@ class BookManager:
                 "current_round": b.current_round,
                 "is_active": b.id == self.active_book_id,
                 "dramas_count": len(b.dramas),
+                "target_total_chapters": getattr(b, "target_total_chapters", 10),
+                "status": getattr(b, "status", "ongoing"),
                 "has_outline": bool(b.outline and b.outline.get("main_plot")),
                 "outline_summary": (b.outline.get("main_plot", "")[:100] + "...") if b.outline.get("main_plot") else ""
             })
         return summaries
 
-    def create_book(self, title: str, genre: str, theme_prompt: str, synopsis: str = "") -> Book:
+    def create_book(self, title: str, genre: str, theme_prompt: str, synopsis: str = "", target_total_chapters: int = 10) -> Book:
         book_id = f"book_{int(time.time()*1000)}"
         while book_id in self.books:
             time.sleep(0.002)
@@ -326,7 +407,9 @@ class BookManager:
             genre=clean_genre,
             synopsis=clean_synopsis,
             theme_prompt=clean_theme,
-            current_round=1
+            current_round=1,
+            target_total_chapters=target_total_chapters,
+            status="ongoing"
         )
         new_book.world.title = f"【{clean_title} · 序幕现世】"
         new_book.world.scene_description = f"在这个以【{clean_genre}】为主轴的大千世界里：{clean_synopsis}"
@@ -819,6 +902,7 @@ class BookManager:
 
         book.save()
 
+
     def generate_book_outline(self, book_id: str, llm_client: Any = None, force_mock: bool = False) -> Dict[str, Any]:
         """基于书名、题材和核心梗，由大纲规划师智能生成全书架构、力量体系与分卷设计"""
         if book_id not in self.books:
@@ -842,6 +926,13 @@ class BookManager:
   "world_view": "宏大而独特的时代/世界观背景体系 (150~250字)",
   "power_system": "升级体系或阶层晋升脉络 (如修为境界/社会权柄/商业体量)",
   "main_plot": "全书最终极的核心主线目标与不可调和的矛盾冲突 (150~250字)",
+  "grand_finale": "全书终极大结局构想与终局决战胜负归宿 (主角最终境界与结局、宿敌下场、大千世界格局终定) (100~200字)",
+  "narrative_arc": {
+    "act_beginning": "【起】开篇立骨与黄金破局点",
+    "act_development": "【承】矛盾螺旋升级与各方博弈",
+    "act_twist": "【转】至暗绝境时刻与惊天大反转",
+    "act_ending": "【合】终局大决战与全员归宿大结局"
+  },
   "protagonist_setting": "核心破局者的人设立体标签、金手指或生存信条",
   "volumes": [
     {{
@@ -1005,15 +1096,25 @@ class BookManager:
         book.save()
         return outline
 
-    def get_or_plan_chapter_outline(self, book: Book, chapter_num: int, llm_client: Any = None, force_mock: bool = False) -> Dict[str, Any]:
+    def get_or_plan_chapter_outline(self, book: Book, chapter_num: int, llm_client: Any = None, force_mock: bool = False, is_final: bool = False, total_chapters: int = 10) -> Dict[str, Any]:
         """获取或智能规划特定章节的细纲蓝图（核心矛盾、目标、冲突、高潮、钩子）"""
         if not book.outline or not book.outline.get("main_plot"):
             self.generate_book_outline(book.id, llm_client, force_mock)
+
+        tot_chaps = total_chapters or getattr(book, "target_total_chapters", 10)
+        phase_info = get_narrative_phase(chapter_num, tot_chaps, is_final=is_final)
+        actual_final = phase_info["is_final"]
+        actual_opening = phase_info["is_opening"]
 
         # 检查是否已存在当前章细纲
         chap_outlines = book.outline.get("chapter_outlines", [])
         for co in chap_outlines:
             if co.get("chapter_num") == chapter_num:
+                # 若终章状态有更新，动态同步终章标记
+                if actual_final:
+                    co["is_final"] = True
+                    if not any(k in co.get("title", "") for k in ["终章", "大结局"]):
+                        co["title"] = f"第{chapter_num}章 终章·乾坤定鼎，大结局"
                 return co
 
         # 根据全书主线、卷大纲与前文进展动态生成本章细纲
@@ -1036,13 +1137,36 @@ class BookManager:
         if book.chapters:
             prev_chap_title = book.chapters[-1].get("title", f"第{len(book.chapters)}章")
 
+        if actual_final:
+            def_title = f"第{chapter_num}章 终章·乾坤落定，因果圆满【大结局】"
+            def_goal = "终极宿命大决战全面爆发，收束全书所有恩怨因果与伏笔，彻底确立终局秩序"
+            def_conflict = "全书最终极对决，生死胜负悬于一线"
+            def_climax = "至高底牌全力对轰，大道乾坤彻底定鼎"
+            def_hook = "【全书完 · 乾坤落定】"
+        elif actual_opening:
+            def_title = f"第1章 惊变开局，绝境破局"
+            def_goal = "立足大千时代格局，确立核心破局者身份与第一重生存危机，打出开篇立威第一战"
+            def_conflict = "开局面临强敌压迫或险恶死局"
+            def_climax = "第一张保命底牌或机缘显露，逆境破局反杀"
+            def_hook = "引出关乎全书大千宿命的深层危机悬念"
+        else:
+            def_title = f"第{chapter_num}章 宿命对峙，风云激变"
+            def_goal = f"围绕【{phase_info['name']}】推进剧情，在前章【{prev_chap_title}】基础上激化各方博弈"
+            def_conflict = "各方核心势力的利益碰撞与生死对决，危机逼近极限"
+            def_climax = "关键底牌掀开，胜负天平出现剧烈反转"
+            def_hook = "危机暂歇但引出更深层的未知迷局或外部强敌"
+
         new_plan = {
             "chapter_num": chapter_num,
-            "title": f"第{chapter_num}章 宿命对峙，风云激变",
-            "goal": f"围绕主线核心目标推进剧情，在前章【{prev_chap_title}】基础上激化各方博弈",
-            "conflict": "各方核心势力的利益碰撞与生死对决，危机逼近极限",
-            "climax": "关键底牌掀开，胜负天平出现剧烈反转",
-            "ending_hook": "危机暂歇但引出更深层的未知迷局或外部强敌",
+            "title": def_title,
+            "goal": def_goal,
+            "conflict": def_conflict,
+            "climax": def_climax,
+            "ending_hook": def_hook,
+            "phase": phase_info["phase"],
+            "phase_name": phase_info["name"],
+            "is_final": actual_final,
+            "is_opening": actual_opening,
             "foreshadowing_notes": ""
         }
 
